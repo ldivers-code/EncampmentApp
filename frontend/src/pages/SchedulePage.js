@@ -732,6 +732,9 @@ const SchedulePage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Notification toggle */}
+            <NotificationManager compact />
+            
             <div className={`flex items-center gap-1 px-2 py-1 rounded-sm text-xs ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
               <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>Auto-sync</span>
