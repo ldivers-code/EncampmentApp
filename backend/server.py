@@ -1334,6 +1334,17 @@ async def update_budget_item(
     return BudgetItemResponse(**item)
 
 
+@api_router.delete("/budget/{item_id}")
+async def delete_budget_item(
+    item_id: str,
+    user: dict = Depends(require_finance_access())
+):
+    result = await db.budget.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    return {"message": "Budget item deleted successfully"}
+
+
 # ================= DOCUMENT ROUTES =================
 
 @api_router.get("/documents", response_model=List[DocumentResponse])
