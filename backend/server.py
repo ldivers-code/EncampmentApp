@@ -1117,7 +1117,7 @@ async def create_budget_item(
 async def update_budget_item(
     item_id: str,
     data: BudgetItemCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_finance_access())
 ):
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
@@ -1132,7 +1132,7 @@ async def update_budget_item(
 @api_router.delete("/budget/{item_id}")
 async def delete_budget_item(
     item_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_finance_access())
 ):
     result = await db.budget.delete_one({"id": item_id})
     if result.deleted_count == 0:
@@ -1142,7 +1142,7 @@ async def delete_budget_item(
 @api_router.post("/budget/import")
 async def import_budget(
     file: UploadFile = File(...),
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_finance_access())
 ):
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
@@ -1184,7 +1184,8 @@ async def import_budget(
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
 @api_router.get("/budget/summary")
-async def get_budget_summary(user: dict = Depends(get_current_user)):
+async def get_budget_summary(user: dict = Depends(require_finance_access())):
+    """Get budget summary - restricted to Commander and Finance roles"""
     items = await db.budget.find({}, {"_id": 0}).to_list(1000)
     
     total_estimated = sum(i.get("estimated", 0) for i in items)
