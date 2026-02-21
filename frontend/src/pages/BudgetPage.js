@@ -392,6 +392,19 @@ const BudgetPage = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {items.length === 0 && (
+            <Button 
+              variant="outline" 
+              className="rounded-sm border-amber-600 text-amber-600 hover:bg-amber-50"
+              onClick={handleLoadTemplate}
+              disabled={loadingTemplate}
+              data-testid="load-template-btn"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              {loadingTemplate ? 'Loading...' : 'TNWG Template'}
+            </Button>
+          )}
+
           <Button 
             variant="outline" 
             className="rounded-sm border-emerald-600 text-emerald-600 hover:bg-emerald-50"
