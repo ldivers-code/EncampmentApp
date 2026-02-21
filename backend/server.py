@@ -862,6 +862,11 @@ async def import_schedule(
         
         for event in schedule_data:
             event_id = str(uuid.uuid4())
+            # Convert squadron to target_groups format
+            target_groups = ["all"]
+            if event.get("squadron") == "staff":
+                target_groups = ["staff"]
+            
             doc = {
                 "id": event_id,
                 "title": event["title"],
@@ -871,17 +876,17 @@ async def import_schedule(
                 "end_time": event["end_time"],
                 "location": event.get("location", ""),
                 "event_type": event["event_type"],
-                "squadron": event.get("squadron", ""),
+                "target_groups": target_groups,
                 "created_at": now,
                 "updated_at": now
             }
             await db.schedule.insert_one(doc)
             imported_count += 1
         
-        # Mark schedule as modified but not published
+        # Mark schedule as modified but not published, increment version
         await db.schedule_settings.update_one(
             {"_id": "settings"},
-            {"$set": {"is_published": False, "last_modified_at": now}},
+            {"$set": {"is_published": False, "last_modified_at": now}, "$inc": {"version": 1}},
             upsert=True
         )
         
@@ -896,10 +901,11 @@ async def clear_schedule(
     """Clear all schedule events - commander only"""
     result = await db.schedule.delete_many({})
     
-    # Reset publish status
+    # Reset publish status and increment version
+    await increment_schedule_version()
     await db.schedule_settings.update_one(
         {"_id": "settings"},
-        {"$set": {"is_published": False, "last_modified_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"is_published": False}},
         upsert=True
     )
     
