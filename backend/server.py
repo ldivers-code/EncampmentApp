@@ -682,13 +682,8 @@ async def delete_schedule_event(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # Update last modified time
-    now = datetime.now(timezone.utc).isoformat()
-    await db.schedule_settings.update_one(
-        {"_id": "settings"},
-        {"$set": {"last_modified_at": now}},
-        upsert=True
-    )
+    # Update version for real-time sync
+    await increment_schedule_version()
     
     return {"message": "Event deleted successfully"}
 
