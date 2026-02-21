@@ -49,6 +49,42 @@ export const importParticipants = async (file) => {
   return response.data;
 };
 
+// Push Notifications
+export const getVapidKey = async () => {
+  const response = await axios.get(`${API}/notifications/vapid-key`);
+  return response.data;
+};
+
+export const subscribeToNotifications = async (subscription) => {
+  const response = await axios.post(`${API}/notifications/subscribe`, subscription, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const unsubscribeFromNotifications = async () => {
+  const response = await axios.delete(`${API}/notifications/unsubscribe`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getNotificationStatus = async () => {
+  const response = await axios.get(`${API}/notifications/status`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const sendNotification = async (title, body, targetGroups = ['all'], url = '/schedule') => {
+  const response = await axios.post(`${API}/notifications/send`, {
+    title,
+    body,
+    target_groups: targetGroups,
+    url
+  }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getNotificationHistory = async () => {
+  const response = await axios.get(`${API}/notifications/history`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Schedule
 export const getSchedule = async () => {
   const response = await axios.get(`${API}/schedule`, { headers: getAuthHeaders() });
