@@ -960,6 +960,21 @@ const BudgetPage = () => {
               <SelectItem value="income">Income</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-40 rounded-sm" data-testid="budget-status-filter">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Quick stats */}
+          <div className="ml-auto text-sm text-slate-500">
+            Showing {filteredItems.length} of {items.length} items
+          </div>
         </div>
       </div>
 
@@ -974,6 +989,7 @@ const BudgetPage = () => {
                 <th className="text-left">Vendor</th>
                 <th className="text-right">Estimated</th>
                 <th className="text-right">Actual</th>
+                <th className="text-center">Variance</th>
                 <th className="text-center">Receipt</th>
                 <th className="text-center">Status</th>
                 <th className="text-right">Actions</th>
