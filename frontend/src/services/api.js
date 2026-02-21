@@ -64,6 +64,22 @@ export const getPendingPayments = async () => {
   return response.data;
 };
 
+export const exportAnalytics = async (format = 'csv') => {
+  const response = await axios.get(`${API}/participants/analytics/export?format=${format}`, {
+    headers: getAuthHeaders(),
+    responseType: 'blob'
+  });
+  return response;
+};
+
+export const exportAnalyticsSummary = async () => {
+  const response = await axios.get(`${API}/participants/analytics/summary-export`, {
+    headers: getAuthHeaders(),
+    responseType: 'blob'
+  });
+  return response;
+};
+
 export const syncRosterToBudget = async () => {
   const response = await axios.post(`${API}/participants/sync-to-budget`, {}, { headers: getAuthHeaders() });
   return response.data;
