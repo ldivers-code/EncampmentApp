@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   getSchedule, 
   getScheduleSettings,
@@ -16,6 +16,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
+import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 import { format, parseISO, addDays, isSameDay } from 'date-fns';
 import { 
@@ -30,11 +31,16 @@ import {
   Send,
   EyeOff,
   Eye,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  Users,
+  Filter
 } from 'lucide-react';
 
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
 const SchedulePage = () => {
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date('2026-07-17'));
@@ -44,7 +50,11 @@ const SchedulePage = () => {
   const [isPublished, setIsPublished] = useState(false);
   const [scheduleSettings, setScheduleSettings] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const [lastVersion, setLastVersion] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const fileInputRef = useRef(null);
+  const refreshIntervalRef = useRef(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -54,7 +64,7 @@ const SchedulePage = () => {
     end_time: '',
     location: '',
     event_type: 'training',
-    squadron: ''
+    target_groups: ['all']
   });
 
   // Encampment dates: July 17-24, 2026
@@ -79,6 +89,20 @@ const SchedulePage = () => {
     { value: 'academics', label: 'Academics', color: 'bg-teal-600' }
   ];
 
+  const targetGroupOptions = [
+    { value: 'all', label: 'All Participants', category: 'general' },
+    { value: 'staff', label: 'Staff/Cadre', category: 'general' },
+    { value: 'sq1', label: 'Squadron 1', category: 'squadron' },
+    { value: 'sq2', label: 'Squadron 2', category: 'squadron' },
+    { value: 'sq3', label: 'Squadron 3', category: 'squadron' },
+    { value: 'alpha', label: 'Alpha Flight', category: 'flight' },
+    { value: 'bravo', label: 'Bravo Flight', category: 'flight' },
+    { value: 'charlie', label: 'Charlie Flight', category: 'flight' },
+    { value: 'delta', label: 'Delta Flight', category: 'flight' },
+    { value: 'echo', label: 'Echo Flight', category: 'flight' },
+    { value: 'foxtrot', label: 'Foxtrot Flight', category: 'flight' }
+  ];
+
   // Time slots for day view (0600-2200 in 30-min increments)
   const timeSlots = useMemo(() => {
     const slots = [];
@@ -91,31 +115,62 @@ const SchedulePage = () => {
     return slots;
   }, []);
 
+  const loadEvents = useCallback(async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) setIsRefreshing(true);
+    try {
+      const showAll = canEdit() && showAllEvents;
+      const data = await getSchedule();
+      setEvents(data);
+    } catch (error) {
+      console.error('Failed to load schedule');
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [canEdit, showAllEvents]);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const settings = await getScheduleSettings();
+      setScheduleSettings(settings);
+      setIsPublished(settings.is_published);
+      
+      // Check if version changed (for real-time sync)
+      if (settings.version !== lastVersion && lastVersion !== 0) {
+        loadEvents(true);
+        toast.info('Schedule updated');
+      }
+      setLastVersion(settings.version);
+    } catch (error) {
+      console.error('Failed to load schedule settings');
+    }
+  }, [lastVersion, loadEvents]);
+
+  // Initial load
   useEffect(() => {
     loadEvents();
     loadSettings();
   }, []);
 
-  const loadEvents = async () => {
-    try {
-      const data = await getSchedule();
-      setEvents(data);
-    } catch (error) {
-      toast.error('Failed to load schedule');
-    } finally {
-      setLoading(false);
+  // Reload when showAllEvents changes
+  useEffect(() => {
+    if (!loading) {
+      loadEvents();
     }
-  };
+  }, [showAllEvents]);
 
-  const loadSettings = async () => {
-    try {
-      const settings = await getScheduleSettings();
-      setScheduleSettings(settings);
-      setIsPublished(settings.is_published);
-    } catch (error) {
-      console.error('Failed to load schedule settings');
-    }
-  };
+  // Real-time sync: poll for changes every 30 seconds
+  useEffect(() => {
+    refreshIntervalRef.current = setInterval(() => {
+      loadSettings();
+    }, REFRESH_INTERVAL);
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [loadSettings]);
 
   // Get events for selected date
   const eventsForDate = useMemo(() => {
@@ -166,7 +221,7 @@ const SchedulePage = () => {
       end_time: event.end_time,
       location: event.location || '',
       event_type: event.event_type,
-      squadron: event.squadron || ''
+      target_groups: event.target_groups || ['all']
     });
     setIsModalOpen(true);
   };
@@ -195,7 +250,8 @@ const SchedulePage = () => {
         const min = parseInt(m);
         if (min === 30) return `${(hour + 1).toString().padStart(2, '0')}:00`;
         return `${h}:30`;
-      })
+      }),
+      target_groups: ['all']
     });
     setIsModalOpen(true);
   };
@@ -242,6 +298,31 @@ const SchedulePage = () => {
     }
   };
 
+  const handleTargetGroupToggle = (value) => {
+    let newGroups = [...formData.target_groups];
+    
+    if (value === 'all') {
+      // If selecting 'all', clear everything else
+      newGroups = ['all'];
+    } else {
+      // Remove 'all' if selecting specific groups
+      newGroups = newGroups.filter(g => g !== 'all');
+      
+      if (newGroups.includes(value)) {
+        newGroups = newGroups.filter(g => g !== value);
+      } else {
+        newGroups.push(value);
+      }
+      
+      // If no groups selected, default to 'all'
+      if (newGroups.length === 0) {
+        newGroups = ['all'];
+      }
+    }
+    
+    setFormData({ ...formData, target_groups: newGroups });
+  };
+
   const resetForm = () => {
     setEditingEvent(null);
     setFormData({
@@ -252,7 +333,7 @@ const SchedulePage = () => {
       end_time: '',
       location: '',
       event_type: 'training',
-      squadron: ''
+      target_groups: ['all']
     });
   };
 
@@ -266,6 +347,28 @@ const SchedulePage = () => {
     if (dayIndex === 1) return 'In-Processing';
     if (dayIndex === 7) return 'Graduation';
     return `Day ${dayIndex - 1}`;
+  };
+
+  const getTargetGroupsLabel = (groups) => {
+    if (!groups || groups.length === 0 || groups.includes('all')) return null;
+    return groups.map(g => {
+      const option = targetGroupOptions.find(o => o.value === g);
+      return option ? option.label : g;
+    }).join(', ');
+  };
+
+  const getUserUnitLabel = () => {
+    if (!user?.flight && !user?.squadron) return null;
+    const parts = [];
+    if (user.flight) {
+      const flight = targetGroupOptions.find(o => o.value === user.flight);
+      if (flight) parts.push(flight.label);
+    }
+    if (user.squadron) {
+      const sq = targetGroupOptions.find(o => o.value === user.squadron);
+      if (sq) parts.push(sq.label);
+    }
+    return parts.join(' • ');
   };
 
   if (loading) {
@@ -288,10 +391,19 @@ const SchedulePage = () => {
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             TNWG Summer Encampment • July 17-24, 2026
+            {getUserUnitLabel() && (
+              <span className="ml-2 text-[#00205B] font-medium">• {getUserUnitLabel()}</span>
+            )}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Real-time sync indicator */}
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-sm text-xs ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Auto-sync</span>
+          </div>
+
           {/* Draft/Published Badge */}
           {canEdit() && (
             <div className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium ${
@@ -311,6 +423,22 @@ const SchedulePage = () => {
                 </>
               )}
             </div>
+          )}
+
+          {/* Show All Toggle (for editors) */}
+          {canEdit() && (
+            <button
+              onClick={() => setShowAllEvents(!showAllEvents)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium border transition-colors ${
+                showAllEvents
+                  ? 'bg-[#00205B] text-white border-[#00205B]'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+              data-testid="show-all-toggle"
+            >
+              <Filter className="w-3 h-3" />
+              <span>{showAllEvents ? 'All Events' : 'Filtered'}</span>
+            </button>
           )}
 
           {/* View Toggle */}
@@ -386,7 +514,7 @@ const SchedulePage = () => {
                     Add Event
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>
                       {editingEvent ? 'Edit Event' : 'Add Event'}
@@ -422,33 +550,15 @@ const SchedulePage = () => {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-xs uppercase tracking-wide text-slate-600">Squadron</Label>
-                        <Select
-                          value={formData.squadron || 'all'}
-                          onValueChange={(value) => setFormData({ ...formData, squadron: value === 'all' ? '' : value })}
-                        >
-                          <SelectTrigger className="mt-1 rounded-sm">
-                            <SelectValue placeholder="All" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Squadrons</SelectItem>
-                            <SelectItem value="sq1">Squadron 1</SelectItem>
-                            <SelectItem value="sq2">Squadron 2</SelectItem>
-                            <SelectItem value="sq3">Squadron 3</SelectItem>
-                            <SelectItem value="staff">Staff/Cadre</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
+                        <Input
+                          type="date"
+                          value={formData.date}
+                          onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                          required
+                          className="mt-1 rounded-sm"
+                        />
                       </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
-                      <Input
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                        required
-                        className="mt-1 rounded-sm"
-                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -481,6 +591,64 @@ const SchedulePage = () => {
                         placeholder="Parade Ground, DFAC, TR-1..."
                       />
                     </div>
+                    
+                    {/* Target Groups Selection */}
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
+                        <Users className="w-3 h-3" />
+                        Target Groups
+                      </Label>
+                      <p className="text-xs text-slate-400 mt-1 mb-2">Select which groups should see this event</p>
+                      <div className="space-y-3 border border-slate-200 rounded-sm p-3 bg-slate-50">
+                        {/* General */}
+                        <div className="flex flex-wrap gap-3">
+                          {targetGroupOptions.filter(o => o.category === 'general').map(option => (
+                            <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={formData.target_groups.includes(option.value)}
+                                onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                              />
+                              <span className="text-sm">{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        
+                        {/* Squadrons */}
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Squadrons</p>
+                          <div className="flex flex-wrap gap-3">
+                            {targetGroupOptions.filter(o => o.category === 'squadron').map(option => (
+                              <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox
+                                  checked={formData.target_groups.includes(option.value)}
+                                  onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                  disabled={formData.target_groups.includes('all')}
+                                />
+                                <span className="text-sm">{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Flights */}
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Flights</p>
+                          <div className="flex flex-wrap gap-3">
+                            {targetGroupOptions.filter(o => o.category === 'flight').map(option => (
+                              <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox
+                                  checked={formData.target_groups.includes(option.value)}
+                                  onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                  disabled={formData.target_groups.includes('all')}
+                                />
+                                <span className="text-sm">{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
                     <div>
                       <Label className="text-xs uppercase tracking-wide text-slate-600">Description</Label>
                       <Textarea
@@ -512,6 +680,16 @@ const SchedulePage = () => {
           <AlertCircle className="w-5 h-5 text-amber-600" />
           <p className="text-amber-800 text-sm">
             The schedule is currently being updated. Check back later for the published version.
+          </p>
+        </div>
+      )}
+
+      {/* User Unit Info (for non-editors) */}
+      {!canEdit() && user?.flight && (
+        <div className="bg-blue-50 border border-blue-200 rounded-sm p-4 mb-4 flex items-center gap-3">
+          <Users className="w-5 h-5 text-blue-600" />
+          <p className="text-blue-800 text-sm">
+            Showing events for <strong>{getUserUnitLabel()}</strong> plus squadron and all-hands events.
           </p>
         </div>
       )}
@@ -592,8 +770,10 @@ const SchedulePage = () => {
                             >
                               <span className="font-medium">{event.title}</span>
                               {event.location && <span className="opacity-75">@ {event.location}</span>}
-                              {event.squadron && (
-                                <span className="bg-white/20 px-1 rounded text-[10px]">{event.squadron.toUpperCase()}</span>
+                              {getTargetGroupsLabel(event.target_groups) && (
+                                <span className="bg-white/20 px-1 rounded text-[10px]">
+                                  {getTargetGroupsLabel(event.target_groups)}
+                                </span>
                               )}
                               {canEdit() && (
                                 <div className="flex gap-1 ml-1">
@@ -651,9 +831,9 @@ const SchedulePage = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-slate-900">{event.title}</p>
-                        {event.squadron && (
-                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs uppercase">
-                            {event.squadron}
+                        {getTargetGroupsLabel(event.target_groups) && (
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">
+                            {getTargetGroupsLabel(event.target_groups)}
                           </span>
                         )}
                       </div>
