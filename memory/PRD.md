@@ -1,12 +1,13 @@
 # CAP Encampment Roster - Product Requirements Document
 
 ## Original Problem Statement
-Create an interactive roster for a Civil Air Patrol encampment using uploaded Excel template. Include pages for handbooks, schedule, official documents and financial trackers. Role-based access with Commander, Staff, and Cadet roles.
+Create an interactive roster for a Civil Air Patrol encampment using uploaded Excel template. Include pages for handbooks, schedule, official documents and financial trackers. Role-based access with Commander, Staff, Finance, and Cadet roles.
 
 ## User Personas
 1. **Commander** - Full access to all features, user management, CRUD on all entities
-2. **Staff** - Can edit roster, schedule, budget, documents; assign users to units
-3. **Cadet** - View-only access, sees only their unit's schedule
+2. **Staff** - Can edit roster, schedule, documents; assign users to units
+3. **Finance** - Full budget access, manage expenses/income, upload receipts, food expense planning
+4. **Cadet** - View-only access, sees only their unit's schedule, no budget access
 
 ## Core Requirements
 - [x] Master Roster management with participant CRUD
@@ -15,7 +16,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Financial budget tracker with estimated vs actual
 - [x] Handbooks document repository (placeholder)
 - [x] Official documents section (placeholder)
-- [x] Role-based access control (Commander/Staff/Cadet)
+- [x] Role-based access control (Commander/Staff/Finance/Cadet)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
 - [x] Schedule import from Excel with date correction (July 17-24, 2026)
@@ -26,8 +27,38 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Mobile-optimized schedule view with swipe navigation
 - [x] Push notifications for schedule updates
 - [x] Custom Tennessee Wing and 60th CTG branding
+- [x] Enhanced Financial Tracker with Finance role restriction
+- [x] Food expense planner (editable cost per person per day)
+- [x] Receipt upload functionality
 
 ## What's Been Implemented
+
+### Feb 21, 2026 - Enhanced Financial Tracker
+- **Finance Role**: New role with exclusive budget access (alongside Commander)
+  - Added to role enum in backend
+  - Added to Admin page role dropdown
+  - Budget endpoints restricted to Commander/Finance only
+- **Summary Dashboard**: 5 metric cards showing:
+  - Total Income (green)
+  - Total Expenses (red)
+  - Current Balance
+  - Estimated Expenses
+  - Budget Left
+- **Food Expense Planner**: 
+  - Editable cost per person per day
+  - Total participants (from roster or manual)
+  - Total days (default 8 for July 17-24)
+  - Live calculated total food budget
+- **Receipt Upload**:
+  - Upload images/PDFs to budget items
+  - Preview receipts in modal
+  - Delete receipts
+- **Enhanced Budget Table**:
+  - Income/Expense type indicator
+  - Vendor column
+  - Receipt upload icon
+  - Payment status badge (pending/paid/cancelled)
+- **Access Control**: Non-Commander/Finance users see "Access Restricted" page
 
 ### Feb 21, 2026 - Push Notifications & Branding
 - **Push Notifications**: 
@@ -86,7 +117,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 ## Architecture
 
 ### Tech Stack
-- **Frontend**: React 18, Tailwind CSS, Shadcn/UI, Axios
+- **Frontend**: React 18, Tailwind CSS, Shadcn/UI, Axios, Recharts
 - **Backend**: FastAPI (Python), Motor (async MongoDB)
 - **Database**: MongoDB
 - **Auth**: JWT tokens, bcrypt password hashing
@@ -96,7 +127,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `/api/users`, `/api/users/{id}/role`, `/api/users/{id}/unit` - User management
 - `/api/participants`, `/api/participants/import` - Roster management
 - `/api/schedule`, `/api/schedule/import`, `/api/schedule/publish`, `/api/schedule/settings` - Schedule
-- `/api/budget`, `/api/budget/summary` - Financial tracking
+- `/api/budget`, `/api/budget/summary`, `/api/budget/food-settings` - Financial tracking
+- `/api/budget/{id}/receipt` - Receipt upload/delete
 - `/api/org-chart/roles`, `/api/org-chart/seed-defaults` - Org chart
 
 ### Database Collections
@@ -104,9 +136,11 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `participants` - Roster participants
 - `schedule` - Schedule events with target_groups
 - `schedule_settings` - Draft/publish status and version
-- `budget` - Budget items
+- `budget` - Budget items with receipt_url, item_type
+- `food_expense_settings` - Cost per person per day settings
 - `org_chart_roles` - Org chart positions
 - `documents` - Handbooks and official docs
+- `push_subscriptions` - Push notification subscriptions
 
 ### Unit Structure
 ```
@@ -130,6 +164,8 @@ Staff/Cadre
 - [x] Real-time schedule sync
 - [x] Flight-specific schedules
 - [x] User unit assignment
+- [x] Enhanced Financial Tracker with Finance role
+- [x] Food expense planner (cost per person per day)
 
 ### P1 (High Priority)
 - [ ] Implement Handbooks page (upload/view PDF documents)
@@ -141,19 +177,16 @@ Staff/Cadre
 - [ ] Email notifications for schedule changes
 - [ ] Attendance tracking per event
 - [ ] Bulk participant import validation
+- [ ] OCR integration for receipt scanning (auto-extract vendor/amount)
 
 ### P3 (Low Priority)
 - [ ] Flight/Squadron assignment interface in Roster
 - [ ] Print-friendly roster and org chart views
-- [ ] Enhanced financial reports
-
-## Next Tasks
-1. Implement Handbooks page with document upload functionality
-2. Implement Official Documents page
-3. Add PDF export for roster
+- [ ] Budget export to Excel
 
 ## Test Credentials
 - **Commander**: commander@test.com / test123 (auto-created, full access)
+- **Finance**: finance_test@test.com / financepass123
 - New users can register and will be assigned Cadet role by default
 
 ## Notes
@@ -165,3 +198,5 @@ Staff/Cadre
   - July 24: Graduation Day
 - Assigning a flight automatically sets the correct squadron
 - Cadets without unit assignment see all events
+- Budget access restricted to Commander and Finance roles only
+- Food expense calculation: cost × participants × days
