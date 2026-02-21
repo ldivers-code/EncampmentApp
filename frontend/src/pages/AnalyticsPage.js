@@ -24,6 +24,7 @@ const AnalyticsPage = () => {
   const [pendingPayments, setPendingPayments] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -42,6 +43,41 @@ const AnalyticsPage = () => {
       toast.error('Failed to load analytics data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExport = async (type) => {
+    setExporting(true);
+    try {
+      let response;
+      let filename;
+      
+      if (type === 'csv') {
+        response = await exportAnalytics('csv');
+        filename = `cap_analytics_${new Date().toISOString().split('T')[0]}.csv`;
+      } else if (type === 'excel') {
+        response = await exportAnalytics('excel');
+        filename = `cap_analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
+      } else if (type === 'full-report') {
+        response = await exportAnalyticsSummary();
+        filename = `cap_full_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      }
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Exported successfully: ${filename}`);
+    } catch (error) {
+      toast.error('Failed to export data');
+    } finally {
+      setExporting(false);
     }
   };
 
