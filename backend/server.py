@@ -340,6 +340,48 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Role updated successfully"}
 
+@api_router.put("/users/{user_id}/unit")
+async def assign_user_unit(
+    user_id: str, 
+    assignment: UserUnitAssignment,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    """Assign a user to a squadron and flight"""
+    valid_squadrons = [None, "", "staff", "sq1", "sq2", "sq3"]
+    valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    
+    if assignment.squadron and assignment.squadron not in valid_squadrons:
+        raise HTTPException(status_code=400, detail="Invalid squadron")
+    if assignment.flight and assignment.flight not in valid_flights:
+        raise HTTPException(status_code=400, detail="Invalid flight")
+    
+    # Validate flight belongs to squadron
+    flight_squadron_map = {
+        "alpha": "sq1", "bravo": "sq1",
+        "charlie": "sq2", "delta": "sq2",
+        "echo": "sq3", "foxtrot": "sq3"
+    }
+    
+    if assignment.flight and assignment.flight in flight_squadron_map:
+        expected_squadron = flight_squadron_map[assignment.flight]
+        if assignment.squadron and assignment.squadron != expected_squadron:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Flight {assignment.flight} belongs to {expected_squadron}"
+            )
+        # Auto-assign squadron based on flight
+        assignment.squadron = expected_squadron
+    
+    result = await db.users.update_one(
+        {"id": user_id}, 
+        {"$set": {"squadron": assignment.squadron, "flight": assignment.flight}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return UserResponse(**updated_user)
+
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
     if user_id == user["id"]:
