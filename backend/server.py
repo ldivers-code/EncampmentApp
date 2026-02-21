@@ -1147,16 +1147,19 @@ async def get_food_expense_settings(user: dict = Depends(require_finance_access(
     # Get participant count from roster
     participant_count = await db.participants.count_documents({})
     
+    # Default cost from 2026 TNWG Encampment Budget: $13.15 per person per day
+    default_cost = 13.15
+    
     if not settings:
         return {
-            "cost_per_person_per_day": 15.0,
+            "cost_per_person_per_day": default_cost,
             "total_participants": participant_count,
             "total_days": 8,
-            "notes": "Default: July 17-24 (8 days)",
-            "total_food_budget": 15.0 * participant_count * 8
+            "notes": "Default: $13.15/day from TNWG Budget (July 17-24)",
+            "total_food_budget": default_cost * participant_count * 8
         }
     
-    cost = settings.get("cost_per_person_per_day", 15.0)
+    cost = settings.get("cost_per_person_per_day", default_cost)
     participants = settings.get("total_participants") or participant_count
     days = settings.get("total_days", 8)
     
