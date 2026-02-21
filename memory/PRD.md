@@ -29,6 +29,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Feb 21, 2026 - Push Notifications & Branding
+- **Push Notifications**: 
+  - Enable/disable notifications in Admin page and Schedule header
+  - Send notifications to specific groups (all, staff, squadrons, flights)
+  - Notification history for admins
+  - Service Worker for background push handling
+  - Auto-notification on schedule publish
+- **Custom Branding**:
+  - Tennessee Wing patch as main logo in sidebar
+  - 60th CTG patch in encampment info section
+  - 2026 Encampment banner on dashboard
+  - "VTS Catoosa, GA" location display
+
 ### Feb 21, 2026 - Mobile Optimization
 - **Mobile-First Schedule View**: Compact card-based layout for phones
   - Large date navigator with day labels
