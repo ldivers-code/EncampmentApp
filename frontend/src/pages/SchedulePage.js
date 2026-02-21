@@ -839,20 +839,24 @@ const SchedulePage = () => {
               </div>
             )}
 
-            {canEdit() && (
-              <button
-                onClick={() => setShowAllEvents(!showAllEvents)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium border transition-colors ${
-                  showAllEvents
-                    ? 'bg-[#00205B] text-white border-[#00205B]'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-                data-testid="show-all-toggle"
+            {/* Schedule Filter - Available to ALL users */}
+            <Select
+              value={scheduleFilter}
+              onValueChange={(value) => setScheduleFilter(value)}
+            >
+              <SelectTrigger 
+                className="w-40 rounded-sm text-xs border-slate-200"
+                data-testid="schedule-filter-select"
               >
-                <Filter className="w-3 h-3" />
-                <span>{showAllEvents ? 'All Events' : 'Filtered'}</span>
-              </button>
-            )}
+                <Filter className="w-3 h-3 mr-1 text-slate-400" />
+                <SelectValue placeholder="Filter Schedule" />
+              </SelectTrigger>
+              <SelectContent>
+                {scheduleFilterOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <div className="flex border border-slate-200 rounded-sm overflow-hidden">
               <button
