@@ -169,9 +169,9 @@ class BudgetItemBase(BaseModel):
     item_type: str = "expense"  # expense, income
 
 
-# Food Expense Settings Model
+# Food Expense Settings Model (Default $13.15 from 2026 TNWG Encampment Budget)
 class FoodExpenseSettings(BaseModel):
-    cost_per_person_per_day: float = 15.0
+    cost_per_person_per_day: float = 13.15
     total_participants: int = 0
     total_days: int = 8  # July 17-24 = 8 days
     notes: Optional[str] = None
