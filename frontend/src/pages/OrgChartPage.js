@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getOrgChartRoles, 
   getOrgChartRole, 
@@ -32,6 +32,73 @@ import {
   AlertCircle,
   Check
 } from 'lucide-react';
+
+// Separate OrgNode component to avoid inline definition issues
+const OrgNode = ({ role, depth, onRoleClick, selectedRoleId, allRoles }) => {
+  const [expanded, setExpanded] = useState(true);
+  
+  const children = useMemo(() => {
+    return allRoles
+      .filter(r => r.reports_to === role.role_id)
+      .sort((a, b) => a.order - b.order);
+  }, [allRoles, role.role_id]);
+  
+  const hasChildren = children.length > 0;
+  const isVacant = !role.assigned_member_name;
+
+  return (
+    <div className="org-node-container">
+      <div 
+        className={`
+          org-node bg-white border-2 rounded-sm p-3 cursor-pointer
+          transition-all duration-150 hover:shadow-md
+          ${isVacant ? 'border-amber-300 border-dashed' : 'border-[#00205B]'}
+          ${selectedRoleId === role.role_id ? 'ring-2 ring-[#00205B] ring-offset-2' : ''}
+        `}
+        onClick={() => onRoleClick(role)}
+        data-testid={`org-node-${role.role_id}`}
+      >
+        <div className="flex items-start gap-2">
+          <div className={`p-1.5 rounded-sm ${isVacant ? 'bg-amber-50' : 'bg-[#00205B]/10'}`}>
+            <UserCircle className={`w-5 h-5 ${isVacant ? 'text-amber-600' : 'text-[#00205B]'}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-sm text-[#00205B] leading-tight">{role.title}</h4>
+            <p className={`text-xs mt-1 truncate ${isVacant ? 'text-amber-600 italic' : 'text-slate-600'}`}>
+              {role.assigned_member_name || 'Vacant'}
+            </p>
+          </div>
+          {hasChildren && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(!expanded);
+              }}
+              className="p-1 hover:bg-slate-100 rounded"
+            >
+              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {hasChildren && expanded && (
+        <div className="org-children mt-4 pl-8 border-l-2 border-slate-200 ml-4 space-y-3">
+          {children.map(child => (
+            <OrgNode 
+              key={child.role_id} 
+              role={child} 
+              depth={depth + 1}
+              onRoleClick={onRoleClick}
+              selectedRoleId={selectedRoleId}
+              allRoles={allRoles}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const OrgChartPage = () => {
   const { canEdit, user } = useAuth();
@@ -75,25 +142,12 @@ const OrgChartPage = () => {
     }
   };
 
-  // Build hierarchical structure
-  const orgChartTree = useMemo(() => {
-    const roleMap = new Map(roles.map(r => [r.role_id, r]));
-    const rootRoles = roles.filter(r => !r.reports_to);
-    
-    const buildTree = (role) => {
-      const children = roles
-        .filter(r => r.reports_to === role.role_id)
-        .sort((a, b) => a.order - b.order);
-      return {
-        ...role,
-        children: children.map(buildTree)
-      };
-    };
-    
-    return rootRoles.sort((a, b) => a.order - b.order).map(buildTree);
+  // Get root roles (no reports_to)
+  const rootRoles = useMemo(() => {
+    return roles.filter(r => !r.reports_to).sort((a, b) => a.order - b.order);
   }, [roles]);
 
-  const handleRoleClick = async (role) => {
+  const handleRoleClick = useCallback(async (role) => {
     try {
       const fullRole = await getOrgChartRole(role.role_id);
       setSelectedRole(fullRole);
@@ -107,7 +161,7 @@ const OrgChartPage = () => {
     } catch (error) {
       toast.error('Failed to load role details');
     }
-  };
+  }, []);
 
   const handleSaveEdit = async () => {
     if (!selectedRole) return;
@@ -116,7 +170,6 @@ const OrgChartPage = () => {
       toast.success('Role updated successfully');
       setIsEditing(false);
       loadData();
-      // Refresh selected role
       const updated = await getOrgChartRole(selectedRole.role_id);
       setSelectedRole(updated);
     } catch (error) {
@@ -180,59 +233,6 @@ const OrgChartPage = () => {
     }
   };
 
-  // Render org chart node
-  const OrgNode = ({ role, depth = 0 }) => {
-    const [expanded, setExpanded] = useState(true);
-    const hasChildren = role.children && role.children.length > 0;
-    const isVacant = !role.assigned_member_name;
-
-    return (
-      <div className="org-node-container">
-        <div 
-          className={`
-            org-node bg-white border-2 rounded-sm p-3 cursor-pointer
-            transition-all duration-150 hover:shadow-md
-            ${isVacant ? 'border-amber-300 border-dashed' : 'border-[#00205B]'}
-            ${selectedRole?.role_id === role.role_id ? 'ring-2 ring-[#00205B] ring-offset-2' : ''}
-          `}
-          onClick={() => handleRoleClick(role)}
-          data-testid={`org-node-${role.role_id}`}
-        >
-          <div className="flex items-start gap-2">
-            <div className={`p-1.5 rounded-sm ${isVacant ? 'bg-amber-50' : 'bg-[#00205B]/10'}`}>
-              <UserCircle className={`w-5 h-5 ${isVacant ? 'text-amber-600' : 'text-[#00205B]'}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-sm text-[#00205B] leading-tight">{role.title}</h4>
-              <p className={`text-xs mt-1 truncate ${isVacant ? 'text-amber-600 italic' : 'text-slate-600'}`}>
-                {role.assigned_member_name || 'Vacant'}
-              </p>
-            </div>
-            {hasChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpanded(!expanded);
-                }}
-                className="p-1 hover:bg-slate-100 rounded"
-              >
-                {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-        </div>
-        
-        {hasChildren && expanded && (
-          <div className="org-children mt-4 pl-8 border-l-2 border-slate-200 ml-4 space-y-3">
-            {role.children.map(child => (
-              <OrgNode key={child.role_id} role={child} depth={depth + 1} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   if (loading) {
     return (
       <div className="p-6 lg:p-8 animate-fade-in">
@@ -255,7 +255,7 @@ const OrgChartPage = () => {
             </h1>
           </div>
           <p className="text-slate-500 text-sm mt-1">
-            {roles.length} positions defined • Click any role for details
+            {roles.length} positions defined - Click any role for details
           </p>
         </div>
 
@@ -312,7 +312,7 @@ const OrgChartPage = () => {
                   <div>
                     <Label className="text-xs uppercase tracking-wide text-slate-600">Reports To</Label>
                     <Select
-                      value={newRoleData.reports_to}
+                      value={newRoleData.reports_to || 'none'}
                       onValueChange={(value) => setNewRoleData({ ...newRoleData, reports_to: value === 'none' ? '' : value })}
                     >
                       <SelectTrigger className="mt-1 rounded-sm">
@@ -413,8 +413,15 @@ const OrgChartPage = () => {
       {roles.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-sm p-6 overflow-x-auto">
           <div className="min-w-[600px] space-y-4">
-            {orgChartTree.map(role => (
-              <OrgNode key={role.role_id} role={role} />
+            {rootRoles.map(role => (
+              <OrgNode 
+                key={role.role_id} 
+                role={role}
+                depth={0}
+                onRoleClick={handleRoleClick}
+                selectedRoleId={selectedRole?.role_id}
+                allRoles={roles}
+              />
             ))}
           </div>
         </div>
@@ -566,7 +573,7 @@ const OrgChartPage = () => {
                           <Users className="w-4 h-4 text-slate-500" />
                           <span className="text-sm">{subRole.title}</span>
                           {subRole.assigned_member_name && (
-                            <span className="text-xs text-slate-500">— {subRole.assigned_member_name}</span>
+                            <span className="text-xs text-slate-500">- {subRole.assigned_member_name}</span>
                           )}
                         </div>
                       ) : null;
