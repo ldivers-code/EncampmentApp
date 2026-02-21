@@ -1,86 +1,97 @@
-<analysis>**original_problem_statement**: The user wants to build an interactive roster for a Civil Air Patrol (CAP) encampment.
+<analysis>**original_problem_statement**: The user wants to build an interactive roster and management application for a Civil Air Patrol (CAP) encampment.
 
 **PRODUCT REQUIREMENTS**:
-- An interactive roster based on a provided Excel template.
-- Role-based access control (Commander, Staff, Cadet) to restrict editing capabilities.
-- Pages for Handbooks, Schedule, Official Documents, and a Financial Tracker.
-- An Excel import feature for the roster.
-- A view-only schedule for most users, editable by administrators.
-- Adherence to Civil Air Patrol branding guidelines.
-- An encampment organizational chart feature with clickable nodes that open a Role Details panel. This panel should be read-only for regular users but editable for admins.
-- The visual design of the org chart must match a reference image provided by the user, including specific color-coding and layout.
-- The schedule page must be updated to handle a new, more detailed Excel template, with a day-by-day grid view.
-- Import events from the provided schedule template, correcting the dates to **July 17th-24th**. July 17th is for Staff/Cadre arrival, and July 18th is for student in-processing.
+-   An interactive roster with Excel import functionality.
+-   Role-based access control (Commander, Staff, Cadet, and now Finance) to restrict editing and viewing capabilities.
+-   Pages for Handbooks, Schedule, Official Documents, and a Financial Tracker.
+-   The schedule must be populated by importing from an Excel template, with dates corrected to **July 17th-24th**.
+-   The schedule should support real-time updates, flight-specific views, and a mobile-friendly interface with swipe gestures.
+-   A publish feature for the schedule, so admins can make edits that are not visible until explicitly published.
+-   Push notifications for schedule updates.
+-   An encampment organizational chart with clickable nodes and role details.
+-   Adherence to specific CAP branding using provided logos and patches.
+-   An enhanced financial tracker with summary metrics, receipt scanning/upload, and access restricted to Commander and a new Finance role.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application has been developed using React for the frontend and FastAPI for the backend with a MongoDB database.
-- **Authentication**: JWT-based authentication with three roles: Commander, Staff, and Cadet. The first registered user automatically becomes a Commander.
-- **Features**:
-    - **Roster Page**: Displays a table of participants with functionality to add new members and import from an Excel file.
-    - **Financial Tracker**: A page to display and add budget items with summary cards.
-    - **Schedule Page**: A custom-built page that displays the encampment schedule in a day-by-day grid format with date tabs (currently June 14-21, 2026) and color-coded event types.
-    - **Org Chart Page**: A visually rich, hierarchical organization chart that matches the user's reference image, featuring color-coded roles and a side panel for viewing and editing role details.
-    - **Admin Page**: A section for user management, accessible only to users with the Commander role.
-- **Placeholder Pages**: Navigation links for Handbooks and Documents exist, but the pages lack functionality.
+A full-stack application using React (frontend) and FastAPI/MongoDB (backend).
+-   **Authentication**: JWT-based auth with Commander, Staff, and Cadet roles. The first registered user is the Commander.
+-   **Roster**: Page to display, add, and import participants from Excel.
+-   **Schedule**: A comprehensive, multi-faceted schedule page. It features a day-by-day grid for desktop and a compact, swipe-able list for mobile. It supports real-time updates, filtering by a user's assigned flight/squadron, and a publish/unpublish system. Dates are correctly set for July 17-24.
+-   **Org Chart**: A hierarchical chart with an editable side panel for role details.
+-   **Admin Page**: A dashboard for user management, including assigning users to roles, squadrons, and flights. It also includes a panel for managing push notifications.
+-   **Dashboard**: A landing page displaying encampment branding (banner and patches).
+-   **Push Notifications**: A system using a service worker and  to notify users of schedule updates. Users can toggle notifications.
+-   **Branding**: The UI incorporates the user-provided Tennessee Wing patch, encampment patch, and header banner.
 
 **Last working item**:
--   **Last item agent was working**: The agent was preparing to implement the user's request to import schedule events from a newly provided Excel template (). This task also requires correcting the event dates to July 17th-24th. The agent has analyzed the Excel file's structure but has not yet started coding the implementation.
--   **Status**: NOT STARTED
+-   **Last item agent was working**: The agent began implementing the user's request for an enhanced financial tracker. The user wants better metrics, receipt upload/scanning capabilities, and a new Finance role with access to this page alongside the Commander. The agent had just started the backend implementation by adding the Finance role to the user model and role enum.
+-   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
 -   **Which testing method agent to use?**: both
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0)**: Import events from schedule template and correct dates.
+-   **Issue 1 (P0)**: Implement the enhanced Financial Tracker.
 
 **Issues Detail**:
 -   **Issue 1**:
-    -   **Description**: The application's schedule is currently empty. The user has provided an Excel file () and requested that all events from this file be imported into the application. As part of the import process, the dates must be changed from the June dates in the file to a new range of **July 17th to July 24th**.
-    -   **Attempted fixes**: None.
+    -   **Description**: The current financial tracker is basic. It needs to be overhauled to include:
+        1.  A new Finance role that, along with Commander, has exclusive access.
+        2.  An easy-to-see balance/income metrics dashboard.
+        3.  The ability to upload/scan receipts and associate them with budget items.
+    -   **Attempted fixes**: The agent added a Finance role to the  enum in .
     -   **Next debug checklist**:
-        1.  Implement a new backend endpoint (e.g., ) to process the Excel file. This endpoint should be protected and only accessible by admins.
-        2.  Use  and  to parse the multi-column structure of the Excel sheet, extracting event details (time, description, group/location).
-        3.  Develop logic to map the parsed Excel rows to the  model in the database.
-        4.  Crucially, implement the date correction logic to shift all events to the specified July 17-24 timeframe.
-        5.  Add a button to the frontend Schedule page (visible to admins) to trigger this import process.
-        6.  Verify that after the import, the schedule grid correctly displays all the new events under the July dates.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a core requirement from the user to populate the schedule, making the Schedule page functional and useful for the encampment.
-    -   **Status**: NOT STARTED
+        1.  Finish backend changes:
+            -   Create a new API endpoint for uploading receipt files (e.g., ).
+            -   Modify the  model to include a  field.
+            -   Secure all financial endpoints () to only allow access for Commander and Finance roles.
+            -   Update the Admin page to allow Commanders to assign the new Finance role to users.
+        2.  Implement frontend changes on :
+            -   Design and build the summary metrics dashboard (Income, Expenses, Balance).
+            -   Update the Add Item form to include a file input for receipt uploads.
+            -   Implement the logic to call the upload endpoint and store the returned receipt URL.
+            -   Display uploaded receipts (e.g., as a clickable link or thumbnail).
+        3.  Refactor the page's access control to check for either Commander or Finance roles.
+    -   **Why fix this issue and what will be achieved with the fix?**: This will deliver a key user requirement for a more robust and secure way to manage the encampment's budget.
+    -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
     -   **Should Test frontend/backend/both after fix?**: both
     -   **Blocked on other issue**: None.
 
 **In progress Task List**:
--   None.
+-   **Task 1: Enhanced Financial Tracker**
+    -   **Where to resume**: Continue building the backend logic in . The Finance role has been added to the enum; next steps are to protect the API routes and add the file upload endpoint.
+    -   **What will be achieved with this?**: A complete, secure, and functional budget management tool with receipt tracking.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    - **P0: Implement Schedule Import** (This is the highest priority task, as detailed in the Pending Issues section).
+    -   **P1: Implement Handbooks and Documents Pages**: The navigation links exist, but functionality to upload, list, and view documents (e.g., PDFs) is needed.
 -   **Future Tasks**:
-    - **P1: Implement Handbooks and Documents Pages**: The navigation links for these pages exist, but the functionality to upload, list, and view documents (like PDFs) needs to be built. This was part of the original problem statement.
-    - **P2: Add Rich Text Support to Org Chart**: The user requested support for rich text or Markdown in the Responsibilities section of the org chart's role details panel. This requires a frontend editor and backend support for storing and rendering formatted text.
-    - **P2: Enhance Financial Tracker**: The current financial tracker is basic. It could be improved by adding features for expense categorization, budget vs. actual tracking, and simple reporting, as implied by the initial user request.
+    -   **P2: Add Rich Text Support to Org Chart**: Implement a rich text or Markdown editor for the Responsibilities section in the org chart's role details panel.
+    -   **P2: Integrate Receipt Scanning (OCR)**: As a follow-up to the receipt upload feature, use an OCR service to automatically extract data (vendor, total amount) from scanned receipts to pre-fill the budget item form.
 
 **Completed work in this session**
-- **Initial Application and Auth**: Set up the full-stack project and implemented JWT-based authentication with Commander, Staff, and Cadet roles.
-- **Roster Management**: Built the  page with a data table, an Add Participant modal, and an Excel import feature.
-- **Financial Tracker**: Created the  page to display and add budget items.
-- **Encampment Org Chart**: Implemented the  page, including backend models, API endpoints, and a frontend hierarchical view with a Role Details side panel for viewing/editing role information.
-- **Visual Org Chart Redesign**: Refactored the org chart's frontend to visually match a user-provided reference image, complete with color-coded roles and a specific hierarchical layout.
-- **Schedule Page Redesign**: Rebuilt the  page from a simple calendar into a detailed day-by-day grid view with date tabs, time slots, and an event legend to match an Excel template.
+-   **Schedule Import**: Implemented backend endpoint and frontend button to import events from an Excel file, correctly mapping dates to July 17-24.
+-   **Schedule Publish System**: Added a  flag to events and Publish/Unpublish buttons for admins, ensuring changes are not live until ready.
+-   **Real-Time Schedule Sync**: Implemented a versioning system for the schedule, allowing the frontend to auto-refresh when changes are made.
+-   **Flight-Specific Schedules**: Updated models and APIs to filter the schedule based on a user's assigned squadron/flight.
+-   **User Unit Assignment**: Enhanced the Admin page to allow Commanders to assign roles, squadrons, and flights to users.
+-   **Mobile-Optimized Schedule**: Created a responsive, mobile-first view for the schedule page with a compact layout and swipe gestures for navigation.
+-   **Application Branding**: Integrated user-provided images (patches, banner) into the sidebar and dashboard.
+-   **Push Notifications**: Built a full push notification system for schedule updates, including backend logic (), a service worker, and frontend UI toggles.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1**:
-    -   **Description**: During development, the agent noted that the Add Event button (on the Schedule page) and the Add Item button (on the Financial Tracker page) were partially cut off or obscured in the header. The agent proceeded without explicitly fixing this UI bug.
-    -   **Debug checklist**:
-        1.  Inspect the CSS for the  component and the pages:  and .
-        2.  Check for conflicting layout styles (e.g., padding, margin, flexbox/grid properties) that might be causing the buttons to overflow or be hidden.
-        3.  Adjust the header or button component styles to ensure they are fully visible.
-    -   **Why to solve this issue and what will be achieved with this?**: This is a minor UI bug that affects usability. Fixing it will ensure all action buttons are clearly visible and accessible to the user.
+    -   **Description**: In the initial handoff, it was noted that action buttons (e.g., Add Event) were partially cut off in the header on some pages. While recent screenshots look correct, this was never explicitly investigated or fixed and could be a latent CSS issue.
+    -   **Debug checklist**: Inspect header and button container CSS for , , or  properties that might cause clipping on certain screen sizes or pages.
+    -   **Why to solve this issue and what will be achieved with this?**: Ensures all UI controls are fully visible and accessible across the application.
     -   **Should Test frontend/backend/both after fix**: frontend
-    -   **Is recurring issue?**: N
+    -   **Is recurring issue?**: Y
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -89,9 +100,10 @@ A full-stack application has been developed using React for the frontend and Fas
 
 
 **Key Technical Concepts**
--   **Frontend**: React, , Tailwind CSS, Shadcn UI, Axios.
--   **Backend**: FastAPI (Python), MongoDB (using  for async operations), Pydantic models, JWT for authentication.
--   **Data Processing**:  and  for handling Excel file imports.
+-   **Frontend**: React, , Tailwind CSS, Shadcn UI, Axios, Service Workers.
+-   **Backend**: FastAPI (Python), MongoDB (), Pydantic, JWT.
+-   **Data Processing**: , .
+-   **Push Notifications**: Web Push Protocol,  library.
 
 **key DB schema**
 -   **users**: 
@@ -99,55 +111,58 @@ A full-stack application has been developed using React for the frontend and Fas
 -   **schedule_events**: 
 -   **financial_items**: 
 -   **org_chart_nodes**: 
+-   **push_subscriptions**: 
 
 **changes in tech stack**
--   None.
+-   New backend dependencies:  for push notifications.
 
 **All files of reference**
--   : Contains all backend logic, API endpoints, and database models.
--   : Contains the main application routing.
--   : Defines all frontend API service calls.
--   : The redesigned schedule page with the day-by-day grid view.
--   : The redesigned visual org chart page.
--   : The roster management page.
--   : The financial tracking page.
--   : The login/registration page with role selection.
+-   : The monolithic backend file, containing all new logic for schedule versioning, unit assignment, and push notifications.
+-   : Contains the complex logic for the responsive desktop/mobile schedule views, real-time sync, and filtering.
+-   : Contains the UI for assigning users to squadrons and flights.
+-   : Updated with the encampment banner.
+-   : Updated with the new branding logos.
+-   : The new service worker for handling push notifications.
+-   : New component to manage notification subscription.
+-   : The target for the next phase of development.
 
 **Areas that need refactoring**:
--   The backend logic is currently in a single  file. This should be refactored into a standard FastAPI project structure with separate directories/files for routes, models, and services to improve maintainability.
--   The frontend's  file is becoming large. It could be split into multiple files based on resources (e.g., , ).
+-   The  file is now extremely large and complex. It urgently needs to be broken down into a standard FastAPI project structure (e.g., separate directories for , , ).
+-   The frontend  could be split by resource to improve organization.
 
 **key api endpoints**
--   Auth: , 
+-   Auth: , , 
 -   Roster: , 
--   Schedule: 
+-   Schedule: , , , 
 -   Financials: 
--   Org Chart: , 
+-   Org Chart: 
 -   Users: , 
+-   Push Notifications: , 
 
 **Critical Info for New Agent**
--   The application's authentication is role-based. The very first user to register is automatically assigned the Commander role, which grants administrative privileges. Use this for testing admin features.
--   The user has a strong preference for visual accuracy. The org chart was redesigned to match an image, so pay close attention to any visual requirements or reference materials provided.
--   The current schedule page is a custom grid component. The next task is to populate it with data from an Excel file, which will require careful parsing and date manipulation.
+-   A new Finance role needs to be fully integrated. This includes restricting access to the financials page and allowing Commanders to assign this role on the Admin page.
+-   The next task is a major overhaul of the Financial Tracker page. Refer to the  section for the detailed checklist.
+-   The backend is a large monolith in . Be careful when making changes to avoid breaking unrelated functionality.
 
 **documents and test reports created in this job**
 -   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  ** (PENDING)**: User's current request to import schedule data and update dates.
-2.   (with schedule .xlsx): User provided the schedule template for the import task. (Acknowledged)
-3.  : User requested a visual redesign of the org chart. (Completed)
-4.  : User provided the reference image for the org chart. (Completed)
-5.  : User specified requirements for the org chart feature. (Completed)
-6.  : User instruction. (Acknowledged)
-7.  : User provided initial detailed requirements. (Completed)
+1.  ** (IN PROGRESS)**: User requested an enhanced budget tracker with metrics, receipt scanning, and a new Finance role.
+2.  ** (COMPLETED)**: User requested push notifications and provided new branding assets.
+3.  ** (COMPLETED)**: User approved the plan to create a mobile-friendly schedule view.
+4.  ** (COMPLETED)**: User confirmed requirements for real-time sync and flight-specific schedules.
+5.  ** (COMPLETED)**: User clarified implementation details for flight-specific schedules.
+6.  ** (COMPLETED)**: User provided the schedule file, requested a publish feature, and approved the initial plan.
 
 **Project Health Check:**
--   **Broken**: The schedule import functionality is not implemented. As a result, the Schedule page is currently empty and not functional.
--   **Mocked**: The Handbooks and Documents pages are placeholders in the navigation with no implemented functionality.
+-   **Broken**: The Financial Tracker is mid-overhaul and does not meet current requirements.
+-   **Mocked**: The Handbooks and Documents pages are still placeholders with no functionality.
 
 **3rd Party Integrations**
--   None.
+-   : Used for sending web push notifications from the backend.
 
 **Testing status**
 -   **Testing agent used after significant changes**: YES
@@ -156,7 +171,7 @@ A full-stack application has been developed using React for the frontend and Fas
 -   **Known regressions**: None.
 
 **Credentials to test flow:**
--   No pre-defined credentials are required. New users can be created through the registration page. The first user to register will automatically have the Commander role, which is necessary for testing administrative features.
+-   Register the first user to automatically become Commander. This role is needed to test admin features, such as assigning roles (including the new Finance role) and managing the schedule.
 
 **What agent forgot to execute**
--   The agent identified a UI bug where action buttons in the header of the Schedule and Financial Tracker pages were cut off. This issue was noted but not fixed before the agent moved on to other tasks.</analysis>
+-   The agent has not explicitly addressed a previously noted UI bug where header buttons were cut off. While not visible in recent screenshots, it may still exist under certain conditions and should be verified.</analysis>
