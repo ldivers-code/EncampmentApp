@@ -792,8 +792,8 @@ const SchedulePage = () => {
                   </form>
                 </DialogContent>
               </Dialog>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : (
         /* Desktop Header */
