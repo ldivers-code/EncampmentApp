@@ -1,15 +1,19 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
+import jwt
+import bcrypt
+import pandas as pd
+from io import BytesIO
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,52 +23,692 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+# JWT Configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'cap-encampment-secret-key-2026')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Create the main app
+app = FastAPI(title="CAP Encampment Roster API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+security = HTTPBearer()
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
+# ================= MODELS =================
+
+class UserRole:
+    COMMANDER = "commander"
+    STAFF = "staff"
+    CADET = "cadet"
+
+class UserBase(BaseModel):
+    email: EmailStr
+    name: str
+    role: str = UserRole.CADET
+    capid: Optional[str] = None
+
+class UserCreate(UserBase):
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    name: str
+    role: str
+    capid: Optional[str] = None
+    created_at: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+class ParticipantBase(BaseModel):
+    capid: str
+    rank: str
+    last_name: str
+    first_name: str
+    unit: str
+    wing: Optional[str] = None
+    region: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    shirt_size: Optional[str] = None
+    participant_type: str = "basic_student"  # basic_student, advanced_student, cadre, staff, senior_member
+    squadron: Optional[str] = None
+    flight: Optional[str] = None
+    position: Optional[str] = None
+    paid: bool = False
+    first_encampment: bool = True
+    religious_preference: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    notes: Optional[str] = None
+
+class ParticipantCreate(ParticipantBase):
+    pass
+
+class ParticipantResponse(ParticipantBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    created_at: str
+    updated_at: str
+
+class ScheduleEventBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    date: str  # ISO date string
+    start_time: str
+    end_time: str
+    location: Optional[str] = None
+    event_type: str = "general"  # general, training, ceremony, meal, recreation
+
+class ScheduleEventCreate(ScheduleEventBase):
+    pass
+
+class ScheduleEventResponse(ScheduleEventBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    created_at: str
+    updated_at: str
+
+class BudgetItemBase(BaseModel):
+    category: str
+    subcategory: Optional[str] = None
+    item_name: str
+    estimated: float = 0.0
+    actual: float = 0.0
+    notes: Optional[str] = None
+
+class BudgetItemCreate(BudgetItemBase):
+    pass
+
+class BudgetItemResponse(BudgetItemBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    created_at: str
+    updated_at: str
+
+class DocumentBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    doc_type: str  # handbook, official_document, form
+    content: Optional[str] = None
+    file_url: Optional[str] = None
+
+class DocumentCreate(DocumentBase):
+    pass
+
+class DocumentResponse(DocumentBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    created_at: str
+    updated_at: str
+
+# ================= AUTH HELPERS =================
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_token(user_id: str, email: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_role(allowed_roles: List[str]):
+    async def role_checker(user: dict = Depends(get_current_user)):
+        if user["role"] not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return role_checker
+
+# ================= AUTH ROUTES =================
+
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(user_data: UserCreate):
+    existing = await db.users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    user_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    user_doc = {
+        "id": user_id,
+        "email": user_data.email,
+        "name": user_data.name,
+        "role": user_data.role,
+        "capid": user_data.capid,
+        "password_hash": hash_password(user_data.password),
+        "created_at": now
+    }
+    await db.users.insert_one(user_doc)
+    
+    token = create_token(user_id, user_data.email, user_data.role)
+    
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(
+            id=user_id,
+            email=user_data.email,
+            name=user_data.name,
+            role=user_data.role,
+            capid=user_data.capid,
+            created_at=now
+        )
+    )
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(credentials: UserLogin):
+    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    if not user or not verify_password(credentials.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_token(user["id"], user["email"], user["role"])
+    
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(
+            id=user["id"],
+            email=user["email"],
+            name=user["name"],
+            role=user["role"],
+            capid=user.get("capid"),
+            created_at=user["created_at"]
+        )
+    )
 
-# Add your routes to the router instead of directly to app
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_me(user: dict = Depends(get_current_user)):
+    return UserResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        role=user["role"],
+        capid=user.get("capid"),
+        created_at=user["created_at"]
+    )
+
+# ================= USER MANAGEMENT =================
+
+@api_router.get("/users", response_model=List[UserResponse])
+async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    return [UserResponse(**u) for u in users]
+
+@api_router.put("/users/{user_id}/role")
+async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
+    if role not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.CADET]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    
+    result = await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "Role updated successfully"}
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully"}
+
+# ================= PARTICIPANT ROUTES =================
+
+@api_router.get("/participants", response_model=List[ParticipantResponse])
+async def get_participants(user: dict = Depends(get_current_user)):
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    return [ParticipantResponse(**p) for p in participants]
+
+@api_router.get("/participants/{participant_id}", response_model=ParticipantResponse)
+async def get_participant(participant_id: str, user: dict = Depends(get_current_user)):
+    participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return ParticipantResponse(**participant)
+
+@api_router.post("/participants", response_model=ParticipantResponse)
+async def create_participant(
+    data: ParticipantCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    participant_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    doc = {
+        "id": participant_id,
+        **data.model_dump(),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.participants.insert_one(doc)
+    del doc["_id"] if "_id" in doc else None
+    return ParticipantResponse(**doc)
+
+@api_router.put("/participants/{participant_id}", response_model=ParticipantResponse)
+async def update_participant(
+    participant_id: str,
+    data: ParticipantCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {**data.model_dump(), "updated_at": now}
+    
+    result = await db.participants.update_one(
+        {"id": participant_id},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    return ParticipantResponse(**participant)
+
+@api_router.delete("/participants/{participant_id}")
+async def delete_participant(
+    participant_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    result = await db.participants.delete_one({"id": participant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return {"message": "Participant deleted successfully"}
+
+@api_router.post("/participants/import")
+async def import_participants(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        
+        # Normalize column names
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        
+        imported_count = 0
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Column mapping for common variations
+        column_map = {
+            'cap_id': 'capid', 'cap id': 'capid', 'capid': 'capid',
+            'last': 'last_name', 'last_name': 'last_name', 'lastname': 'last_name',
+            'first': 'first_name', 'first_name': 'first_name', 'firstname': 'first_name',
+            'shirt': 'shirt_size', 'shirt_size': 'shirt_size', 'shirtsize': 'shirt_size',
+            'type': 'participant_type', 'participant_type': 'participant_type'
+        }
+        
+        df.columns = [column_map.get(col, col) for col in df.columns]
+        
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            # Skip rows without CAPID
+            capid = str(row_dict.get('capid', '')).strip()
+            if not capid or capid == 'nan':
+                continue
+            
+            participant_id = str(uuid.uuid4())
+            
+            doc = {
+                "id": participant_id,
+                "capid": capid,
+                "rank": str(row_dict.get('rank', '')).strip() if pd.notna(row_dict.get('rank')) else '',
+                "last_name": str(row_dict.get('last_name', '')).strip() if pd.notna(row_dict.get('last_name')) else '',
+                "first_name": str(row_dict.get('first_name', '')).strip() if pd.notna(row_dict.get('first_name')) else '',
+                "unit": str(row_dict.get('unit', '')).strip() if pd.notna(row_dict.get('unit')) else '',
+                "wing": str(row_dict.get('wing', '')).strip() if pd.notna(row_dict.get('wing')) else None,
+                "region": str(row_dict.get('region', '')).strip() if pd.notna(row_dict.get('region')) else None,
+                "gender": str(row_dict.get('gender', '')).strip() if pd.notna(row_dict.get('gender')) else None,
+                "age": int(row_dict.get('age', 0)) if pd.notna(row_dict.get('age')) else None,
+                "email": str(row_dict.get('email', '')).strip() if pd.notna(row_dict.get('email')) else None,
+                "phone": str(row_dict.get('phone', '')).strip() if pd.notna(row_dict.get('phone')) else None,
+                "shirt_size": str(row_dict.get('shirt_size', '')).strip() if pd.notna(row_dict.get('shirt_size')) else None,
+                "participant_type": str(row_dict.get('participant_type', 'basic_student')).strip() if pd.notna(row_dict.get('participant_type')) else 'basic_student',
+                "squadron": str(row_dict.get('squadron', '')).strip() if pd.notna(row_dict.get('squadron')) else None,
+                "flight": str(row_dict.get('flight', '')).strip() if pd.notna(row_dict.get('flight')) else None,
+                "position": str(row_dict.get('position', '')).strip() if pd.notna(row_dict.get('position')) else None,
+                "paid": bool(row_dict.get('paid', False)) if pd.notna(row_dict.get('paid')) else False,
+                "first_encampment": bool(row_dict.get('first_encampment', True)) if pd.notna(row_dict.get('first_encampment')) else True,
+                "religious_preference": str(row_dict.get('religious_preference', '')).strip() if pd.notna(row_dict.get('religious_preference')) else None,
+                "emergency_contact": str(row_dict.get('emergency_contact', '')).strip() if pd.notna(row_dict.get('emergency_contact')) else None,
+                "notes": str(row_dict.get('notes', '')).strip() if pd.notna(row_dict.get('notes')) else None,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            # Upsert by CAPID
+            await db.participants.update_one(
+                {"capid": capid},
+                {"$set": doc},
+                upsert=True
+            )
+            imported_count += 1
+        
+        return {"message": f"Successfully imported {imported_count} participants"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+# ================= SCHEDULE ROUTES =================
+
+@api_router.get("/schedule", response_model=List[ScheduleEventResponse])
+async def get_schedule(user: dict = Depends(get_current_user)):
+    events = await db.schedule.find({}, {"_id": 0}).to_list(1000)
+    return [ScheduleEventResponse(**e) for e in events]
+
+@api_router.post("/schedule", response_model=ScheduleEventResponse)
+async def create_schedule_event(
+    data: ScheduleEventCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    event_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    doc = {
+        "id": event_id,
+        **data.model_dump(),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.schedule.insert_one(doc)
+    del doc["_id"] if "_id" in doc else None
+    return ScheduleEventResponse(**doc)
+
+@api_router.put("/schedule/{event_id}", response_model=ScheduleEventResponse)
+async def update_schedule_event(
+    event_id: str,
+    data: ScheduleEventCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {**data.model_dump(), "updated_at": now}
+    
+    result = await db.schedule.update_one({"id": event_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    event = await db.schedule.find_one({"id": event_id}, {"_id": 0})
+    return ScheduleEventResponse(**event)
+
+@api_router.delete("/schedule/{event_id}")
+async def delete_schedule_event(
+    event_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    result = await db.schedule.delete_one({"id": event_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Event deleted successfully"}
+
+# ================= BUDGET ROUTES =================
+
+@api_router.get("/budget", response_model=List[BudgetItemResponse])
+async def get_budget(user: dict = Depends(get_current_user)):
+    items = await db.budget.find({}, {"_id": 0}).to_list(1000)
+    return [BudgetItemResponse(**i) for i in items]
+
+@api_router.post("/budget", response_model=BudgetItemResponse)
+async def create_budget_item(
+    data: BudgetItemCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    item_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    doc = {
+        "id": item_id,
+        **data.model_dump(),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.budget.insert_one(doc)
+    del doc["_id"] if "_id" in doc else None
+    return BudgetItemResponse(**doc)
+
+@api_router.put("/budget/{item_id}", response_model=BudgetItemResponse)
+async def update_budget_item(
+    item_id: str,
+    data: BudgetItemCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {**data.model_dump(), "updated_at": now}
+    
+    result = await db.budget.update_one({"id": item_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    item = await db.budget.find_one({"id": item_id}, {"_id": 0})
+    return BudgetItemResponse(**item)
+
+@api_router.delete("/budget/{item_id}")
+async def delete_budget_item(
+    item_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    result = await db.budget.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    return {"message": "Budget item deleted successfully"}
+
+@api_router.post("/budget/import")
+async def import_budget(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        
+        imported_count = 0
+        now = datetime.now(timezone.utc).isoformat()
+        
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            item_name = str(row_dict.get('item_name', row_dict.get('item', ''))).strip()
+            if not item_name or item_name == 'nan':
+                continue
+            
+            item_id = str(uuid.uuid4())
+            
+            doc = {
+                "id": item_id,
+                "category": str(row_dict.get('category', 'General')).strip() if pd.notna(row_dict.get('category')) else 'General',
+                "subcategory": str(row_dict.get('subcategory', '')).strip() if pd.notna(row_dict.get('subcategory')) else None,
+                "item_name": item_name,
+                "estimated": float(row_dict.get('estimated', 0)) if pd.notna(row_dict.get('estimated')) else 0.0,
+                "actual": float(row_dict.get('actual', 0)) if pd.notna(row_dict.get('actual')) else 0.0,
+                "notes": str(row_dict.get('notes', '')).strip() if pd.notna(row_dict.get('notes')) else None,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            await db.budget.insert_one(doc)
+            imported_count += 1
+        
+        return {"message": f"Successfully imported {imported_count} budget items"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/budget/summary")
+async def get_budget_summary(user: dict = Depends(get_current_user)):
+    items = await db.budget.find({}, {"_id": 0}).to_list(1000)
+    
+    total_estimated = sum(i.get("estimated", 0) for i in items)
+    total_actual = sum(i.get("actual", 0) for i in items)
+    
+    # Group by category
+    categories = {}
+    for item in items:
+        cat = item.get("category", "General")
+        if cat not in categories:
+            categories[cat] = {"estimated": 0, "actual": 0}
+        categories[cat]["estimated"] += item.get("estimated", 0)
+        categories[cat]["actual"] += item.get("actual", 0)
+    
+    return {
+        "total_estimated": total_estimated,
+        "total_actual": total_actual,
+        "variance": total_estimated - total_actual,
+        "by_category": categories
+    }
+
+# ================= DOCUMENT ROUTES =================
+
+@api_router.get("/documents", response_model=List[DocumentResponse])
+async def get_documents(user: dict = Depends(get_current_user)):
+    docs = await db.documents.find({}, {"_id": 0}).to_list(1000)
+    return [DocumentResponse(**d) for d in docs]
+
+@api_router.get("/documents/{doc_id}", response_model=DocumentResponse)
+async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return DocumentResponse(**doc)
+
+@api_router.post("/documents", response_model=DocumentResponse)
+async def create_document(
+    data: DocumentCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    doc_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    doc = {
+        "id": doc_id,
+        **data.model_dump(),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.documents.insert_one(doc)
+    del doc["_id"] if "_id" in doc else None
+    return DocumentResponse(**doc)
+
+@api_router.put("/documents/{doc_id}", response_model=DocumentResponse)
+async def update_document(
+    doc_id: str,
+    data: DocumentCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {**data.model_dump(), "updated_at": now}
+    
+    result = await db.documents.update_one({"id": doc_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    return DocumentResponse(**doc)
+
+@api_router.delete("/documents/{doc_id}")
+async def delete_document(
+    doc_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    result = await db.documents.delete_one({"id": doc_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"message": "Document deleted successfully"}
+
+# ================= STATS ROUTES =================
+
+@api_router.get("/stats/dashboard")
+async def get_dashboard_stats(user: dict = Depends(get_current_user)):
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    budget_items = await db.budget.find({}, {"_id": 0}).to_list(1000)
+    events = await db.schedule.find({}, {"_id": 0}).to_list(1000)
+    
+    # Participant stats
+    total_participants = len(participants)
+    by_type = {}
+    by_gender = {"M": 0, "F": 0, "Other": 0}
+    paid_count = 0
+    
+    for p in participants:
+        ptype = p.get("participant_type", "basic_student")
+        by_type[ptype] = by_type.get(ptype, 0) + 1
+        
+        gender = p.get("gender", "Other")
+        if gender in by_gender:
+            by_gender[gender] += 1
+        else:
+            by_gender["Other"] += 1
+        
+        if p.get("paid"):
+            paid_count += 1
+    
+    # Budget stats
+    total_estimated = sum(i.get("estimated", 0) for i in budget_items)
+    total_actual = sum(i.get("actual", 0) for i in budget_items)
+    
+    # Schedule stats
+    upcoming_events = len([e for e in events if e.get("date", "") >= datetime.now(timezone.utc).strftime("%Y-%m-%d")])
+    
+    return {
+        "participants": {
+            "total": total_participants,
+            "by_type": by_type,
+            "by_gender": by_gender,
+            "paid": paid_count,
+            "unpaid": total_participants - paid_count
+        },
+        "budget": {
+            "total_estimated": total_estimated,
+            "total_actual": total_actual,
+            "variance": total_estimated - total_actual
+        },
+        "schedule": {
+            "total_events": len(events),
+            "upcoming_events": upcoming_events
+        }
+    }
+
+# ================= ROOT ROUTE =================
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+    return {"message": "CAP Encampment Roster API", "version": "1.0.0"}
 
 # Include the router in the main app
 app.include_router(api_router)
