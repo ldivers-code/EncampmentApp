@@ -476,8 +476,6 @@ async def import_participants(
 @api_router.get("/schedule", response_model=List[ScheduleEventResponse])
 async def get_schedule(user: dict = Depends(get_current_user)):
     """Get schedule events. Editors see all events, others see only published."""
-    is_editor = user["role"] in [UserRole.COMMANDER, UserRole.STAFF]
-    
     # Get schedule settings
     settings = await db.schedule_settings.find_one({"_id": "settings"})
     is_published = settings.get("is_published", False) if settings else False
