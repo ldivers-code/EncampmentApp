@@ -1494,7 +1494,7 @@
     {
       "test_name": "Assign Role to Participant",
       "method": "PUT",
-      "endpoint": "/org-chart/roles/enc-commander/assign?participant_id=6102be85-aed8-48a7-83cb-b0e303f8db3e",
+      "endpoint": "/org-chart/roles/enc-commander/assign?participant_id=encampment-ops",
       "expected_status": 200,
       "actual_status": 200,
       "success": true,
