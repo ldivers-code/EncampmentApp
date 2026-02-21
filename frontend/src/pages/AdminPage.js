@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUserRole, deleteUser } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -10,7 +10,8 @@ import {
   UserCog,
   Trash2,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Plane
 } from 'lucide-react';
 
 const AdminPage = () => {
@@ -22,6 +23,24 @@ const AdminPage = () => {
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
     { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     { value: 'cadet', label: 'Cadet', color: 'bg-slate-100 text-slate-800 border-slate-200' }
+  ];
+
+  const squadrons = [
+    { value: '', label: 'Not Assigned' },
+    { value: 'staff', label: 'Staff/Cadre' },
+    { value: 'sq1', label: 'Squadron 1' },
+    { value: 'sq2', label: 'Squadron 2' },
+    { value: 'sq3', label: 'Squadron 3' }
+  ];
+
+  const flights = [
+    { value: '', label: 'Not Assigned' },
+    { value: 'alpha', label: 'Alpha', squadron: 'sq1' },
+    { value: 'bravo', label: 'Bravo', squadron: 'sq1' },
+    { value: 'charlie', label: 'Charlie', squadron: 'sq2' },
+    { value: 'delta', label: 'Delta', squadron: 'sq2' },
+    { value: 'echo', label: 'Echo', squadron: 'sq3' },
+    { value: 'foxtrot', label: 'Foxtrot', squadron: 'sq3' }
   ];
 
   useEffect(() => {
@@ -49,6 +68,31 @@ const AdminPage = () => {
     }
   };
 
+  const handleUnitChange = async (userId, squadron, flight) => {
+    try {
+      await assignUserUnit(userId, squadron || null, flight || null);
+      toast.success('Unit assignment updated');
+      loadUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update unit');
+    }
+  };
+
+  const handleSquadronChange = (userId, squadron) => {
+    const user = users.find(u => u.id === userId);
+    // Clear flight if squadron changes and flight doesn't belong to new squadron
+    const currentFlight = user?.flight;
+    const flightInfo = flights.find(f => f.value === currentFlight);
+    const newFlight = (flightInfo && flightInfo.squadron === squadron) ? currentFlight : '';
+    handleUnitChange(userId, squadron, newFlight);
+  };
+
+  const handleFlightChange = (userId, flight) => {
+    const flightInfo = flights.find(f => f.value === flight);
+    const squadron = flightInfo?.squadron || '';
+    handleUnitChange(userId, squadron, flight);
+  };
+
   const handleDelete = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       try {
@@ -63,6 +107,11 @@ const AdminPage = () => {
 
   const getRoleBadgeColor = (role) => {
     return roles.find(r => r.value === role)?.color || roles[2].color;
+  };
+
+  const getFlightsForSquadron = (squadron) => {
+    if (!squadron || squadron === 'staff') return [];
+    return flights.filter(f => f.squadron === squadron || f.value === '');
   };
 
   if (loading) {
@@ -86,7 +135,7 @@ const AdminPage = () => {
           </h1>
         </div>
         <p className="text-slate-500">
-          Manage user roles and permissions
+          Manage user roles, permissions, and unit assignments
         </p>
       </div>
 
@@ -118,7 +167,7 @@ const AdminPage = () => {
             <ul className="text-sm text-slate-600 space-y-1">
               <li>• Edit roster participants</li>
               <li>• Manage schedule events</li>
-              <li>• Update budget items</li>
+              <li>• Assign users to units</li>
               <li>• Manage documents</li>
             </ul>
           </div>
@@ -129,10 +178,43 @@ const AdminPage = () => {
             </div>
             <ul className="text-sm text-slate-600 space-y-1">
               <li>• View roster</li>
-              <li>• View schedule</li>
+              <li>• View their unit's schedule</li>
               <li>• View budget</li>
               <li>• Access documents</li>
             </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Unit Structure Info */}
+      <div className="bg-white border border-slate-200 rounded-sm mb-6">
+        <div className="border-b border-slate-100 p-4">
+          <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            <Plane className="w-4 h-4" />
+            Unit Structure
+          </h2>
+        </div>
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-3 bg-blue-50 rounded-sm border border-blue-200">
+            <p className="font-bold text-blue-800 mb-2">Squadron 1</p>
+            <div className="flex gap-2">
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">Alpha</span>
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">Bravo</span>
+            </div>
+          </div>
+          <div className="p-3 bg-emerald-50 rounded-sm border border-emerald-200">
+            <p className="font-bold text-emerald-800 mb-2">Squadron 2</p>
+            <div className="flex gap-2">
+              <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">Charlie</span>
+              <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">Delta</span>
+            </div>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-sm border border-purple-200">
+            <p className="font-bold text-purple-800 mb-2">Squadron 3</p>
+            <div className="flex gap-2">
+              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Echo</span>
+              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Foxtrot</span>
+            </div>
           </div>
         </div>
       </div>
@@ -151,15 +233,16 @@ const AdminPage = () => {
               <tr>
                 <th className="text-left">Name</th>
                 <th className="text-left">Email</th>
-                <th className="text-left">CAP ID</th>
                 <th className="text-left">Role</th>
+                <th className="text-left">Squadron</th>
+                <th className="text-left">Flight</th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-slate-400">
+                  <td colSpan={6} className="text-center py-8 text-slate-400">
                     No users registered yet
                   </td>
                 </tr>
@@ -172,8 +255,7 @@ const AdminPage = () => {
                         <span className="ml-2 text-xs text-slate-400">(You)</span>
                       )}
                     </td>
-                    <td className="text-slate-600">{user.email}</td>
-                    <td className="font-mono">{user.capid || '-'}</td>
+                    <td className="text-slate-600 text-sm">{user.email}</td>
                     <td>
                       <Select
                         value={user.role}
@@ -181,7 +263,7 @@ const AdminPage = () => {
                         disabled={user.id === currentUser?.id}
                       >
                         <SelectTrigger 
-                          className={`w-32 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
+                          className={`w-28 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
                           data-testid={`role-select-${user.id}`}
                         >
                           <SelectValue />
@@ -189,6 +271,41 @@ const AdminPage = () => {
                         <SelectContent>
                           {roles.map(role => (
                             <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td>
+                      <Select
+                        value={user.squadron || ''}
+                        onValueChange={(value) => handleSquadronChange(user.id, value)}
+                      >
+                        <SelectTrigger className="w-32 rounded-sm text-xs" data-testid={`squadron-select-${user.id}`}>
+                          <SelectValue placeholder="Not Assigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {squadrons.map(sq => (
+                            <SelectItem key={sq.value} value={sq.value}>{sq.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td>
+                      <Select
+                        value={user.flight || ''}
+                        onValueChange={(value) => handleFlightChange(user.id, value)}
+                        disabled={!user.squadron || user.squadron === 'staff'}
+                      >
+                        <SelectTrigger 
+                          className="w-28 rounded-sm text-xs" 
+                          data-testid={`flight-select-${user.id}`}
+                          disabled={!user.squadron || user.squadron === 'staff'}
+                        >
+                          <SelectValue placeholder="Not Assigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getFlightsForSquadron(user.squadron).map(fl => (
+                            <SelectItem key={fl.value} value={fl.value}>{fl.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -219,7 +336,10 @@ const AdminPage = () => {
         <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-amber-800">
           <p className="font-semibold">Important</p>
-          <p className="mt-1">Role changes take effect immediately. Users will need to refresh their browser to see updated permissions. Be careful when modifying Commander access.</p>
+          <p className="mt-1">
+            Role and unit changes take effect immediately. Users will need to refresh their browser to see updated permissions and schedule filtering.
+            Assigning a flight will automatically set the correct squadron.
+          </p>
         </div>
       </div>
     </div>
