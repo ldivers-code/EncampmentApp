@@ -23,6 +23,7 @@ const AdminPage = () => {
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
     { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+    { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
     { value: 'cadet', label: 'Cadet', color: 'bg-slate-100 text-slate-800 border-slate-200' }
   ];
 
