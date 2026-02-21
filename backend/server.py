@@ -200,6 +200,10 @@ async def register(user_data: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Check if this is the first user - make them commander
+    user_count = await db.users.count_documents({})
+    assigned_role = UserRole.COMMANDER if user_count == 0 else user_data.role
+    
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
@@ -207,14 +211,14 @@ async def register(user_data: UserCreate):
         "id": user_id,
         "email": user_data.email,
         "name": user_data.name,
-        "role": user_data.role,
+        "role": assigned_role,
         "capid": user_data.capid,
         "password_hash": hash_password(user_data.password),
         "created_at": now
     }
     await db.users.insert_one(user_doc)
     
-    token = create_token(user_id, user_data.email, user_data.role)
+    token = create_token(user_id, user_data.email, assigned_role)
     
     return TokenResponse(
         access_token=token,
@@ -222,7 +226,7 @@ async def register(user_data: UserCreate):
             id=user_id,
             email=user_data.email,
             name=user_data.name,
-            role=user_data.role,
+            role=assigned_role,
             capid=user_data.capid,
             created_at=now
         )
