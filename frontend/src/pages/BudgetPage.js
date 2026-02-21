@@ -66,8 +66,9 @@ const BudgetPage = () => {
     payment_status: 'pending'
   });
 
+  // Food expense default from 2026 TNWG Encampment Budget: $13.15 per person per day
   const [foodFormData, setFoodFormData] = useState({
-    cost_per_person_per_day: 15,
+    cost_per_person_per_day: 13.15,
     total_participants: 0,
     total_days: 8,
     notes: ''
