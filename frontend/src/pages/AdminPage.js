@@ -141,6 +141,46 @@ const AdminPage = () => {
     }
   };
 
+  const handleEditPermissions = (user) => {
+    setEditingPermissions(user.id);
+    setPermissionsForm(user.permissions || {
+      dashboard: true,
+      roster_view: true,
+      roster_edit: false,
+      schedule_view: true,
+      schedule_edit: false,
+      budget_view: false,
+      budget_edit: false,
+      analytics: false,
+      org_chart: true,
+      handbooks: true,
+      documents: true,
+      admin_panel: false
+    });
+  };
+
+  const handleSavePermissions = async (userId) => {
+    try {
+      await updateUserPermissions(userId, permissionsForm);
+      toast.success('Permissions updated successfully');
+      setEditingPermissions(null);
+      loadUsers();
+    } catch (error) {
+      toast.error('Failed to update permissions');
+    }
+  };
+
+  const handleResetPermissions = async (userId) => {
+    try {
+      await resetUserPermissions(userId);
+      toast.success('Permissions reset to role defaults');
+      setEditingPermissions(null);
+      loadUsers();
+    } catch (error) {
+      toast.error('Failed to reset permissions');
+    }
+  };
+
   const handleRoleChange = async (userId, newRole) => {
     try {
       await updateUserRole(userId, newRole);
