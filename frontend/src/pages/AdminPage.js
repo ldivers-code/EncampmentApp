@@ -279,7 +279,7 @@ const AdminPage = () => {
                     </td>
                     <td>
                       <Select
-                        value={user.squadron || ''}
+                        value={user.squadron || 'none'}
                         onValueChange={(value) => handleSquadronChange(user.id, value)}
                       >
                         <SelectTrigger className="w-32 rounded-sm text-xs" data-testid={`squadron-select-${user.id}`}>
@@ -294,7 +294,7 @@ const AdminPage = () => {
                     </td>
                     <td>
                       <Select
-                        value={user.flight || ''}
+                        value={user.flight || 'none'}
                         onValueChange={(value) => handleFlightChange(user.id, value)}
                         disabled={!user.squadron || user.squadron === 'staff'}
                       >
