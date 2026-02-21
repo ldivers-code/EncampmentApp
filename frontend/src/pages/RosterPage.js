@@ -67,6 +67,7 @@ const RosterPage = () => {
 
   useEffect(() => {
     loadParticipants();
+    loadStats();
   }, []);
 
   const loadParticipants = async () => {
@@ -80,14 +81,26 @@ const RosterPage = () => {
     }
   };
 
+  const loadStats = async () => {
+    try {
+      const data = await getParticipantStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Failed to load stats');
+    }
+  };
+
   const filteredParticipants = useMemo(() => {
     return participants.filter(p => {
       const matchesSearch = 
         `${p.first_name} ${p.last_name} ${p.capid} ${p.unit}`.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === 'all' || p.participant_type === typeFilter;
-      return matchesSearch && matchesType;
+      const matchesPaid = paidFilter === 'all' || 
+        (paidFilter === 'paid' && (p.paid || p.paid_in_full)) ||
+        (paidFilter === 'unpaid' && !p.paid && !p.paid_in_full);
+      return matchesSearch && matchesType && matchesPaid;
     });
-  }, [participants, searchTerm, typeFilter]);
+  }, [participants, searchTerm, typeFilter, paidFilter]);
 
   const paginatedParticipants = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
