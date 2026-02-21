@@ -142,6 +142,17 @@ class ScheduleSettings(BaseModel):
     last_modified_at: Optional[str] = None
     version: int = 0  # Incremented on each change for real-time sync
 
+# Push Notification Models
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: Dict[str, str]
+
+class PushNotificationRequest(BaseModel):
+    title: str
+    body: str
+    target_groups: List[str] = ["all"]  # all, staff, sq1, sq2, sq3, or specific flights
+    url: Optional[str] = "/schedule"
+
 class BudgetItemBase(BaseModel):
     category: str
     subcategory: Optional[str] = None
