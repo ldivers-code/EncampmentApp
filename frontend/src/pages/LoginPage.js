@@ -135,7 +135,7 @@ const LoginPage = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="staff">Staff / Senior Member</SelectItem>
-                        <SelectItem value="cadet">Cadre / Cadet</SelectItem>
+                        <SelectItem value="cadre">Cadre</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-slate-400 mt-1">Your role can be adjusted by encampment admin after approval</p>
