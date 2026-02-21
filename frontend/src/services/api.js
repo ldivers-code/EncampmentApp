@@ -304,6 +304,56 @@ export const deleteUser = async (userId) => {
   return response.data;
 };
 
+// Profile
+export const getProfile = async () => {
+  const response = await axios.get(`${API}/profile`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateProfile = async (data) => {
+  const response = await axios.put(`${API}/profile`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const uploadProfilePhoto = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/profile/photo`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const deleteProfilePhoto = async () => {
+  const response = await axios.delete(`${API}/profile/photo`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// User Approval
+export const getPendingUsers = async () => {
+  const response = await axios.get(`${API}/users/pending`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const approveUser = async (userId) => {
+  const response = await axios.post(`${API}/users/${userId}/approve`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const linkUserToParticipant = async (userId, participantId, autoPopulate = true) => {
+  const response = await axios.post(
+    `${API}/users/${userId}/link-participant?participant_id=${participantId}&auto_populate=${autoPopulate}`,
+    {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const findMatchingParticipants = async (userId) => {
+  const response = await axios.get(`${API}/users/${userId}/match-participants`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Org Chart
 export const getOrgChartRoles = async () => {
   const response = await axios.get(`${API}/org-chart/roles`, { headers: getAuthHeaders() });
