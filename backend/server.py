@@ -1078,15 +1078,27 @@ async def send_schedule_update_notification():
 
 # ================= BUDGET ROUTES =================
 
+# Helper to check if user can access financials
+def require_finance_access():
+    """Require Commander or Finance role for budget access"""
+    async def checker(user: dict = Depends(get_current_user)):
+        if user["role"] not in [UserRole.COMMANDER, UserRole.FINANCE]:
+            raise HTTPException(status_code=403, detail="Access restricted to Commander and Finance roles")
+        return user
+    return checker
+
+
 @api_router.get("/budget", response_model=List[BudgetItemResponse])
-async def get_budget(user: dict = Depends(get_current_user)):
+async def get_budget(user: dict = Depends(require_finance_access())):
+    """Get all budget items - restricted to Commander and Finance roles"""
     items = await db.budget.find({}, {"_id": 0}).to_list(1000)
     return [BudgetItemResponse(**i) for i in items]
+
 
 @api_router.post("/budget", response_model=BudgetItemResponse)
 async def create_budget_item(
     data: BudgetItemCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_finance_access())
 ):
     item_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
