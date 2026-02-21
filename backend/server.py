@@ -542,6 +542,246 @@ async def get_participant_stats(user: dict = Depends(get_current_user)):
     return stats
 
 
+@api_router.get("/participants/analytics/detailed")
+async def get_detailed_analytics(user: dict = Depends(get_current_user)):
+    """Get comprehensive analytics for encampment attendees"""
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    if not participants:
+        return {"error": "No participants found"}
+    
+    # Initialize analytics structure
+    analytics = {
+        'total_count': len(participants),
+        'by_role': {
+            'seniors': {'count': 0, 'male': 0, 'female': 0, 'ages': []},
+            'staff': {'count': 0, 'male': 0, 'female': 0, 'ages': []},
+            'cadre': {'count': 0, 'male': 0, 'female': 0, 'ages': []},
+            'students': {'count': 0, 'male': 0, 'female': 0, 'ages': []},
+        },
+        'by_rank': {},
+        'by_wing': {},
+        'by_region': {},
+        'by_gender': {'M': 0, 'F': 0, 'Unknown': 0},
+        'by_group': {},  # TN Groups
+        'by_squadron': {},
+        'by_flight': {},
+        'age_stats': {
+            'total': {'ages': [], 'avg': 0, 'min': 0, 'max': 0},
+            'by_squadron': {},
+            'by_flight': {}
+        },
+        'pending_payments': [],
+    }
+    
+    for p in participants:
+        member_type = (p.get('member_type') or '').upper()
+        ptype = p.get('participant_type', '')
+        gender = (p.get('gender') or 'Unknown').upper()
+        if gender not in ['M', 'F']:
+            gender = 'Unknown'
+        age = p.get('age') or p.get('age_at_event')
+        rank = p.get('rank', 'Unknown')
+        wing = p.get('wing', 'Unknown')
+        region = p.get('region', 'Unknown')
+        unit = p.get('unit', '')
+        squadron = p.get('squadron', 'Unassigned')
+        flight = p.get('flight', 'Unassigned')
+        
+        # Gender counts
+        analytics['by_gender'][gender] = analytics['by_gender'].get(gender, 0) + 1
+        
+        # Rank distribution
+        if rank:
+            analytics['by_rank'][rank] = analytics['by_rank'].get(rank, 0) + 1
+        
+        # Wing distribution
+        if wing:
+            analytics['by_wing'][wing] = analytics['by_wing'].get(wing, 0) + 1
+        
+        # Region distribution
+        if region:
+            analytics['by_region'][region] = analytics['by_region'].get(region, 0) + 1
+        
+        # TN Group extraction (for TN wing members)
+        if wing == 'TN' and unit:
+            # CAP unit format: Group/Squadron or just number
+            # Try to extract group from unit
+            group = 'Unknown'
+            try:
+                unit_num = int(str(unit).split('/')[0].strip())
+                if unit_num < 100:
+                    group = f"Group {unit_num}"
+                elif unit_num < 200:
+                    group = "Group 1"
+                elif unit_num < 300:
+                    group = "Group 2"
+                elif unit_num < 400:
+                    group = "Group 3"
+                elif unit_num < 500:
+                    group = "Group 4"
+                else:
+                    group = "Other"
+            except (ValueError, IndexError):
+                group = "Unknown"
+            analytics['by_group'][group] = analytics['by_group'].get(group, 0) + 1
+        
+        # Role-based counts with gender and age
+        if member_type == 'SENIOR':
+            analytics['by_role']['seniors']['count'] += 1
+            if gender == 'M':
+                analytics['by_role']['seniors']['male'] += 1
+            elif gender == 'F':
+                analytics['by_role']['seniors']['female'] += 1
+            if age:
+                analytics['by_role']['seniors']['ages'].append(age)
+            
+            if ptype == 'staff':
+                analytics['by_role']['staff']['count'] += 1
+                if gender == 'M':
+                    analytics['by_role']['staff']['male'] += 1
+                elif gender == 'F':
+                    analytics['by_role']['staff']['female'] += 1
+                if age:
+                    analytics['by_role']['staff']['ages'].append(age)
+        else:
+            if ptype == 'cadre':
+                analytics['by_role']['cadre']['count'] += 1
+                if gender == 'M':
+                    analytics['by_role']['cadre']['male'] += 1
+                elif gender == 'F':
+                    analytics['by_role']['cadre']['female'] += 1
+                if age:
+                    analytics['by_role']['cadre']['ages'].append(age)
+            else:
+                analytics['by_role']['students']['count'] += 1
+                if gender == 'M':
+                    analytics['by_role']['students']['male'] += 1
+                elif gender == 'F':
+                    analytics['by_role']['students']['female'] += 1
+                if age:
+                    analytics['by_role']['students']['ages'].append(age)
+        
+        # Age tracking for averages
+        if age:
+            analytics['age_stats']['total']['ages'].append(age)
+            
+            if squadron and squadron != 'Unassigned':
+                if squadron not in analytics['age_stats']['by_squadron']:
+                    analytics['age_stats']['by_squadron'][squadron] = []
+                analytics['age_stats']['by_squadron'][squadron].append(age)
+            
+            if flight and flight != 'Unassigned':
+                if flight not in analytics['age_stats']['by_flight']:
+                    analytics['age_stats']['by_flight'][flight] = []
+                analytics['age_stats']['by_flight'][flight].append(age)
+        
+        # Squadron/Flight distribution
+        if squadron:
+            analytics['by_squadron'][squadron] = analytics['by_squadron'].get(squadron, 0) + 1
+        if flight:
+            analytics['by_flight'][flight] = analytics['by_flight'].get(flight, 0) + 1
+        
+        # Pending payments
+        is_paid = p.get('paid') or p.get('paid_in_full')
+        if not is_paid:
+            analytics['pending_payments'].append({
+                'capid': p.get('capid'),
+                'name': f"{p.get('last_name', '')}, {p.get('first_name', '')}",
+                'rank': rank,
+                'unit': unit,
+                'wing': wing,
+                'type': ptype,
+                'email': p.get('email'),
+                'phone': p.get('phone') or p.get('cell_phone'),
+                'parent_email': p.get('cadet_parent_email'),
+                'parent_phone': p.get('cadet_parent_phone'),
+                'amount_paid': p.get('amount_paid', 0)
+            })
+    
+    # Calculate percentages for gender by role
+    for role in ['staff', 'cadre', 'students']:
+        total = analytics['by_role'][role]['count']
+        if total > 0:
+            analytics['by_role'][role]['male_pct'] = round(analytics['by_role'][role]['male'] / total * 100, 1)
+            analytics['by_role'][role]['female_pct'] = round(analytics['by_role'][role]['female'] / total * 100, 1)
+            # Average age
+            ages = analytics['by_role'][role]['ages']
+            if ages:
+                analytics['by_role'][role]['avg_age'] = round(sum(ages) / len(ages), 1)
+        else:
+            analytics['by_role'][role]['male_pct'] = 0
+            analytics['by_role'][role]['female_pct'] = 0
+            analytics['by_role'][role]['avg_age'] = 0
+        # Remove raw ages list from response
+        del analytics['by_role'][role]['ages']
+    
+    # Also calculate for seniors
+    if analytics['by_role']['seniors']['count'] > 0:
+        total = analytics['by_role']['seniors']['count']
+        analytics['by_role']['seniors']['male_pct'] = round(analytics['by_role']['seniors']['male'] / total * 100, 1)
+        analytics['by_role']['seniors']['female_pct'] = round(analytics['by_role']['seniors']['female'] / total * 100, 1)
+        ages = analytics['by_role']['seniors']['ages']
+        if ages:
+            analytics['by_role']['seniors']['avg_age'] = round(sum(ages) / len(ages), 1)
+    del analytics['by_role']['seniors']['ages']
+    
+    # Calculate age statistics
+    all_ages = analytics['age_stats']['total']['ages']
+    if all_ages:
+        analytics['age_stats']['total']['avg'] = round(sum(all_ages) / len(all_ages), 1)
+        analytics['age_stats']['total']['min'] = min(all_ages)
+        analytics['age_stats']['total']['max'] = max(all_ages)
+    del analytics['age_stats']['total']['ages']
+    
+    # Squadron averages
+    for sq, ages in analytics['age_stats']['by_squadron'].items():
+        if ages:
+            analytics['age_stats']['by_squadron'][sq] = round(sum(ages) / len(ages), 1)
+    
+    # Flight averages
+    for fl, ages in analytics['age_stats']['by_flight'].items():
+        if ages:
+            analytics['age_stats']['by_flight'][fl] = round(sum(ages) / len(ages), 1)
+    
+    return analytics
+
+
+@api_router.get("/participants/pending-payments")
+async def get_pending_payments(user: dict = Depends(get_current_user)):
+    """Get list of participants with pending payments for follow-up"""
+    participants = await db.participants.find(
+        {"$or": [{"paid": False}, {"paid": None}, {"paid_in_full": False}, {"paid_in_full": None}]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Filter to only truly unpaid
+    unpaid = []
+    for p in participants:
+        if not p.get('paid') and not p.get('paid_in_full'):
+            unpaid.append({
+                'capid': p.get('capid'),
+                'name': f"{p.get('last_name', '')}, {p.get('first_name', '')}",
+                'rank': p.get('rank'),
+                'unit': p.get('unit'),
+                'wing': p.get('wing'),
+                'participant_type': p.get('participant_type'),
+                'member_type': p.get('member_type'),
+                'email': p.get('email'),
+                'phone': p.get('phone') or p.get('cell_phone'),
+                'parent_email': p.get('cadet_parent_email'),
+                'parent_phone': p.get('cadet_parent_phone'),
+                'unit_cc_email': p.get('unit_cc_email'),
+                'amount_paid': p.get('amount_paid', 0),
+                'registration_status': p.get('registration_status')
+            })
+    
+    return {
+        'count': len(unpaid),
+        'participants': unpaid
+    }
+
+
 @api_router.get("/participants/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(participant_id: str, user: dict = Depends(get_current_user)):
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
