@@ -346,6 +346,40 @@ const BudgetPage = () => {
     }
   };
 
+  // Inline actual value editing
+  const handleStartEditActual = (item) => {
+    setEditingActual(item.id);
+    setEditingActualValue(item.actual?.toString() || '0');
+  };
+
+  const handleSaveActual = async (itemId) => {
+    try {
+      const actualValue = parseFloat(editingActualValue) || 0;
+      await updateBudgetActual(itemId, actualValue);
+      toast.success('Actual value updated');
+      setEditingActual(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update');
+    }
+  };
+
+  const handleCancelEditActual = () => {
+    setEditingActual(null);
+    setEditingActualValue('');
+  };
+
+  // Mark as paid quick action
+  const handleMarkPaid = async (itemId) => {
+    try {
+      await markBudgetItemPaid(itemId);
+      toast.success('Marked as paid');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to mark as paid');
+    }
+  };
+
   const handleLoadTemplate = async () => {
     if (items.length > 0) {
       if (!window.confirm('Loading the TNWG template will require clearing existing items first. This cannot be undone. Continue?')) {
