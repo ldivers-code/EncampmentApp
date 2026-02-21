@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   Network,
   Bell,
-  BarChart3
+  BarChart3,
+  UserCircle
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
