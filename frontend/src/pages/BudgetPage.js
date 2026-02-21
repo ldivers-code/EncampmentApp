@@ -37,12 +37,14 @@ import {
   X,
   FileImage,
   AlertCircle,
-  Lock
+  Lock,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const BudgetPage = () => {
   const { canAccessFinance, user } = useAuth();
   const [items, setItems] = useState([]);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [summary, setSummary] = useState(null);
   const [foodSettings, setFoodSettings] = useState(null);
   const [loading, setLoading] = useState(true);
