@@ -23,6 +23,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Real-time schedule sync (auto-refresh every 30 seconds)
 - [x] Flight-specific schedules with target groups
 - [x] User unit assignment (squadron/flight) in Admin page
+- [x] Mobile-optimized schedule view with swipe navigation
 
 ## What's Been Implemented
 
