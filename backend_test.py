@@ -426,6 +426,220 @@ class CAPEncampmentAPITester:
         
         return False
 
+    def test_seed_default_org_chart(self):
+        """Test seeding default org chart structure (commander only)"""
+        success, response = self.run_test(
+            "Seed Default Org Chart",
+            "POST",
+            "/org-chart/seed-defaults",
+            200
+        )
+        
+        if success:
+            print(f"   ✅ Default org chart seeded successfully")
+            return True
+        return False
+
+    def test_get_org_chart_roles(self):
+        """Test getting all org chart roles"""
+        success, response = self.run_test("Get Org Chart Roles", "GET", "/org-chart/roles", 200)
+        
+        if success and isinstance(response, list):
+            print(f"   ✅ Retrieved {len(response)} org chart roles")
+            # Check if we have the expected 48 roles from default structure
+            if len(response) >= 30:  # At least 30 roles expected
+                self.org_roles = response
+                return True
+        return False
+
+    def test_get_single_org_role(self):
+        """Test getting a single org chart role"""
+        # Use enc-commander role which should exist after seeding
+        success, response = self.run_test(
+            "Get Single Org Role",
+            "GET", 
+            "/org-chart/roles/enc-commander",
+            200
+        )
+        
+        if success and response.get('role_id') == 'enc-commander':
+            print(f"   ✅ Retrieved role: {response.get('title')}")
+            self.test_role = response
+            return True
+        return False
+
+    def test_update_org_role(self):
+        """Test updating org chart role (editor only)"""
+        if not hasattr(self, 'test_role'):
+            print("❌ Skipping update role test - get role failed")
+            return False
+            
+        update_data = {
+            "summary": "Updated summary for testing purposes",
+            "responsibilities": "- Updated responsibility 1\n- Updated responsibility 2"
+        }
+        
+        success, response = self.run_test(
+            "Update Org Chart Role",
+            "PUT",
+            f"/org-chart/roles/{self.test_role['role_id']}",
+            200,
+            data=update_data
+        )
+        
+        if success and response.get('summary') == update_data['summary']:
+            print(f"   ✅ Role updated successfully")
+            return True
+        return False
+
+    def test_assign_role_to_participant(self):
+        """Test assigning a participant to an org chart role"""
+        if not hasattr(self, 'participant_id') or not hasattr(self, 'test_role'):
+            print("❌ Skipping assignment test - missing participant or role")
+            return False
+            
+        success, response = self.run_test(
+            "Assign Role to Participant",
+            "PUT",
+            f"/org-chart/roles/{self.test_role['role_id']}/assign?participant_id={self.participant_id}",
+            200
+        )
+        
+        if success and response.get('assigned_participant_id') == self.participant_id:
+            print(f"   ✅ Participant assigned to role successfully")
+            return True
+        return False
+
+    def test_unassign_role(self):
+        """Test unassigning a participant from org chart role"""
+        if not hasattr(self, 'test_role'):
+            print("❌ Skipping unassignment test - no role available")
+            return False
+            
+        success, response = self.run_test(
+            "Unassign Role",
+            "PUT",
+            f"/org-chart/roles/{self.test_role['role_id']}/assign",
+            200
+        )
+        
+        if success and not response.get('assigned_participant_id'):
+            print(f"   ✅ Participant unassigned from role successfully")
+            return True
+        return False
+
+    def test_org_chart_role_access_control(self):
+        """Test org chart role-based access control"""
+        # Test with cadet user accessing org chart endpoints
+        timestamp = datetime.now().strftime("%H%M%S")
+        cadet_data = {
+            "email": f"cadet_org{timestamp}@capunit.org", 
+            "password": "CadetPass123!",
+            "name": f"Org Chart Cadet {timestamp}",
+            "role": "cadet",
+            "capid": f"ORG{timestamp}"
+        }
+        
+        success, response = self.run_test(
+            "Create Org Chart Test Cadet",
+            "POST",
+            "/auth/register",
+            200,
+            data=cadet_data
+        )
+        
+        if not success:
+            return False
+        
+        # Store commander token
+        commander_token = self.token
+        
+        # Login as cadet
+        cadet_login = {
+            "email": cadet_data["email"],
+            "password": cadet_data["password"]
+        }
+        
+        success, response = self.run_test(
+            "Cadet Login for Org Chart",
+            "POST",
+            "/auth/login", 
+            200,
+            data=cadet_login
+        )
+        
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            
+            # Test cadet can view org chart roles (should succeed)
+            self.run_test(
+                "Cadet View Org Roles (Should Succeed)",
+                "GET",
+                "/org-chart/roles",
+                200
+            )
+            
+            # Test cadet can get specific role (should succeed)
+            self.run_test(
+                "Cadet Get Single Role (Should Succeed)",
+                "GET", 
+                "/org-chart/roles/enc-commander",
+                200
+            )
+            
+            # Test cadet trying to update role (should fail)
+            self.run_test(
+                "Cadet Update Role (Should Fail)",
+                "PUT",
+                "/org-chart/roles/enc-commander",
+                403,
+                data={"summary": "Cadet should not be able to update"}
+            )
+            
+            # Test cadet trying to assign role (should fail)
+            self.run_test(
+                "Cadet Assign Role (Should Fail)",
+                "PUT",
+                "/org-chart/roles/enc-commander/assign",
+                403
+            )
+            
+            # Test cadet trying to create role (should fail)
+            self.run_test(
+                "Cadet Create Role (Should Fail)",
+                "POST",
+                "/org-chart/roles",
+                403,
+                data={
+                    "role_id": "cadet-test-role",
+                    "title": "Test Role",
+                    "level": 1,
+                    "order": 0
+                }
+            )
+            
+            # Test cadet trying to delete role (should fail)
+            self.run_test(
+                "Cadet Delete Role (Should Fail)",
+                "DELETE",
+                "/org-chart/roles/enc-commander",
+                403
+            )
+            
+            # Test cadet trying to seed defaults (should fail)
+            self.run_test(
+                "Cadet Seed Defaults (Should Fail)",
+                "POST",
+                "/org-chart/seed-defaults",
+                403
+            )
+            
+            # Restore commander token
+            self.token = commander_token
+            return True
+        
+        return False
+
     def test_delete_operations(self):
         """Test delete operations"""
         results = []
