@@ -192,18 +192,21 @@ const BudgetPage = () => {
     }
     if (typeFilter !== 'all') {
       if (typeFilter === 'income') {
-        filtered = filtered.filter(i => i.item_type === 'income' || i.category === 'Income');
+        filtered = filtered.filter(i => i.item_type === 'income' || i.category?.includes('Fees') || i.category?.includes('Allocations') || i.category?.includes('Donations'));
       } else {
-        filtered = filtered.filter(i => i.item_type !== 'income' && i.category !== 'Income');
+        filtered = filtered.filter(i => i.item_type !== 'income' && !i.category?.includes('Fees') && !i.category?.includes('Allocations') && !i.category?.includes('Donations'));
       }
     }
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(i => i.payment_status === statusFilter);
+    }
     return filtered;
-  }, [items, categoryFilter, typeFilter]);
+  }, [items, categoryFilter, typeFilter, statusFilter]);
 
   const chartData = useMemo(() => {
     if (!summary?.by_category) return [];
     return Object.entries(summary.by_category)
-      .filter(([cat]) => cat !== 'Income')
+      .filter(([cat]) => !cat.includes('Fees') && !cat.includes('Allocations') && !cat.includes('Donations'))
       .map(([category, data]) => ({
         name: category.length > 12 ? category.substring(0, 12) + '...' : category,
         Estimated: data.estimated,
