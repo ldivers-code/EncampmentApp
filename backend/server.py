@@ -46,16 +46,85 @@ security = HTTPBearer()
 
 class UserRole:
     COMMANDER = "commander"
-    STAFF = "staff"
     FINANCE = "finance"
-    CADET = "cadet"
+    PLANS_PROGRAMS = "plans_programs"  # Schedule/Admin
+    EXEC_CADRE = "exec_cadre"  # Cadet Leadership
+    STAFF = "staff"
+    CADRE = "cadre"
+
+class UserUnit:
+    STAFF = "staff"
+    SUPPORT_CADRE = "support_cadre"
+    EXEC_CADRE = "exec_cadre"
+    OPS_CADRE = "ops_cadre"  # Contains squadrons/flights
+
+# Granular permissions that can be assigned per user
+class AccessPermissions(BaseModel):
+    dashboard: bool = True
+    roster_view: bool = True
+    roster_edit: bool = False
+    schedule_view: bool = True
+    schedule_edit: bool = False
+    budget_view: bool = False
+    budget_edit: bool = False
+    analytics: bool = False
+    org_chart: bool = True
+    handbooks: bool = True
+    documents: bool = True
+    admin_panel: bool = False
+
+# Default permissions by role
+DEFAULT_PERMISSIONS = {
+    UserRole.COMMANDER: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        budget_view=True, budget_edit=True,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=True
+    ),
+    UserRole.FINANCE: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=True, budget_edit=True,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False
+    ),
+    UserRole.PLANS_PROGRAMS: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        budget_view=False, budget_edit=False,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=True
+    ),
+    UserRole.EXEC_CADRE: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False
+    ),
+    UserRole.STAFF: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False
+    ),
+    UserRole.CADRE: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False
+    )
+}
 
 class UserBase(BaseModel):
     email: EmailStr
     name: str
     role: str = UserRole.STAFF  # Default to staff (can choose staff/cadre during registration)
     capid: Optional[str] = None
-    squadron: Optional[str] = None  # sq1, sq2, sq3, staff
+    squadron: Optional[str] = None  # staff, support_cadre, exec_cadre, ops_cadre, sq1, sq2, sq3
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
 
 class UserCreate(UserBase):
