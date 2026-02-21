@@ -523,12 +523,12 @@ const AdminPage = () => {
                       <Select
                         value={user.flight || 'none'}
                         onValueChange={(value) => handleFlightChange(user.id, value)}
-                        disabled={!['sq1', 'sq2', 'sq3', 'ops_cadre'].includes(user.squadron)}
+                        disabled={!unitRequiresFlight(user.squadron)}
                       >
                         <SelectTrigger 
                           className="w-24 rounded-sm text-xs" 
                           data-testid={`flight-select-${user.id}`}
-                          disabled={!['sq1', 'sq2', 'sq3', 'ops_cadre'].includes(user.squadron)}
+                          disabled={!unitRequiresFlight(user.squadron)}
                         >
                           <SelectValue placeholder="N/A" />
                         </SelectTrigger>
