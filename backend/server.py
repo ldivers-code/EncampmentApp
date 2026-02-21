@@ -162,10 +162,26 @@ class BudgetItemBase(BaseModel):
     actual: float = 0.0
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
-    receipt_data: Optional[str] = None  # Base64 encoded receipt image
+    receipt_filename: Optional[str] = None
     payment_status: str = "pending"  # pending, paid, cancelled
     payment_date: Optional[str] = None
     vendor: Optional[str] = None
+    item_type: str = "expense"  # expense, income
+
+
+# Food Expense Settings Model
+class FoodExpenseSettings(BaseModel):
+    cost_per_person_per_day: float = 15.0
+    total_participants: int = 0
+    total_days: int = 8  # July 17-24 = 8 days
+    notes: Optional[str] = None
+
+
+class FoodExpenseSettingsUpdate(BaseModel):
+    cost_per_person_per_day: Optional[float] = None
+    total_participants: Optional[int] = None
+    total_days: Optional[int] = None
+    notes: Optional[str] = None
 
 class BudgetItemCreate(BudgetItemBase):
     pass
@@ -354,7 +370,7 @@ async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
 
 @api_router.put("/users/{user_id}/role")
 async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
-    if role not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.CADET]:
+    if role not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.FINANCE, UserRole.CADET]:
         raise HTTPException(status_code=400, detail="Invalid role")
     
     result = await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
