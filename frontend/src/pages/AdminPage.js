@@ -29,17 +29,24 @@ const AdminPage = () => {
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'users'
   const [matchingParticipants, setMatchingParticipants] = useState({});
   const [loadingMatches, setLoadingMatches] = useState({});
+  const [editingPermissions, setEditingPermissions] = useState(null);
+  const [permissionsForm, setPermissionsForm] = useState({});
 
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
-    { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-    { value: 'cadet', label: 'Cadet', color: 'bg-slate-100 text-slate-800 border-slate-200' }
+    { value: 'plans_programs', label: 'Plans & Programs', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+    { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+    { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+    { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' }
   ];
 
   const squadrons = [
     { value: 'none', label: 'Not Assigned' },
-    { value: 'staff', label: 'Staff/Cadre' },
+    { value: 'staff', label: 'Staff' },
+    { value: 'support_cadre', label: 'Support Cadre' },
+    { value: 'exec_cadre', label: 'Exec Cadre' },
+    { value: 'ops_cadre', label: 'Ops Cadre' },
     { value: 'sq1', label: 'Squadron 1' },
     { value: 'sq2', label: 'Squadron 2' },
     { value: 'sq3', label: 'Squadron 3' }
@@ -54,6 +61,21 @@ const AdminPage = () => {
     { value: 'echo', label: 'Echo', squadron: 'sq3' },
     { value: 'foxtrot', label: 'Foxtrot', squadron: 'sq3' }
   ];
+
+  const permissionLabels = {
+    dashboard: 'Dashboard',
+    roster_view: 'Roster (View)',
+    roster_edit: 'Roster (Edit)',
+    schedule_view: 'Schedule (View)',
+    schedule_edit: 'Schedule (Edit)',
+    budget_view: 'Budget (View)',
+    budget_edit: 'Budget (Edit)',
+    analytics: 'Analytics',
+    org_chart: 'Org Chart',
+    handbooks: 'Handbooks',
+    documents: 'Documents',
+    admin_panel: 'Admin Panel'
+  };
 
   useEffect(() => {
     loadUsers();
