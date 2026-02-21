@@ -630,7 +630,15 @@ async def publish_schedule(
         {"$set": {"is_published": True, "last_published_at": now}, "$inc": {"version": 1}},
         upsert=True
     )
-    return {"message": "Schedule published successfully", "published_at": now}
+    
+    # Send push notification to all subscribers
+    notification_count = await send_schedule_update_notification()
+    
+    return {
+        "message": "Schedule published successfully", 
+        "published_at": now,
+        "notifications_sent": notification_count
+    }
 
 @api_router.post("/schedule/unpublish")
 async def unpublish_schedule(
