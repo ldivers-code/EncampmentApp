@@ -11,7 +11,8 @@ import {
   Trash2,
   Settings,
   AlertTriangle,
-  Plane
+  Plane,
+  DollarSign
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
