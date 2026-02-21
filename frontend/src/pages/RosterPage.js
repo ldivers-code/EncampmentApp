@@ -650,17 +650,18 @@ const RosterPage = () => {
                 <th className="text-left">Rank</th>
                 <th className="text-left">Name</th>
                 <th className="text-left">Unit</th>
+                <th className="text-left">Wing</th>
                 <th className="text-left">Type</th>
-                <th className="text-left">Squadron</th>
-                <th className="text-left">Paid</th>
+                <th className="text-center">Paid</th>
+                <th className="text-center">Approved</th>
                 {canEdit() && <th className="text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedParticipants.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit() ? 8 : 7} className="text-center py-8 text-slate-400">
-                    {searchTerm || typeFilter !== 'all' ? 'No matching participants found' : 'No participants yet. Add your first participant or import from Excel.'}
+                  <td colSpan={canEdit() ? 9 : 8} className="text-center py-8 text-slate-400">
+                    {searchTerm || typeFilter !== 'all' || paidFilter !== 'all' ? 'No matching participants found' : 'No participants yet. Import a CAP Event Admin Report to get started.'}
                   </td>
                 </tr>
               ) : (
@@ -669,15 +670,31 @@ const RosterPage = () => {
                     <td className="font-mono text-[#00205B] font-medium">{p.capid}</td>
                     <td>{p.rank}</td>
                     <td className="font-medium">{p.last_name}, {p.first_name}</td>
-                    <td className="font-mono">{p.unit}</td>
+                    <td className="font-mono text-sm">{p.unit}</td>
+                    <td className="text-sm text-slate-500">{p.wing || '-'}</td>
                     <td>
                       <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm border ${getTypeBadgeColor(p.participant_type)}`}>
                         {p.participant_type?.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td>{p.squadron || '-'}</td>
-                    <td>
-                      <span className={`inline-block w-2 h-2 rounded-full ${p.paid ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    <td className="text-center">
+                      {p.paid || p.paid_in_full ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-600 text-xs">
+                          <CheckCircle className="w-3 h-3" />
+                          {p.amount_paid > 0 && <span className="font-mono">${p.amount_paid}</span>}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-500 text-xs">
+                          <AlertCircle className="w-3 h-3" />
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {p.unit_approved && <span className="text-[10px] px-1 bg-blue-100 text-blue-700 rounded">Unit</span>}
+                        {p.wing_approved && <span className="text-[10px] px-1 bg-emerald-100 text-emerald-700 rounded">Wing</span>}
+                        {!p.unit_approved && !p.wing_approved && <span className="text-slate-300">-</span>}
+                      </div>
                     </td>
                     {canEdit() && (
                       <td className="text-right">
