@@ -55,6 +55,35 @@ export const getSchedule = async () => {
   return response.data;
 };
 
+export const getScheduleSettings = async () => {
+  const response = await axios.get(`${API}/schedule/settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const publishSchedule = async () => {
+  const response = await axios.post(`${API}/schedule/publish`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const unpublishSchedule = async () => {
+  const response = await axios.post(`${API}/schedule/unpublish`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const importSchedule = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/schedule/import`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const clearSchedule = async () => {
+  const response = await axios.delete(`${API}/schedule/clear`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const createScheduleEvent = async (data) => {
   const response = await axios.post(`${API}/schedule`, data, { headers: getAuthHeaders() });
   return response.data;
