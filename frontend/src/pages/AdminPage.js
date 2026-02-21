@@ -80,17 +80,19 @@ const AdminPage = () => {
 
   const handleSquadronChange = (userId, squadron) => {
     const user = users.find(u => u.id === userId);
+    const actualSquadron = squadron === 'none' ? null : squadron;
     // Clear flight if squadron changes and flight doesn't belong to new squadron
     const currentFlight = user?.flight;
     const flightInfo = flights.find(f => f.value === currentFlight);
-    const newFlight = (flightInfo && flightInfo.squadron === squadron) ? currentFlight : '';
-    handleUnitChange(userId, squadron, newFlight);
+    const newFlight = (flightInfo && flightInfo.squadron === actualSquadron) ? currentFlight : null;
+    handleUnitChange(userId, actualSquadron, newFlight);
   };
 
   const handleFlightChange = (userId, flight) => {
-    const flightInfo = flights.find(f => f.value === flight);
-    const squadron = flightInfo?.squadron || '';
-    handleUnitChange(userId, squadron, flight);
+    const actualFlight = flight === 'none' ? null : flight;
+    const flightInfo = flights.find(f => f.value === actualFlight);
+    const squadron = flightInfo?.squadron || null;
+    handleUnitChange(userId, squadron, actualFlight);
   };
 
   const handleDelete = async (userId) => {
