@@ -623,7 +623,7 @@ async def unpublish_schedule(
     """Unpublish the schedule (make it draft)"""
     await db.schedule_settings.update_one(
         {"_id": "settings"},
-        {"$set": {"is_published": False}},
+        {"$set": {"is_published": False}, "$inc": {"version": 1}},
         upsert=True
     )
     return {"message": "Schedule unpublished successfully"}
@@ -644,12 +644,8 @@ async def create_schedule_event(
     }
     await db.schedule.insert_one(doc)
     
-    # Update last modified time
-    await db.schedule_settings.update_one(
-        {"_id": "settings"},
-        {"$set": {"last_modified_at": now}},
-        upsert=True
-    )
+    # Update version for real-time sync
+    await increment_schedule_version()
     
     doc.pop("_id", None)
     settings = await db.schedule_settings.find_one({"_id": "settings"})
@@ -669,12 +665,8 @@ async def update_schedule_event(
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # Update last modified time
-    await db.schedule_settings.update_one(
-        {"_id": "settings"},
-        {"$set": {"last_modified_at": now}},
-        upsert=True
-    )
+    # Update version for real-time sync
+    await increment_schedule_version()
     
     event = await db.schedule.find_one({"id": event_id}, {"_id": 0})
     settings = await db.schedule_settings.find_one({"_id": "settings"})
