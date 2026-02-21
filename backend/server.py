@@ -386,9 +386,14 @@ async def register(user_data: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Check if this is the first user - make them commander
+    # Check if this is the first user - make them commander and auto-approve
     user_count = await db.users.count_documents({})
-    assigned_role = UserRole.COMMANDER if user_count == 0 else user_data.role
+    is_first_user = user_count == 0
+    assigned_role = UserRole.COMMANDER if is_first_user else user_data.role
+    
+    # Validate role selection - only allow staff or cadet for new registrations (not commander/finance)
+    if not is_first_user and assigned_role not in [UserRole.STAFF, UserRole.CADET]:
+        assigned_role = UserRole.STAFF  # Default to staff if invalid role selected
     
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -402,7 +407,11 @@ async def register(user_data: UserCreate):
         "squadron": user_data.squadron,
         "flight": user_data.flight,
         "password_hash": hash_password(user_data.password),
-        "created_at": now
+        "created_at": now,
+        # First user (commander) is auto-approved, others need approval
+        "is_approved": is_first_user,
+        "approved_by": user_id if is_first_user else None,
+        "approved_at": now if is_first_user else None
     }
     await db.users.insert_one(user_doc)
     
@@ -418,7 +427,8 @@ async def register(user_data: UserCreate):
             capid=user_data.capid,
             squadron=user_data.squadron,
             flight=user_data.flight,
-            created_at=now
+            created_at=now,
+            is_approved=is_first_user
         )
     )
 
