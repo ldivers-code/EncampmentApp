@@ -33,6 +33,16 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Feb 21, 2026 - Auto-Sync Roster to Budget
+- **Automatic Budget Sync on Import**: When a roster is imported, the budget income items are automatically updated:
+  - Senior Members Staff: Actual = total collected from seniors
+  - Cadet Cadre: Actual = total collected from cadre members
+  - Basic Students: Actual = total collected from student members
+- **Notes Auto-Update**: Each budget item notes field shows count (e.g., "33 Students @ $250")
+- **Food Planner Sync**: Participant count auto-updates from roster total
+- **Variance Tracking**: Income items show collection percentage (33%, 27%, 24%)
+- **Manual Sync Available**: `/api/participants/sync-to-budget` endpoint for manual sync
+
 ### Feb 21, 2026 - CAP Event Admin Report Import
 - **Smart Excel Import**: Automatically maps 60+ CAP Admin Report columns to participant data
   - CAPID, Rank, Name, Unit, Wing, Region
