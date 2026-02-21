@@ -40,7 +40,13 @@ import {
   FileImage,
   AlertCircle,
   Lock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Check,
+  CheckCircle,
+  Clock,
+  Banknote,
+  ArrowUpDown,
+  Target
 } from 'lucide-react';
 
 const BudgetPage = () => {
@@ -53,11 +59,15 @@ const BudgetPage = () => {
   const [accessDenied, setAccessDenied] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFoodSettingsOpen, setIsFoodSettingsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(null);
+  // Inline editing state
+  const [editingActual, setEditingActual] = useState(null);
+  const [editingActualValue, setEditingActualValue] = useState('');
 
   const [formData, setFormData] = useState({
     category: '',
