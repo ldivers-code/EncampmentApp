@@ -183,11 +183,12 @@ const SchedulePage = () => {
     loadSettings();
   }, []);
 
+  // Reload when filter changes
   useEffect(() => {
     if (!loading) {
-      loadEvents();
+      // No need to reload - filtering is done client-side
     }
-  }, [showAllEvents]);
+  }, [scheduleFilter]);
 
   useEffect(() => {
     refreshIntervalRef.current = setInterval(() => {
