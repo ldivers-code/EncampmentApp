@@ -48,6 +48,8 @@ class UserBase(BaseModel):
     name: str
     role: str = UserRole.CADET
     capid: Optional[str] = None
+    squadron: Optional[str] = None  # sq1, sq2, sq3, staff
+    flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
 
 class UserCreate(UserBase):
     password: str
@@ -56,6 +58,10 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class UserUnitAssignment(BaseModel):
+    squadron: Optional[str] = None
+    flight: Optional[str] = None
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -63,6 +69,8 @@ class UserResponse(BaseModel):
     name: str
     role: str
     capid: Optional[str] = None
+    squadron: Optional[str] = None
+    flight: Optional[str] = None
     created_at: str
 
 class TokenResponse(BaseModel):
