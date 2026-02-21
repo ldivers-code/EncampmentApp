@@ -67,6 +67,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const canEdit = () => hasRole(['commander', 'staff']);
+  
+  const canAccessFinance = () => hasRole(['commander', 'finance']);
+  
+  const isCommander = () => hasRole(['commander']);
 
   return (
     <AuthContext.Provider value={{
@@ -78,6 +82,8 @@ export const AuthProvider = ({ children }) => {
       logout,
       hasRole,
       canEdit,
+      canAccessFinance,
+      isCommander,
       isAuthenticated: !!user
     }}>
       {children}
