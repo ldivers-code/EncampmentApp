@@ -118,7 +118,7 @@ class ScheduleEventBase(BaseModel):
     end_time: str
     location: Optional[str] = None
     event_type: str = "general"  # general, training, ceremony, meal, recreation, pt, admin, leadership, academics
-    squadron: Optional[str] = None  # sq1, sq2, sq3, staff, or None for all
+    target_groups: List[str] = ["all"]  # all, staff, sq1, sq2, sq3, alpha, bravo, charlie, delta, echo, foxtrot
 
 class ScheduleEventCreate(ScheduleEventBase):
     pass
@@ -135,6 +135,7 @@ class ScheduleSettings(BaseModel):
     is_published: bool = False
     last_published_at: Optional[str] = None
     last_modified_at: Optional[str] = None
+    version: int = 0  # Incremented on each change for real-time sync
 
 class BudgetItemBase(BaseModel):
     category: str
