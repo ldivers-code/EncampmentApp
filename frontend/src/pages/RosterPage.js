@@ -228,6 +228,14 @@ const RosterPage = () => {
     );
   }
 
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(value || 0);
+  };
+
   return (
     <div className="p-6 lg:p-8 animate-fade-in">
       {/* Header */}
@@ -237,17 +245,36 @@ const RosterPage = () => {
             Master Roster
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {filteredParticipants.length} participants
+            {filteredParticipants.length} of {participants.length} participants
           </p>
         </div>
         
         {canEdit() && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <label className="cursor-pointer">
               <input
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={handleImport}
+                className="hidden"
+                data-testid="import-roster-input"
+              />
+              <Button 
+                variant="outline" 
+                className="rounded-sm border-[#00205B] text-[#00205B] hover:bg-[#00205B]/10" 
+                asChild
+                disabled={importing}
+              >
+                <span>
+                  {importing ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  )}
+                  {importing ? 'Importing...' : 'Import CAP Report'}
+                </span>
+              </Button>
+            </label>
                 className="hidden"
                 data-testid="import-file-input"
               />
