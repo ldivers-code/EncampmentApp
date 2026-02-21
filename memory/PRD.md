@@ -33,6 +33,26 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Feb 21, 2026 - CAP Event Admin Report Import
+- **Smart Excel Import**: Automatically maps 60+ CAP Admin Report columns to participant data
+  - CAPID, Rank, Name, Unit, Wing, Region
+  - Payment info: PaidInFull, AmountPaid
+  - Contact: Email, Phone, Cell Phone, Address
+  - Emergency Contact, Parent Contact
+  - Unit/Wing CC info
+  - Approvals: Unit Approved, Wing Approved, Slotted
+  - Training: CPPT Expiration, First Aid, IS100, IS700
+  - Last Encampment history
+- **Auto-detect Participant Type**: Senior vs Cadet, Staff vs Student based on MbrType & StaffMember fields
+- **Upsert by CAPID**: Updates existing participants, creates new ones
+- **Stats Dashboard on Roster Page**: Shows real-time counts:
+  - Total participants, Seniors (+ staff count), Cadets (+ cadre + student counts)
+  - Payment status (paid/unpaid), Total collected
+  - Wing/Unit approval counts
+- **Enhanced Roster Table**: New columns for Wing, Paid (with amount), Approved (Unit/Wing badges)
+- **Payment Filter**: Filter roster by Paid/Unpaid status
+- **Auto-update Food Planner**: Updates participant count in food expense settings after import
+
 ### Feb 21, 2026 - Live Budget Tracking
 - **Real-Time Variance Tracking**: Dashboard shows 6 key metrics:
   - Estimated Income vs Actual Income with variance
