@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getDetailedAnalytics, getPendingPayments } from '../services/api';
+import { getDetailedAnalytics, getPendingPayments, exportAnalytics, exportAnalyticsSummary } from '../services/api';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { 
@@ -14,7 +14,9 @@ import {
   Phone,
   AlertCircle,
   Download,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
 
 const AnalyticsPage = () => {
