@@ -32,8 +32,29 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Receipt upload functionality
 - [x] **Analytics Dashboard with detailed attendee metrics**
 - [x] **Export functionality (CSV, Excel, Full Report)**
+- [x] **Member Profiles with editable fields**
+- [x] **Profile photo upload**
+- [x] **User approval workflow for new accounts**
+- [x] **Link users to roster participants by CAPID**
 
 ## What's Been Implemented
+
+### Feb 21, 2026 - Member Profiles & User Approval System
+- **Profile Page** (`/profile`): New page with 4 editable sections:
+  - **Basic Information**: Name, email, phone, cell phone, gender, shirt size
+  - **CAP Information**: CAPID, rank, unit, wing, region (squadron/flight read-only, set by admin)
+  - **Address**: Street address, city, state, ZIP code
+  - **Emergency Contact**: Contact name, phone, parent/guardian info (for cadets)
+- **Profile Photo**: Upload profile photo (5MB limit, base64 storage), displayed in sidebar
+- **Registration Updates**: 
+  - Users can select "Staff/Senior Member" or "Cadre/Cadet" role during registration
+  - New accounts are created with `is_approved=false` and require Commander approval
+- **User Approval Workflow** (Admin page):
+  - New "Pending Approval" tab showing users awaiting approval
+  - "Find Matches" button searches roster by CAPID/email/name with confidence levels
+  - "Link & Approve" auto-populates profile from roster participant data
+  - "Direct Approve" approves user without linking to roster
+- **Admin Page Reorganization**: 3 tabs (Pending Approval, All Users, Settings)
 
 ### Feb 21, 2026 - Analytics Dashboard with Export
 - **Comprehensive Analytics Dashboard**: New `/analytics` page with 4 tabs:
@@ -201,6 +222,9 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `/api/participants`, `/api/participants/import` - Roster management
 - `/api/participants/analytics/detailed`, `/api/participants/analytics/export` - Analytics
 - `/api/participants/pending-payments` - Unpaid participants
+- `/api/profile`, `/api/profile/photo` - User profile management
+- `/api/users/pending`, `/api/users/{id}/approve`, `/api/users/{id}/link-participant` - User approval
+- `/api/users/{id}/match-participants` - Find roster matches for user
 - `/api/schedule`, `/api/schedule/import`, `/api/schedule/publish`, `/api/schedule/settings` - Schedule
 - `/api/budget`, `/api/budget/summary`, `/api/budget/food-settings` - Financial tracking
 - `/api/budget/{id}/receipt` - Receipt upload/delete
@@ -243,6 +267,9 @@ Staff/Cadre
 - [x] Food expense planner (cost per person per day)
 - [x] Analytics Dashboard with detailed attendee metrics
 - [x] Export functionality (CSV, Excel, Full Report)
+- [x] Member Profiles (editable basic, CAP, address, emergency contact info)
+- [x] Profile photo upload
+- [x] User approval workflow with roster linking
 
 ### P1 (High Priority)
 - [ ] Implement Handbooks page (upload/view PDF documents)
