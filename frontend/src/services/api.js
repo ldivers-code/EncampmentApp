@@ -54,6 +54,16 @@ export const getParticipantStats = async () => {
   return response.data;
 };
 
+export const getDetailedAnalytics = async () => {
+  const response = await axios.get(`${API}/participants/analytics/detailed`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getPendingPayments = async () => {
+  const response = await axios.get(`${API}/participants/pending-payments`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const syncRosterToBudget = async () => {
   const response = await axios.post(`${API}/participants/sync-to-budget`, {}, { headers: getAuthHeaders() });
   return response.data;
