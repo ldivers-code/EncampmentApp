@@ -532,31 +532,75 @@ async def import_participants(
 
 # ================= SCHEDULE ROUTES =================
 
+async def increment_schedule_version():
+    """Increment schedule version for real-time sync"""
+    await db.schedule_settings.update_one(
+        {"_id": "settings"},
+        {"$inc": {"version": 1}, "$set": {"last_modified_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+
 @api_router.get("/schedule", response_model=List[ScheduleEventResponse])
-async def get_schedule(user: dict = Depends(get_current_user)):
-    """Get schedule events. Editors see all events, others see only published."""
+async def get_schedule(
+    show_all: bool = False,
+    user: dict = Depends(get_current_user)
+):
+    """Get schedule events. Filters by user's unit unless show_all=true (editors only)."""
+    is_editor = user["role"] in [UserRole.COMMANDER, UserRole.STAFF]
+    
     # Get schedule settings
     settings = await db.schedule_settings.find_one({"_id": "settings"})
     is_published = settings.get("is_published", False) if settings else False
     
     events = await db.schedule.find({}, {"_id": 0}).to_list(1000)
     
+    # Filter events based on user's unit assignment (unless editor viewing all)
+    if not (is_editor and show_all):
+        user_squadron = user.get("squadron")
+        user_flight = user.get("flight")
+        
+        filtered_events = []
+        for event in events:
+            target_groups = event.get("target_groups", ["all"])
+            
+            # Check if event applies to this user
+            should_include = (
+                "all" in target_groups or
+                (user_squadron and user_squadron in target_groups) or
+                (user_flight and user_flight in target_groups) or
+                # Staff members see staff events
+                (user["role"] in [UserRole.COMMANDER, UserRole.STAFF] and "staff" in target_groups)
+            )
+            
+            # If user has no assignment, show all events (they're not filtered yet)
+            if not user_squadron and not user_flight:
+                should_include = True
+            
+            if should_include:
+                filtered_events.append(event)
+        
+        events = filtered_events
+    
     # Add is_published flag to each event based on global setting
     for event in events:
         event["is_published"] = is_published
+        # Ensure target_groups exists for backward compatibility
+        if "target_groups" not in event:
+            event["target_groups"] = ["all"]
     
     return [ScheduleEventResponse(**e) for e in events]
 
 @api_router.get("/schedule/settings")
 async def get_schedule_settings(user: dict = Depends(get_current_user)):
-    """Get schedule publish status"""
+    """Get schedule publish status and version for real-time sync"""
     settings = await db.schedule_settings.find_one({"_id": "settings"})
     if not settings:
-        return {"is_published": False, "last_published_at": None, "last_modified_at": None}
+        return {"is_published": False, "last_published_at": None, "last_modified_at": None, "version": 0}
     return {
         "is_published": settings.get("is_published", False),
         "last_published_at": settings.get("last_published_at"),
-        "last_modified_at": settings.get("last_modified_at")
+        "last_modified_at": settings.get("last_modified_at"),
+        "version": settings.get("version", 0)
     }
 
 @api_router.post("/schedule/publish")
@@ -567,7 +611,7 @@ async def publish_schedule(
     now = datetime.now(timezone.utc).isoformat()
     await db.schedule_settings.update_one(
         {"_id": "settings"},
-        {"$set": {"is_published": True, "last_published_at": now}},
+        {"$set": {"is_published": True, "last_published_at": now}, "$inc": {"version": 1}},
         upsert=True
     )
     return {"message": "Schedule published successfully", "published_at": now}
