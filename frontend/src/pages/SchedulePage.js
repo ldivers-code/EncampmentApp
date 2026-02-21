@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { getSchedule, createScheduleEvent, updateScheduleEvent, deleteScheduleEvent } from '../services/api';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  getSchedule, 
+  getScheduleSettings,
+  createScheduleEvent, 
+  updateScheduleEvent, 
+  deleteScheduleEvent,
+  importSchedule,
+  publishSchedule,
+  unpublishSchedule
+} from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,29 +17,34 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { format, parseISO, addDays, isSameDay, startOfDay } from 'date-fns';
+import { format, parseISO, addDays, isSameDay } from 'date-fns';
 import { 
   Plus, 
-  Calendar as CalendarIcon, 
   Clock, 
   MapPin, 
   Edit2, 
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   List,
   Grid3X3,
-  Users
+  Upload,
+  Send,
+  EyeOff,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 
 const SchedulePage = () => {
   const { canEdit } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date('2026-06-14')); // Default to encampment start
-  const [viewMode, setViewMode] = useState('day'); // 'day' or 'list'
+  const [selectedDate, setSelectedDate] = useState(new Date('2026-07-17'));
+  const [viewMode, setViewMode] = useState('day');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [isPublished, setIsPublished] = useState(false);
+  const [scheduleSettings, setScheduleSettings] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -40,13 +54,13 @@ const SchedulePage = () => {
     end_time: '',
     location: '',
     event_type: 'training',
-    squadron: '' // For squadron-specific events
+    squadron: ''
   });
 
-  // Encampment dates: June 14-21, 2026
+  // Encampment dates: July 17-24, 2026
   const encampmentDates = useMemo(() => {
     const dates = [];
-    const startDate = new Date('2026-06-14');
+    const startDate = new Date('2026-07-17');
     for (let i = 0; i < 8; i++) {
       dates.push(addDays(startDate, i));
     }
@@ -79,6 +93,7 @@ const SchedulePage = () => {
 
   useEffect(() => {
     loadEvents();
+    loadSettings();
   }, []);
 
   const loadEvents = async () => {
@@ -89,6 +104,16 @@ const SchedulePage = () => {
       toast.error('Failed to load schedule');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const settings = await getScheduleSettings();
+      setScheduleSettings(settings);
+      setIsPublished(settings.is_published);
+    } catch (error) {
+      console.error('Failed to load schedule settings');
     }
   };
 
@@ -125,6 +150,7 @@ const SchedulePage = () => {
       setIsModalOpen(false);
       resetForm();
       loadEvents();
+      loadSettings();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Operation failed');
     }
@@ -151,6 +177,7 @@ const SchedulePage = () => {
         await deleteScheduleEvent(id);
         toast.success('Event deleted');
         loadEvents();
+        loadSettings();
       } catch (error) {
         toast.error('Failed to delete event');
       }
@@ -173,6 +200,48 @@ const SchedulePage = () => {
     setIsModalOpen(true);
   };
 
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setImporting(true);
+    try {
+      const result = await importSchedule(file);
+      toast.success(result.message);
+      loadEvents();
+      loadSettings();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Import failed');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handlePublish = async () => {
+    try {
+      await publishSchedule();
+      setIsPublished(true);
+      toast.success('Schedule published! All users can now view it.');
+      loadSettings();
+    } catch (error) {
+      toast.error('Failed to publish schedule');
+    }
+  };
+
+  const handleUnpublish = async () => {
+    try {
+      await unpublishSchedule();
+      setIsPublished(false);
+      toast.success('Schedule unpublished. Only editors can view it now.');
+      loadSettings();
+    } catch (error) {
+      toast.error('Failed to unpublish schedule');
+    }
+  };
+
   const resetForm = () => {
     setEditingEvent(null);
     setFormData({
@@ -193,9 +262,10 @@ const SchedulePage = () => {
 
   const getDayLabel = (date) => {
     const dayIndex = encampmentDates.findIndex(d => isSameDay(d, date));
-    if (dayIndex === 0) return 'Arrival Day';
-    if (dayIndex === 7) return 'Graduation Day';
-    return `Day ${dayIndex}`;
+    if (dayIndex === 0) return 'Staff Arrival';
+    if (dayIndex === 1) return 'In-Processing';
+    if (dayIndex === 7) return 'Graduation';
+    return `Day ${dayIndex - 1}`;
   };
 
   if (loading) {
@@ -217,156 +287,234 @@ const SchedulePage = () => {
             Training Schedule
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            TNWG Summer Encampment • June 14-21, 2026
+            TNWG Summer Encampment • July 17-24, 2026
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Draft/Published Badge */}
+          {canEdit() && (
+            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium ${
+              isPublished 
+                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                : 'bg-amber-100 text-amber-700 border border-amber-200'
+            }`}>
+              {isPublished ? (
+                <>
+                  <Eye className="w-3 h-3" />
+                  <span>Published</span>
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3 h-3" />
+                  <span>Draft</span>
+                </>
+              )}
+            </div>
+          )}
+
           {/* View Toggle */}
           <div className="flex border border-slate-200 rounded-sm overflow-hidden">
             <button
               onClick={() => setViewMode('day')}
               className={`px-3 py-2 text-sm ${viewMode === 'day' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="view-day-btn"
             >
               <Grid3X3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`px-3 py-2 text-sm ${viewMode === 'list' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="view-list-btn"
             >
               <List className="w-4 h-4" />
             </button>
           </div>
 
           {canEdit() && (
-            <Dialog open={isModalOpen} onOpenChange={(open) => {
-              setIsModalOpen(open);
-              if (!open) resetForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="add-event-btn">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Event
+            <>
+              {/* Import Button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImport}
+                className="hidden"
+                id="schedule-import"
+              />
+              <Button
+                variant="outline"
+                className="rounded-sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                data-testid="import-schedule-btn"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {importing ? 'Importing...' : 'Import'}
+              </Button>
+
+              {/* Publish/Unpublish Button */}
+              {isPublished ? (
+                <Button
+                  variant="outline"
+                  className="rounded-sm border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={handleUnpublish}
+                  data-testid="unpublish-btn"
+                >
+                  <EyeOff className="w-4 h-4 mr-2" />
+                  Unpublish
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                    {editingEvent ? 'Edit Event' : 'Add Event'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                  <div>
-                    <Label className="text-xs uppercase tracking-wide text-slate-600">Title *</Label>
-                    <Input
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      required
-                      className="mt-1 rounded-sm"
-                      placeholder="Morning Formation"
-                      data-testid="event-title-input"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+              ) : (
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 rounded-sm"
+                  onClick={handlePublish}
+                  data-testid="publish-btn"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Publish
+                </Button>
+              )}
+
+              {/* Add Event Button */}
+              <Dialog open={isModalOpen} onOpenChange={(open) => {
+                setIsModalOpen(open);
+                if (!open) resetForm();
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="add-event-btn">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Event
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>
+                      {editingEvent ? 'Edit Event' : 'Add Event'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                     <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
-                      <Select
-                        value={formData.event_type}
-                        onValueChange={(value) => setFormData({ ...formData, event_type: value })}
-                      >
-                        <SelectTrigger className="mt-1 rounded-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {eventTypes.map(type => (
-                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">Squadron</Label>
-                      <Select
-                        value={formData.squadron || 'all'}
-                        onValueChange={(value) => setFormData({ ...formData, squadron: value === 'all' ? '' : value })}
-                      >
-                        <SelectTrigger className="mt-1 rounded-sm">
-                          <SelectValue placeholder="All" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Squadrons</SelectItem>
-                          <SelectItem value="sq1">Squadron 1</SelectItem>
-                          <SelectItem value="sq2">Squadron 2</SelectItem>
-                          <SelectItem value="sq3">Squadron 3</SelectItem>
-                          <SelectItem value="staff">Staff/Cadre</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      required
-                      className="mt-1 rounded-sm"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">Start Time *</Label>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Title *</Label>
                       <Input
-                        type="time"
-                        value={formData.start_time}
-                        onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        required
+                        className="mt-1 rounded-sm"
+                        placeholder="Morning Formation"
+                        data-testid="event-title-input"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
+                        <Select
+                          value={formData.event_type}
+                          onValueChange={(value) => setFormData({ ...formData, event_type: value })}
+                        >
+                          <SelectTrigger className="mt-1 rounded-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {eventTypes.map(type => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Squadron</Label>
+                        <Select
+                          value={formData.squadron || 'all'}
+                          onValueChange={(value) => setFormData({ ...formData, squadron: value === 'all' ? '' : value })}
+                        >
+                          <SelectTrigger className="mt-1 rounded-sm">
+                            <SelectValue placeholder="All" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Squadrons</SelectItem>
+                            <SelectItem value="sq1">Squadron 1</SelectItem>
+                            <SelectItem value="sq2">Squadron 2</SelectItem>
+                            <SelectItem value="sq3">Squadron 3</SelectItem>
+                            <SelectItem value="staff">Staff/Cadre</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
+                      <Input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                         required
                         className="mt-1 rounded-sm"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Start Time *</Label>
+                        <Input
+                          type="time"
+                          value={formData.start_time}
+                          onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                          required
+                          className="mt-1 rounded-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">End Time *</Label>
+                        <Input
+                          type="time"
+                          value={formData.end_time}
+                          onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                          required
+                          className="mt-1 rounded-sm"
+                        />
+                      </div>
+                    </div>
                     <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">End Time *</Label>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Location</Label>
                       <Input
-                        type="time"
-                        value={formData.end_time}
-                        onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                        required
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                         className="mt-1 rounded-sm"
+                        placeholder="Parade Ground, DFAC, TR-1..."
                       />
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-wide text-slate-600">Location</Label>
-                    <Input
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="mt-1 rounded-sm"
-                      placeholder="Parade Ground, DFAC, TR-1..."
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-wide text-slate-600">Description</Label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="mt-1 rounded-sm"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-sm">
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
-                      {editingEvent ? 'Update' : 'Add'} Event
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Description</Label>
+                      <Textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className="mt-1 rounded-sm"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-sm">
+                        Cancel
+                      </Button>
+                      <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
+                        {editingEvent ? 'Update' : 'Add'} Event
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
       </div>
+
+      {/* Draft Warning for non-editors */}
+      {!canEdit() && !isPublished && (
+        <div className="bg-amber-50 border border-amber-200 rounded-sm p-4 mb-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600" />
+          <p className="text-amber-800 text-sm">
+            The schedule is currently being updated. Check back later for the published version.
+          </p>
+        </div>
+      )}
 
       {/* Date Selector Tabs */}
       <div className="bg-white border border-slate-200 rounded-sm mb-4 overflow-x-auto">
@@ -380,6 +528,7 @@ const SchedulePage = () => {
                   ? 'bg-[#00205B] text-white'
                   : 'bg-white text-slate-700 hover:bg-slate-50'
               }`}
+              data-testid={`date-tab-${format(date, 'yyyy-MM-dd')}`}
             >
               <div className="text-xs uppercase tracking-wide opacity-75">{format(date, 'EEE')}</div>
               <div className="text-lg font-bold">{format(date, 'd')}</div>
@@ -419,7 +568,7 @@ const SchedulePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {timeSlots.map((slot, idx) => {
+                {timeSlots.map((slot) => {
                   const slotEvents = eventsByTimeSlot[slot] || [];
                   const isHourMark = slot.endsWith(':00');
                   
@@ -439,6 +588,7 @@ const SchedulePage = () => {
                               key={event.id}
                               className={`${getEventTypeColor(event.event_type)} text-white px-2 py-1 rounded text-xs flex items-center gap-2`}
                               onClick={(e) => e.stopPropagation()}
+                              data-testid={`event-${event.id}`}
                             >
                               <span className="font-medium">{event.title}</span>
                               {event.location && <span className="opacity-75">@ {event.location}</span>}
@@ -495,7 +645,7 @@ const SchedulePage = () => {
               </div>
             ) : (
               eventsForDate.map(event => (
-                <div key={event.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                <div key={event.id} className="p-4 flex items-center justify-between hover:bg-slate-50" data-testid={`list-event-${event.id}`}>
                   <div className="flex items-center gap-4">
                     <div className={`w-1 h-12 rounded-full ${getEventTypeColor(event.event_type)}`}></div>
                     <div>
