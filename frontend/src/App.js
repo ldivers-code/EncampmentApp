@@ -6,6 +6,7 @@ import Sidebar from "./components/Sidebar";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import RosterPage from "./pages/RosterPage";
+import OrgChartPage from "./pages/OrgChartPage";
 import SchedulePage from "./pages/SchedulePage";
 import BudgetPage from "./pages/BudgetPage";
 import HandbooksPage from "./pages/HandbooksPage";
