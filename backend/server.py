@@ -814,26 +814,126 @@ async def import_participants(
                 await db.participants.insert_one(doc)
                 imported_count += 1
         
+        # Get the final total participant count
+        total_participant_count = await db.participants.count_documents({})
+        
         # Update food settings with participant count
-        total_participants = imported_count + updated_count
         await db.food_expense_settings.update_one(
             {"_id": "settings"},
             {"$set": {
-                "total_participants": total_participants,
+                "total_participants": total_participant_count,
                 "updated_at": now
             }},
             upsert=True
         )
         
+        # AUTO-SYNC: Update budget income items based on roster payment data
+        sync_result = await sync_roster_to_budget()
+        
         return {
             "message": f"Import complete: {imported_count} new, {updated_count} updated",
             "imported": imported_count,
             "updated": updated_count,
-            "total": total_participants,
-            "stats": stats
+            "total": total_participant_count,
+            "stats": stats,
+            "budget_sync": sync_result
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+async def sync_roster_to_budget():
+    """Sync roster payment data to budget income items"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get all participants
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    # Calculate totals by participant type
+    senior_staff_count = 0
+    senior_staff_collected = 0.0
+    cadet_cadre_count = 0
+    cadet_cadre_collected = 0.0
+    basic_student_count = 0
+    basic_student_collected = 0.0
+    
+    for p in participants:
+        member_type = (p.get('member_type') or '').upper()
+        ptype = p.get('participant_type', '')
+        amount = float(p.get('amount_paid') or 0)
+        is_paid = p.get('paid') or p.get('paid_in_full')
+        
+        if member_type == 'SENIOR':
+            senior_staff_count += 1
+            if is_paid or amount > 0:
+                senior_staff_collected += amount
+        elif ptype == 'cadre':
+            cadet_cadre_count += 1
+            if is_paid or amount > 0:
+                cadet_cadre_collected += amount
+        else:  # basic_student or advanced_student
+            basic_student_count += 1
+            if is_paid or amount > 0:
+                basic_student_collected += amount
+    
+    # Update or create budget items for each category
+    updates = []
+    
+    # Senior Members Staff
+    senior_item = await db.budget.find_one({"item_name": "Senior Members Staff", "category": "Participant Fees"})
+    if senior_item:
+        await db.budget.update_one(
+            {"id": senior_item["id"]},
+            {"$set": {
+                "actual": senior_staff_collected,
+                "notes": f"{senior_staff_count} SM @ varies",
+                "updated_at": now
+            }}
+        )
+        updates.append({"item": "Senior Members Staff", "actual": senior_staff_collected, "count": senior_staff_count})
+    
+    # Cadet Cadre
+    cadre_item = await db.budget.find_one({"item_name": "Cadet Cadre", "category": "Participant Fees"})
+    if cadre_item:
+        await db.budget.update_one(
+            {"id": cadre_item["id"]},
+            {"$set": {
+                "actual": cadet_cadre_collected,
+                "notes": f"{cadet_cadre_count} Cadre @ $250",
+                "updated_at": now
+            }}
+        )
+        updates.append({"item": "Cadet Cadre", "actual": cadet_cadre_collected, "count": cadet_cadre_count})
+    
+    # Basic Students
+    student_item = await db.budget.find_one({"item_name": "Basic Students", "category": "Participant Fees"})
+    if student_item:
+        await db.budget.update_one(
+            {"id": student_item["id"]},
+            {"$set": {
+                "actual": basic_student_collected,
+                "notes": f"{basic_student_count} Students @ $250",
+                "updated_at": now
+            }}
+        )
+        updates.append({"item": "Basic Students", "actual": basic_student_collected, "count": basic_student_count})
+    
+    total_collected = senior_staff_collected + cadet_cadre_collected + basic_student_collected
+    
+    return {
+        "synced": True,
+        "total_collected": total_collected,
+        "updates": updates
+    }
+
+
+@api_router.post("/participants/sync-to-budget")
+async def trigger_roster_budget_sync(
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.FINANCE]))
+):
+    """Manually trigger sync of roster payment data to budget"""
+    result = await sync_roster_to_budget()
+    return result
 
 
 # ================= SCHEDULE ROUTES =================
