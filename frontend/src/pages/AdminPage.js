@@ -198,10 +198,177 @@ const AdminPage = () => {
         </p>
       </div>
 
-      {/* Push Notifications */}
-      <div className="mb-6">
-        <NotificationManager />
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'pending'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="pending-users-tab"
+        >
+          <span className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            Pending Approval
+            {pendingUsers.length > 0 && (
+              <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                {pendingUsers.length}
+              </span>
+            )}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'users'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="all-users-tab"
+        >
+          <span className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            All Users ({users.length})
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'settings'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="settings-tab"
+        >
+          <span className="flex items-center gap-2">
+            <Settings className="w-4 h-4" />
+            Settings
+          </span>
+        </button>
       </div>
+
+      {/* Pending Users Tab */}
+      {activeTab === 'pending' && (
+        <div className="space-y-6">
+          {pendingUsers.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-sm p-8 text-center">
+              <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+              <p className="text-slate-600 font-medium">No pending approvals</p>
+              <p className="text-sm text-slate-400 mt-1">All user accounts have been approved</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-sm">
+              <div className="border-b border-slate-100 p-4">
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
+                  Pending User Approvals ({pendingUsers.length})
+                </h2>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {pendingUsers.map(pendingUser => (
+                  <div key={pendingUser.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold">
+                          {pendingUser.name?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">{pendingUser.name}</p>
+                          <p className="text-sm text-slate-500">{pendingUser.email}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-xs px-2 py-0.5 rounded border ${getRoleBadgeColor(pendingUser.role)}`}>
+                              {pendingUser.role}
+                            </span>
+                            {pendingUser.capid && (
+                              <span className="text-xs font-mono text-slate-500">CAPID: {pendingUser.capid}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Registered {new Date(pendingUser.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleFindMatches(pendingUser.id)}
+                          disabled={loadingMatches[pendingUser.id]}
+                          className="rounded-sm text-xs"
+                          data-testid={`find-matches-${pendingUser.id}`}
+                        >
+                          <Search className="w-3 h-3 mr-1" />
+                          {loadingMatches[pendingUser.id] ? 'Searching...' : 'Find Matches'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveUser(pendingUser.id)}
+                          className="rounded-sm bg-emerald-600 hover:bg-emerald-700 text-xs"
+                          data-testid={`approve-user-${pendingUser.id}`}
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Matching Participants */}
+                    {matchingParticipants[pendingUser.id] && matchingParticipants[pendingUser.id].length > 0 && (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-sm">
+                        <p className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+                          <Link className="w-4 h-4" />
+                          Potential Roster Matches
+                        </p>
+                        <div className="space-y-2">
+                          {matchingParticipants[pendingUser.id].map((match, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {match.participant.rank} {match.participant.first_name} {match.participant.last_name}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  CAPID: {match.participant.capid} | {match.participant.unit} | {match.participant.wing}
+                                </p>
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                  match.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {match.match_type} match ({match.confidence})
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleLinkParticipant(pendingUser.id, match.participant.id || match.participant.capid)}
+                                className="rounded-sm bg-blue-600 hover:bg-blue-700 text-xs"
+                              >
+                                <UserPlus className="w-3 h-3 mr-1" />
+                                Link & Approve
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {matchingParticipants[pendingUser.id] && matchingParticipants[pendingUser.id].length === 0 && (
+                      <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-sm">
+                        <p className="text-sm text-slate-500">No matching participants found in the roster</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* All Users Tab */}
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          {/* Push Notifications */}
+          <div className="mb-6">
+            <NotificationManager />
+          </div>
 
       {/* Role Permissions Info */}
       <div className="bg-white border border-slate-200 rounded-sm mb-6">
