@@ -49,6 +49,11 @@ export const importParticipants = async (file) => {
   return response.data;
 };
 
+export const getParticipantStats = async () => {
+  const response = await axios.get(`${API}/participants/stats`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Push Notifications
 export const getVapidKey = async () => {
   const response = await axios.get(`${API}/notifications/vapid-key`);
