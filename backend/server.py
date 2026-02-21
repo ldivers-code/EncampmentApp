@@ -690,6 +690,215 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted successfully"}
 
+
+# ================= ORG CHART ROUTES =================
+
+async def get_role_with_details(role: dict) -> dict:
+    """Enrich org chart role with member details and subordinates"""
+    # Get assigned member details
+    if role.get("assigned_participant_id"):
+        participant = await db.participants.find_one(
+            {"id": role["assigned_participant_id"]}, 
+            {"_id": 0, "first_name": 1, "last_name": 1, "rank": 1}
+        )
+        if participant:
+            role["assigned_member_name"] = f"{participant.get('rank', '')} {participant.get('first_name', '')} {participant.get('last_name', '')}".strip()
+            role["assigned_member_rank"] = participant.get("rank", "")
+        else:
+            role["assigned_member_name"] = None
+            role["assigned_member_rank"] = None
+    else:
+        role["assigned_member_name"] = None
+        role["assigned_member_rank"] = None
+    
+    # Get direct subordinates
+    subordinates = await db.org_chart_roles.find(
+        {"reports_to": role["role_id"]}, 
+        {"_id": 0, "role_id": 1}
+    ).to_list(100)
+    role["direct_subordinates"] = [s["role_id"] for s in subordinates]
+    
+    return role
+
+@api_router.get("/org-chart/roles", response_model=List[OrgChartRoleResponse])
+async def get_org_chart_roles(user: dict = Depends(get_current_user)):
+    """Get all org chart roles - accessible by all authenticated users"""
+    roles = await db.org_chart_roles.find({}, {"_id": 0}).to_list(1000)
+    enriched_roles = []
+    for role in roles:
+        enriched = await get_role_with_details(role)
+        enriched_roles.append(OrgChartRoleResponse(**enriched))
+    return enriched_roles
+
+@api_router.get("/org-chart/roles/{role_id}", response_model=OrgChartRoleResponse)
+async def get_org_chart_role(role_id: str, user: dict = Depends(get_current_user)):
+    """Get single org chart role details - accessible by all authenticated users"""
+    role = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    enriched = await get_role_with_details(role)
+    return OrgChartRoleResponse(**enriched)
+
+@api_router.post("/org-chart/roles", response_model=OrgChartRoleResponse)
+async def create_org_chart_role(
+    data: OrgChartRoleCreate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    """Create new org chart role - editors only"""
+    # Check if role_id already exists
+    existing = await db.org_chart_roles.find_one({"role_id": data.role_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Role ID already exists")
+    
+    doc_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    doc = {
+        "id": doc_id,
+        **data.model_dump(),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.org_chart_roles.insert_one(doc)
+    doc.pop("_id", None)
+    
+    enriched = await get_role_with_details(doc)
+    return OrgChartRoleResponse(**enriched)
+
+@api_router.put("/org-chart/roles/{role_id}", response_model=OrgChartRoleResponse)
+async def update_org_chart_role(
+    role_id: str,
+    data: OrgChartRoleUpdate,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    """Update org chart role - editors only"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Only update fields that are provided
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_at"] = now
+    
+    result = await db.org_chart_roles.update_one(
+        {"role_id": role_id}, 
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    role = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    enriched = await get_role_with_details(role)
+    return OrgChartRoleResponse(**enriched)
+
+@api_router.put("/org-chart/roles/{role_id}/assign", response_model=OrgChartRoleResponse)
+async def assign_org_chart_role(
+    role_id: str,
+    participant_id: Optional[str] = None,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    """Assign or unassign a participant to a role - editors only"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Verify participant exists if assigning
+    if participant_id:
+        participant = await db.participants.find_one({"id": participant_id})
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+    
+    result = await db.org_chart_roles.update_one(
+        {"role_id": role_id},
+        {"$set": {"assigned_participant_id": participant_id, "updated_at": now}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    role = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    enriched = await get_role_with_details(role)
+    return OrgChartRoleResponse(**enriched)
+
+@api_router.delete("/org-chart/roles/{role_id}")
+async def delete_org_chart_role(
+    role_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+):
+    """Delete org chart role - editors only"""
+    # Check if any roles report to this one
+    subordinates = await db.org_chart_roles.count_documents({"reports_to": role_id})
+    if subordinates > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete role with {subordinates} subordinate(s). Reassign them first."
+        )
+    
+    result = await db.org_chart_roles.delete_one({"role_id": role_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Role not found")
+    return {"message": "Role deleted successfully"}
+
+@api_router.post("/org-chart/seed-defaults")
+async def seed_default_org_chart(
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Seed default encampment org chart structure - commander only"""
+    # Check if roles already exist
+    existing_count = await db.org_chart_roles.count_documents({})
+    if existing_count > 0:
+        raise HTTPException(status_code=400, detail="Org chart already has roles. Clear first if you want to reseed.")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    default_roles = [
+        # Level 0 - Top Leadership
+        {"role_id": "enc-commander", "title": "Encampment Commander", "level": 0, "order": 0, "reports_to": None,
+         "summary": "Overall commander responsible for the entire encampment operation.",
+         "responsibilities": "- Provide strategic leadership and vision\n- Ensure safety of all participants\n- Coordinate with Wing and Region leadership\n- Final authority on all encampment matters\n- Conduct commander's calls and briefings"},
+        
+        # Level 1 - Deputy Commanders
+        {"role_id": "deputy-cc-ops", "title": "Deputy Commander for Operations", "level": 1, "order": 0, "reports_to": "enc-commander",
+         "summary": "Oversees all training and operational activities.",
+         "responsibilities": "- Supervise Commandant of Cadets\n- Coordinate training schedule\n- Ensure training objectives are met\n- Manage cadet training staff"},
+        {"role_id": "deputy-cc-support", "title": "Deputy Commander for Support", "level": 1, "order": 1, "reports_to": "enc-commander",
+         "summary": "Oversees all support and logistics functions.",
+         "responsibilities": "- Supervise logistics operations\n- Manage facilities and supplies\n- Coordinate transportation\n- Oversee health services"},
+        
+        # Level 2 - Senior Staff
+        {"role_id": "commandant", "title": "Commandant of Cadets", "level": 2, "order": 0, "reports_to": "deputy-cc-ops",
+         "summary": "Directly supervises cadet training squadrons.",
+         "responsibilities": "- Lead daily cadet training operations\n- Supervise squadron commanders\n- Conduct training evaluations\n- Maintain discipline standards"},
+        {"role_id": "logistics-officer", "title": "Logistics Officer", "level": 2, "order": 1, "reports_to": "deputy-cc-support",
+         "summary": "Manages all supply and logistics operations.",
+         "responsibilities": "- Inventory management\n- Supply distribution\n- Equipment maintenance\n- Facility coordination"},
+        {"role_id": "safety-officer", "title": "Safety Officer", "level": 2, "order": 2, "reports_to": "enc-commander",
+         "summary": "Ensures safety compliance throughout encampment.",
+         "responsibilities": "- Conduct safety briefings\n- Inspect facilities and activities\n- Investigate incidents\n- Maintain safety documentation"},
+        {"role_id": "health-services", "title": "Health Services Officer", "level": 2, "order": 3, "reports_to": "deputy-cc-support",
+         "summary": "Oversees medical support for all participants.",
+         "responsibilities": "- Manage medical staff\n- Coordinate emergency response\n- Track medications\n- Conduct health screenings"},
+        
+        # Level 3 - Squadron Commanders
+        {"role_id": "sq1-commander", "title": "Squadron 1 Commander", "level": 3, "order": 0, "reports_to": "commandant",
+         "summary": "Commands training Squadron 1.",
+         "responsibilities": "- Lead squadron training activities\n- Supervise flight commanders\n- Evaluate cadet progress\n- Maintain squadron discipline"},
+        {"role_id": "sq2-commander", "title": "Squadron 2 Commander", "level": 3, "order": 1, "reports_to": "commandant",
+         "summary": "Commands training Squadron 2.",
+         "responsibilities": "- Lead squadron training activities\n- Supervise flight commanders\n- Evaluate cadet progress\n- Maintain squadron discipline"},
+        {"role_id": "public-affairs", "title": "Public Affairs Officer", "level": 3, "order": 2, "reports_to": "enc-commander",
+         "summary": "Manages communications and documentation.",
+         "responsibilities": "- Photography and videography\n- Social media updates\n- Graduation program\n- Media coordination"},
+    ]
+    
+    for role_data in default_roles:
+        doc = {
+            "id": str(uuid.uuid4()),
+            **role_data,
+            "assigned_participant_id": None,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.org_chart_roles.insert_one(doc)
+    
+    return {"message": f"Successfully created {len(default_roles)} default org chart roles"}
+
+
 # ================= STATS ROUTES =================
 
 @api_router.get("/stats/dashboard")
