@@ -531,6 +531,7 @@ async def import_participants(
     file: UploadFile = File(...),
     user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
 ):
+    """Import participants from CAP Event Admin Report Excel file"""
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
     
@@ -538,22 +539,71 @@ async def import_participants(
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         
-        # Normalize column names
-        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        # Normalize column names - handle CAP Admin Report format
+        df.columns = df.columns.str.strip()
         
-        imported_count = 0
-        now = datetime.now(timezone.utc).isoformat()
-        
-        # Column mapping for common variations
+        # Create column mapping for CAP Admin Report headers
         column_map = {
-            'cap_id': 'capid', 'cap id': 'capid', 'capid': 'capid',
-            'last': 'last_name', 'last_name': 'last_name', 'lastname': 'last_name',
-            'first': 'first_name', 'first_name': 'first_name', 'firstname': 'first_name',
-            'shirt': 'shirt_size', 'shirt_size': 'shirt_size', 'shirtsize': 'shirt_size',
-            'type': 'participant_type', 'participant_type': 'participant_type'
+            'CAPID': 'capid',
+            'Rank': 'rank',
+            'NameLast': 'last_name',
+            'NameFirst': 'first_name',
+            'NameMiddle': 'middle_name',
+            'Unit': 'unit',
+            'Wing': 'wing',
+            'Region': 'region',
+            'Gender': 'gender',
+            'Age': 'age',
+            'AgeAtEventStart': 'age_at_event',
+            'Email': 'email',
+            'HomePhonePrimary': 'phone',
+            'CellPhonePrimary': 'cell_phone',
+            'ShirtSize': 'shirt_size',
+            'MbrType': 'member_type',
+            'StaffMember': 'staff_member',
+            'PaidInFull': 'paid_in_full',
+            'AmountPaid': 'amount_paid',
+            'RegistrationStatus': 'registration_status',
+            'UnitApproved': 'unit_approved',
+            'UnitApprovalDate': 'unit_approval_date',
+            'WingApproved': 'wing_approved',
+            'WingApprovalDate': 'wing_approval_date',
+            'Slotted': 'slotted',
+            'Addr1': 'address',
+            'City': 'city',
+            'State': 'state',
+            'Zip': 'zip_code',
+            'EmergencyContactName': 'emergency_contact',
+            'EmergencyContactNumber': 'emergency_phone',
+            'CadetParentPhonePrimary': 'cadet_parent_phone',
+            'CadetParentEmailPrimary': 'cadet_parent_email',
+            'UnitCCName': 'unit_cc_name',
+            'UnitCCEmail': 'unit_cc_email',
+            'LastEncampment': 'last_encampment',
+            'CPPTExpiration': 'cppt_expiration',
+            'FirstAid': 'first_aid',
+            'IS100': 'is100_date',
+            'IS700': 'is700_date',
+            'Comments': 'comments',
         }
         
-        df.columns = [column_map.get(col, col) for col in df.columns]
+        # Rename columns
+        df = df.rename(columns=column_map)
+        
+        imported_count = 0
+        updated_count = 0
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Track import stats
+        stats = {
+            'seniors': 0,
+            'cadets': 0,
+            'staff': 0,
+            'cadre': 0,
+            'paid': 0,
+            'unpaid': 0,
+            'total_collected': 0.0
+        }
         
         for _, row in df.iterrows():
             row_dict = row.to_dict()
@@ -563,46 +613,225 @@ async def import_participants(
             if not capid or capid == 'nan':
                 continue
             
-            participant_id = str(uuid.uuid4())
+            # Helper function to safely get value
+            def get_val(key, default=None):
+                val = row_dict.get(key)
+                if pd.isna(val) or val == '' or val == 'nan':
+                    return default
+                return val
+            
+            def get_str(key, default=''):
+                val = get_val(key, default)
+                return str(val).strip() if val is not None else default
+            
+            def get_bool(key):
+                val = get_val(key)
+                if val is None:
+                    return False
+                if isinstance(val, bool):
+                    return val
+                return str(val).lower() in ['yes', 'true', '1']
+            
+            def get_float(key, default=0.0):
+                val = get_val(key)
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except:
+                    return default
+            
+            def get_int(key, default=None):
+                val = get_val(key)
+                if val is None:
+                    return default
+                try:
+                    return int(float(val))
+                except:
+                    return default
+            
+            # Determine participant type based on member type and staff status
+            member_type = get_str('member_type', '').upper()
+            is_staff = get_bool('staff_member')
+            
+            if member_type == 'SENIOR':
+                participant_type = 'staff' if is_staff else 'senior_member'
+                stats['seniors'] += 1
+                if is_staff:
+                    stats['staff'] += 1
+            elif member_type == 'CADET':
+                participant_type = 'cadre' if is_staff else 'basic_student'
+                stats['cadets'] += 1
+                if is_staff:
+                    stats['cadre'] += 1
+            else:
+                participant_type = 'basic_student'
+            
+            # Payment tracking
+            paid_in_full = get_bool('paid_in_full')
+            amount_paid = get_float('amount_paid', 0.0)
+            
+            if paid_in_full or amount_paid > 0:
+                stats['paid'] += 1
+                stats['total_collected'] += amount_paid
+            else:
+                stats['unpaid'] += 1
+            
+            # Check if last_encampment is "Not Complete" (first encampment)
+            last_enc = get_str('last_encampment', '')
+            first_encampment = last_enc.lower() == 'not complete' or last_enc == ''
             
             doc = {
-                "id": participant_id,
                 "capid": capid,
-                "rank": str(row_dict.get('rank', '')).strip() if pd.notna(row_dict.get('rank')) else '',
-                "last_name": str(row_dict.get('last_name', '')).strip() if pd.notna(row_dict.get('last_name')) else '',
-                "first_name": str(row_dict.get('first_name', '')).strip() if pd.notna(row_dict.get('first_name')) else '',
-                "unit": str(row_dict.get('unit', '')).strip() if pd.notna(row_dict.get('unit')) else '',
-                "wing": str(row_dict.get('wing', '')).strip() if pd.notna(row_dict.get('wing')) else None,
-                "region": str(row_dict.get('region', '')).strip() if pd.notna(row_dict.get('region')) else None,
-                "gender": str(row_dict.get('gender', '')).strip() if pd.notna(row_dict.get('gender')) else None,
-                "age": int(row_dict.get('age', 0)) if pd.notna(row_dict.get('age')) else None,
-                "email": str(row_dict.get('email', '')).strip() if pd.notna(row_dict.get('email')) else None,
-                "phone": str(row_dict.get('phone', '')).strip() if pd.notna(row_dict.get('phone')) else None,
-                "shirt_size": str(row_dict.get('shirt_size', '')).strip() if pd.notna(row_dict.get('shirt_size')) else None,
-                "participant_type": str(row_dict.get('participant_type', 'basic_student')).strip() if pd.notna(row_dict.get('participant_type')) else 'basic_student',
-                "squadron": str(row_dict.get('squadron', '')).strip() if pd.notna(row_dict.get('squadron')) else None,
-                "flight": str(row_dict.get('flight', '')).strip() if pd.notna(row_dict.get('flight')) else None,
-                "position": str(row_dict.get('position', '')).strip() if pd.notna(row_dict.get('position')) else None,
-                "paid": bool(row_dict.get('paid', False)) if pd.notna(row_dict.get('paid')) else False,
-                "first_encampment": bool(row_dict.get('first_encampment', True)) if pd.notna(row_dict.get('first_encampment')) else True,
-                "religious_preference": str(row_dict.get('religious_preference', '')).strip() if pd.notna(row_dict.get('religious_preference')) else None,
-                "emergency_contact": str(row_dict.get('emergency_contact', '')).strip() if pd.notna(row_dict.get('emergency_contact')) else None,
-                "notes": str(row_dict.get('notes', '')).strip() if pd.notna(row_dict.get('notes')) else None,
-                "created_at": now,
+                "rank": get_str('rank'),
+                "last_name": get_str('last_name'),
+                "first_name": get_str('first_name'),
+                "middle_name": get_str('middle_name') or None,
+                "unit": get_str('unit'),
+                "wing": get_str('wing') or None,
+                "region": get_str('region') or None,
+                "gender": get_str('gender') or None,
+                "age": get_int('age'),
+                "age_at_event": get_int('age_at_event'),
+                "email": get_str('email') or None,
+                "phone": get_str('phone') or None,
+                "cell_phone": get_str('cell_phone') or None,
+                "shirt_size": get_str('shirt_size') or None,
+                "member_type": member_type or None,
+                "participant_type": participant_type,
+                "staff_member": is_staff,
+                "paid": paid_in_full,
+                "paid_in_full": paid_in_full,
+                "amount_paid": amount_paid if amount_paid > 0 else None,
+                "registration_status": get_str('registration_status') or None,
+                "unit_approved": get_bool('unit_approved'),
+                "unit_approval_date": get_str('unit_approval_date') or None,
+                "wing_approved": get_bool('wing_approved'),
+                "wing_approval_date": get_str('wing_approval_date') or None,
+                "slotted": get_bool('slotted'),
+                "address": get_str('address') or None,
+                "city": get_str('city') or None,
+                "state": get_str('state') or None,
+                "zip_code": get_str('zip_code') or None,
+                "emergency_contact": get_str('emergency_contact') or None,
+                "emergency_phone": get_str('emergency_phone') or None,
+                "cadet_parent_phone": get_str('cadet_parent_phone') or None,
+                "cadet_parent_email": get_str('cadet_parent_email') or None,
+                "unit_cc_name": get_str('unit_cc_name') or None,
+                "unit_cc_email": get_str('unit_cc_email') or None,
+                "last_encampment": get_str('last_encampment') or None,
+                "cppt_expiration": get_str('cppt_expiration') or None,
+                "first_aid": get_str('first_aid') or None,
+                "is100_date": get_str('is100_date') or None,
+                "is700_date": get_str('is700_date') or None,
+                "first_encampment": first_encampment,
+                "comments": get_str('comments') or None,
                 "updated_at": now
             }
             
             # Upsert by CAPID
-            await db.participants.update_one(
-                {"capid": capid},
-                {"$set": doc},
-                upsert=True
-            )
-            imported_count += 1
+            existing = await db.participants.find_one({"capid": capid})
+            if existing:
+                await db.participants.update_one(
+                    {"capid": capid},
+                    {"$set": doc}
+                )
+                updated_count += 1
+            else:
+                doc["id"] = str(uuid.uuid4())
+                doc["created_at"] = now
+                await db.participants.insert_one(doc)
+                imported_count += 1
         
-        return {"message": f"Successfully imported {imported_count} participants"}
+        # Update food settings with participant count
+        total_participants = imported_count + updated_count
+        await db.food_expense_settings.update_one(
+            {"_id": "settings"},
+            {"$set": {
+                "total_participants": total_participants,
+                "updated_at": now
+            }},
+            upsert=True
+        )
+        
+        return {
+            "message": f"Import complete: {imported_count} new, {updated_count} updated",
+            "imported": imported_count,
+            "updated": updated_count,
+            "total": total_participants,
+            "stats": stats
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+@api_router.get("/participants/stats")
+async def get_participant_stats(user: dict = Depends(get_current_user)):
+    """Get participant statistics for dashboard"""
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    stats = {
+        'total': len(participants),
+        'seniors': 0,
+        'cadets': 0,
+        'staff': 0,
+        'cadre': 0,
+        'students': 0,
+        'paid': 0,
+        'unpaid': 0,
+        'total_collected': 0.0,
+        'unit_approved': 0,
+        'wing_approved': 0,
+        'slotted': 0,
+        'by_wing': {},
+        'by_unit': {}
+    }
+    
+    for p in participants:
+        # Member type counts
+        member_type = (p.get('member_type') or '').upper()
+        if member_type == 'SENIOR':
+            stats['seniors'] += 1
+        elif member_type == 'CADET':
+            stats['cadets'] += 1
+        
+        # Role counts
+        ptype = p.get('participant_type', '')
+        if ptype == 'staff':
+            stats['staff'] += 1
+        elif ptype == 'cadre':
+            stats['cadre'] += 1
+        elif ptype in ['basic_student', 'advanced_student']:
+            stats['students'] += 1
+        
+        # Payment
+        if p.get('paid') or p.get('paid_in_full'):
+            stats['paid'] += 1
+        else:
+            stats['unpaid'] += 1
+        
+        if p.get('amount_paid'):
+            stats['total_collected'] += float(p.get('amount_paid', 0))
+        
+        # Approvals
+        if p.get('unit_approved'):
+            stats['unit_approved'] += 1
+        if p.get('wing_approved'):
+            stats['wing_approved'] += 1
+        if p.get('slotted'):
+            stats['slotted'] += 1
+        
+        # By wing
+        wing = p.get('wing', 'Unknown')
+        if wing:
+            stats['by_wing'][wing] = stats['by_wing'].get(wing, 0) + 1
+        
+        # By unit
+        unit = p.get('unit', 'Unknown')
+        if unit:
+            stats['by_unit'][unit] = stats['by_unit'].get(unit, 0) + 1
+    
+    return stats
 
 # ================= SCHEDULE ROUTES =================
 
