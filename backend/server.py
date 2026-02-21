@@ -544,6 +544,7 @@ async def import_participants(
         
         # Create column mapping for CAP Admin Report headers
         column_map = {
+            'RegistrantsCAPID': 'capid',
             'CAPID': 'capid',
             'Rank': 'rank',
             'NameLast': 'last_name',
