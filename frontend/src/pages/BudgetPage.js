@@ -634,25 +634,57 @@ const BudgetPage = () => {
         </div>
       </div>
 
-      {/* Summary Dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-income">
+      {/* Live Budget Summary Dashboard */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+        {/* Income Section */}
+        <div className="bg-white border border-emerald-200 rounded-sm p-4" data-testid="budget-income-estimated">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Total Income</p>
-              <p className="text-xl lg:text-2xl font-bold text-emerald-600 font-mono">{formatCurrency(totals.income)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Est. Income</p>
+              <p className="text-lg lg:text-xl font-bold text-slate-600 font-mono">{formatCurrency(totals.estimatedIncome)}</p>
             </div>
             <div className="p-2 bg-emerald-100 rounded-sm">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <Target className="w-4 h-4 text-emerald-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-expenses">
+        <div className="bg-white border border-emerald-200 rounded-sm p-4" data-testid="budget-income-actual">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Total Expenses</p>
-              <p className="text-xl lg:text-2xl font-bold text-[#BF0D3E] font-mono">{formatCurrency(totals.expenses)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Actual Income</p>
+              <p className="text-lg lg:text-xl font-bold text-emerald-600 font-mono">{formatCurrency(totals.actualIncome)}</p>
+              <p className={`text-xs font-mono mt-1 ${totals.incomeVariance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                {totals.incomeVariance >= 0 ? '+' : ''}{formatCurrency(totals.incomeVariance)} variance
+              </p>
+            </div>
+            <div className="p-2 bg-emerald-100 rounded-sm">
+              <Banknote className="w-4 h-4 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Expense Section */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-expense-estimated">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Est. Expenses</p>
+              <p className="text-lg lg:text-xl font-bold text-slate-600 font-mono">{formatCurrency(totals.estimatedExpenses)}</p>
+            </div>
+            <div className="p-2 bg-[#00205B]/10 rounded-sm">
+              <Target className="w-4 h-4 text-[#00205B]" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-expense-actual">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Actual Expenses</p>
+              <p className="text-lg lg:text-xl font-bold text-[#BF0D3E] font-mono">{formatCurrency(totals.actualExpenses)}</p>
+              <p className={`text-xs font-mono mt-1 ${totals.expenseVariance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                {totals.expenseVariance >= 0 ? '+' : ''}{formatCurrency(totals.expenseVariance)} {totals.expenseVariance >= 0 ? 'under' : 'over'}
+              </p>
             </div>
             <div className="p-2 bg-red-100 rounded-sm">
               <TrendingDown className="w-4 h-4 text-[#BF0D3E]" />
@@ -660,45 +692,41 @@ const BudgetPage = () => {
           </div>
         </div>
 
+        {/* Balance Section */}
         <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-balance">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Current Balance</p>
-              <p className={`text-xl lg:text-2xl font-bold font-mono ${totals.balance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
-                {formatCurrency(totals.balance)}
+              <p className={`text-lg lg:text-xl font-bold font-mono ${totals.currentBalance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                {formatCurrency(totals.currentBalance)}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Proj: {formatCurrency(totals.projectedBalance)}
               </p>
             </div>
-            <div className={`p-2 rounded-sm ${totals.balance >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
-              <DollarSign className={`w-4 h-4 ${totals.balance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`} />
+            <div className={`p-2 rounded-sm ${totals.currentBalance >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
+              <DollarSign className={`w-4 h-4 ${totals.currentBalance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-estimated">
+        {/* Payment Progress */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-progress">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Est. Expenses</p>
-              <p className="text-xl lg:text-2xl font-bold text-[#00205B] font-mono">{formatCurrency(totals.estimatedExpenses)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Payment Status</p>
+              <p className="text-lg lg:text-xl font-bold text-[#00205B] font-mono">
+                {totals.paidCount}/{totals.totalItems}
+              </p>
+              <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2">
+                <div 
+                  className="bg-emerald-500 h-1.5 rounded-full transition-all" 
+                  style={{ width: `${totals.totalItems > 0 ? (totals.paidCount / totals.totalItems * 100) : 0}%` }}
+                />
+              </div>
             </div>
             <div className="p-2 bg-[#00205B]/10 rounded-sm">
-              <DollarSign className="w-4 h-4 text-[#00205B]" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="budget-remaining">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Budget Left</p>
-              <p className={`text-xl lg:text-2xl font-bold font-mono ${totals.budgetRemaining >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
-                {formatCurrency(totals.budgetRemaining)}
-              </p>
-            </div>
-            <div className={`p-2 rounded-sm ${totals.budgetRemaining >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
-              {totals.budgetRemaining >= 0 
-                ? <TrendingUp className="w-4 h-4 text-emerald-600" />
-                : <AlertCircle className="w-4 h-4 text-[#BF0D3E]" />
-              }
+              <CheckCircle className="w-4 h-4 text-[#00205B]" />
             </div>
           </div>
         </div>
