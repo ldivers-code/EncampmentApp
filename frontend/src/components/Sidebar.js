@@ -151,17 +151,47 @@ const Sidebar = ({ children }) => {
           {/* User info & logout */}
           <div className="border-t border-slate-100 p-3">
             {!collapsed && (
-              <div className="mb-3 px-3">
-                <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
+              <NavLink
+                to="/profile"
+                className="block mb-3 px-3 py-2 -mx-3 rounded-sm hover:bg-slate-50 transition-colors"
+                data-testid="profile-link"
+              >
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">{user?.role}</p>
-                  {user?.flight && (
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                      {user.flight.toUpperCase()}
-                    </span>
+                  {user?.photo_url ? (
+                    <img src={user.photo_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-[#00205B] text-white flex items-center justify-center text-sm font-bold">
+                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-500 uppercase tracking-wide">{user?.role}</p>
+                      {user?.flight && (
+                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                          {user.flight.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </NavLink>
+            )}
+            {collapsed && (
+              <NavLink
+                to="/profile"
+                className="flex items-center justify-center p-2 mb-2 rounded-sm hover:bg-slate-50 transition-colors"
+                data-testid="profile-link-collapsed"
+              >
+                {user?.photo_url ? (
+                  <img src={user.photo_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[#00205B] text-white flex items-center justify-center text-sm font-bold">
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                )}
+              </NavLink>
             )}
             <button
               onClick={logout}
