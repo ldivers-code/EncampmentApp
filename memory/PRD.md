@@ -30,8 +30,27 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Enhanced Financial Tracker with Finance role restriction
 - [x] Food expense planner (editable cost per person per day)
 - [x] Receipt upload functionality
+- [x] **Analytics Dashboard with detailed attendee metrics**
+- [x] **Export functionality (CSV, Excel, Full Report)**
 
 ## What's Been Implemented
+
+### Feb 21, 2026 - Analytics Dashboard with Export
+- **Comprehensive Analytics Dashboard**: New `/analytics` page with 4 tabs:
+  - **Overview Tab**: Role counts (Seniors, Staff, Cadre, Students) with average ages, Age Statistics (avg, min, max, range), Gender Distribution by Role table
+  - **Demographics Tab**: Overall Gender Distribution bars, Rank Distribution grid, Average Age by Squadron/Flight
+  - **Distribution Tab**: Wing Distribution (with percentages), Region Distribution, Tennessee Group Distribution, Squadron/Flight Distribution bars
+  - **Pending Payments Tab**: Table of unpaid participants with contact info (email, phone, parent contact)
+- **Export Functionality**: Export dropdown with 3 options:
+  - Export as CSV (participant list)
+  - Export as Excel (single sheet)
+  - Full Report (Multi-sheet Excel with summaries)
+- **Access Control**: Analytics visible only to Commander, Staff, and Finance roles
+- **API Endpoints**:
+  - `GET /api/participants/analytics/detailed` - Comprehensive analytics data
+  - `GET /api/participants/pending-payments` - Unpaid participants with contact info
+  - `GET /api/participants/analytics/export?format=csv|excel` - Single-sheet export
+  - `GET /api/participants/analytics/summary-export` - Multi-sheet Excel report
 
 ### Feb 21, 2026 - Auto-Sync Roster to Budget
 - **Automatic Budget Sync on Import**: When a roster is imported, the budget income items are automatically updated:
@@ -180,6 +199,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `/api/auth/register`, `/api/auth/login`, `/api/auth/me` - Authentication
 - `/api/users`, `/api/users/{id}/role`, `/api/users/{id}/unit` - User management
 - `/api/participants`, `/api/participants/import` - Roster management
+- `/api/participants/analytics/detailed`, `/api/participants/analytics/export` - Analytics
+- `/api/participants/pending-payments` - Unpaid participants
 - `/api/schedule`, `/api/schedule/import`, `/api/schedule/publish`, `/api/schedule/settings` - Schedule
 - `/api/budget`, `/api/budget/summary`, `/api/budget/food-settings` - Financial tracking
 - `/api/budget/{id}/receipt` - Receipt upload/delete
@@ -220,6 +241,8 @@ Staff/Cadre
 - [x] User unit assignment
 - [x] Enhanced Financial Tracker with Finance role
 - [x] Food expense planner (cost per person per day)
+- [x] Analytics Dashboard with detailed attendee metrics
+- [x] Export functionality (CSV, Excel, Full Report)
 
 ### P1 (High Priority)
 - [ ] Implement Handbooks page (upload/view PDF documents)
