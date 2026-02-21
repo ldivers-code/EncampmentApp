@@ -16,7 +16,7 @@ const LoginPage = () => {
     password: '',
     name: '',
     capid: '',
-    role: 'cadet'
+    role: 'staff'  // Default to staff
   });
 
   const handleSubmit = async (e) => {
@@ -125,7 +125,7 @@ const LoginPage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="role" className="text-xs uppercase tracking-wide text-slate-600">Role</Label>
+                    <Label htmlFor="role" className="text-xs uppercase tracking-wide text-slate-600">I am registering as</Label>
                     <Select
                       value={formData.role}
                       onValueChange={(value) => setFormData({ ...formData, role: value })}
@@ -134,12 +134,11 @@ const LoginPage = () => {
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="commander">Commander</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="cadet">Cadet</SelectItem>
+                        <SelectItem value="staff">Staff / Senior Member</SelectItem>
+                        <SelectItem value="cadet">Cadre / Cadet</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-slate-400 mt-1">First user is automatically Commander</p>
+                    <p className="text-xs text-slate-400 mt-1">Your role can be adjusted by encampment admin after approval</p>
                   </div>
                 </>
               )}
