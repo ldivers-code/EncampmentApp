@@ -73,20 +73,29 @@ const BudgetPage = () => {
     notes: ''
   });
 
+  // Budget categories from 2026 TNWG Encampment Budget structure
   const budgetCategories = [
-    'Food & Meals',
-    'Facility - Catoosa',
+    // Income Sources
+    'Participant Fees',
+    'NHQ Allocations',
+    'Donations',
+    // Expense Categories
+    'Facility',
+    'DFAC Budget',
+    'Graduation Budget',
     'Commandants Budget',
+    'Deputy Commander Support',
     'Advanced Training School',
     'Public Affairs',
     'Logistics',
-    'Transportation',
-    'Supplies',
-    'Income',
+    'Health Services',
+    'Awards & Recognition',
+    'T-Shirts & Merchandise',
+    'Refunds',
     'Other'
   ];
 
-  const COLORS = ['#00205B', '#BF0D3E', '#10B981', '#F59E0B', '#6366F1', '#EC4899'];
+  const COLORS = ['#00205B', '#BF0D3E', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#14B8A6', '#8B5CF6'];
 
   useEffect(() => {
     loadData();
