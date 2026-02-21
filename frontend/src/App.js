@@ -12,6 +12,7 @@ import BudgetPage from "./pages/BudgetPage";
 import HandbooksPage from "./pages/HandbooksPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -117,6 +118,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DocumentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute allowedRoles={['commander', 'staff', 'finance']}>
+            <AnalyticsPage />
           </ProtectedRoute>
         }
       />

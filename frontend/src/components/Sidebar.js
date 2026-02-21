@@ -14,7 +14,8 @@ import {
   X,
   ChevronLeft,
   Network,
-  Bell
+  Bell,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -33,6 +34,11 @@ const Sidebar = ({ children }) => {
     { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
     { path: '/documents', icon: FileText, label: 'Official Documents' },
   ];
+
+  // Analytics visible to commander, staff, and finance
+  if (['commander', 'staff', 'finance'].includes(user?.role)) {
+    navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
+  }
 
   if (user?.role === 'commander') {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
