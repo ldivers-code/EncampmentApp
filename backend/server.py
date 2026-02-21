@@ -207,6 +207,8 @@ class UserResponse(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None
     linked_participant_id: Optional[str] = None
+    # Granular permissions
+    permissions: Optional[dict] = None
 
 class TokenResponse(BaseModel):
     access_token: str
