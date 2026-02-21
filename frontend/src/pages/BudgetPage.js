@@ -314,6 +314,25 @@ const BudgetPage = () => {
     }
   };
 
+  const handleLoadTemplate = async () => {
+    if (items.length > 0) {
+      if (!window.confirm('Loading the TNWG template will require clearing existing items first. This cannot be undone. Continue?')) {
+        return;
+      }
+    }
+    
+    setLoadingTemplate(true);
+    try {
+      const result = await seedTNWGBudgetTemplate();
+      toast.success(result.message);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load template');
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
   const resetForm = () => {
     setEditingItem(null);
     setFormData({
