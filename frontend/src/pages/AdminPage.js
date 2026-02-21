@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -12,14 +12,23 @@ import {
   Settings,
   AlertTriangle,
   Plane,
-  DollarSign
+  DollarSign,
+  Clock,
+  CheckCircle,
+  Link,
+  Search,
+  UserPlus
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
 const AdminPage = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
+  const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'users'
+  const [matchingParticipants, setMatchingParticipants] = useState({});
+  const [loadingMatches, setLoadingMatches] = useState({});
 
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
