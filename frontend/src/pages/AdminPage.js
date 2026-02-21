@@ -235,8 +235,18 @@ const AdminPage = () => {
   };
 
   const getFlightsForSquadron = (squadron) => {
-    if (!squadron || squadron === 'staff') return [{ value: 'none', label: 'N/A' }];
+    // Units that don't need flight assignment
+    const noFlightUnits = ['staff', 'support_cadre', 'exec_cadre'];
+    if (!squadron || noFlightUnits.includes(squadron)) return [{ value: 'none', label: 'N/A' }];
+    // For ops_cadre and squadrons, show all flights or filter by squadron
+    if (squadron === 'ops_cadre') return flights;
     return flights.filter(f => f.squadron === squadron || f.value === 'none');
+  };
+
+  // Check if unit requires flight assignment
+  const unitRequiresFlight = (squadron) => {
+    const noFlightUnits = ['staff', 'support_cadre', 'exec_cadre', null, undefined, 'none'];
+    return !noFlightUnits.includes(squadron);
   };
 
   if (loading) {
