@@ -81,6 +81,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/org-chart"
+        element={
+          <ProtectedRoute>
+            <OrgChartPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/schedule"
         element={
           <ProtectedRoute>
