@@ -633,7 +633,11 @@ async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
 
 @api_router.put("/users/{user_id}/role")
 async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
-    if role not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.FINANCE, UserRole.CADET]:
+    valid_roles = [
+        UserRole.COMMANDER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
+        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE
+    ]
+    if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
     
     result = await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
