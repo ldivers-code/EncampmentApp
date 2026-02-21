@@ -1207,6 +1207,143 @@ async def get_budget_summary(user: dict = Depends(require_finance_access())):
         "by_category": categories
     }
 
+
+# ================= FOOD EXPENSE SETTINGS =================
+
+@api_router.get("/budget/food-settings")
+async def get_food_expense_settings(user: dict = Depends(require_finance_access())):
+    """Get food expense settings for cost-per-person-per-day calculation"""
+    settings = await db.food_expense_settings.find_one({"_id": "settings"})
+    
+    # Get participant count from roster
+    participant_count = await db.participants.count_documents({})
+    
+    if not settings:
+        return {
+            "cost_per_person_per_day": 15.0,
+            "total_participants": participant_count,
+            "total_days": 8,
+            "notes": "Default: July 17-24 (8 days)",
+            "total_food_budget": 15.0 * participant_count * 8
+        }
+    
+    cost = settings.get("cost_per_person_per_day", 15.0)
+    participants = settings.get("total_participants") or participant_count
+    days = settings.get("total_days", 8)
+    
+    return {
+        "cost_per_person_per_day": cost,
+        "total_participants": participants,
+        "total_days": days,
+        "notes": settings.get("notes", ""),
+        "total_food_budget": cost * participants * days
+    }
+
+
+@api_router.put("/budget/food-settings")
+async def update_food_expense_settings(
+    data: FoodExpenseSettingsUpdate,
+    user: dict = Depends(require_finance_access())
+):
+    """Update food expense settings"""
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.food_expense_settings.update_one(
+        {"_id": "settings"},
+        {"$set": update_data},
+        upsert=True
+    )
+    
+    # Fetch and return updated settings
+    settings = await db.food_expense_settings.find_one({"_id": "settings"})
+    participant_count = await db.participants.count_documents({})
+    
+    cost = settings.get("cost_per_person_per_day", 15.0)
+    participants = settings.get("total_participants") or participant_count
+    days = settings.get("total_days", 8)
+    
+    return {
+        "cost_per_person_per_day": cost,
+        "total_participants": participants,
+        "total_days": days,
+        "notes": settings.get("notes", ""),
+        "total_food_budget": cost * participants * days
+    }
+
+
+# ================= RECEIPT UPLOAD =================
+
+import base64
+
+@api_router.post("/budget/{item_id}/receipt")
+async def upload_receipt(
+    item_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_finance_access())
+):
+    """Upload a receipt image for a budget item"""
+    # Verify budget item exists
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    # Check file type
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf']
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid file type. Allowed: JPEG, PNG, GIF, PDF"
+        )
+    
+    # Read file and encode as base64
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed.")
+    
+    # Store receipt as base64 data URL
+    b64_content = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{b64_content}"
+    
+    # Update budget item with receipt
+    await db.budget.update_one(
+        {"id": item_id},
+        {"$set": {
+            "receipt_url": data_url,
+            "receipt_filename": file.filename,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": "Receipt uploaded successfully",
+        "filename": file.filename,
+        "item_id": item_id
+    }
+
+
+@api_router.delete("/budget/{item_id}/receipt")
+async def delete_receipt(
+    item_id: str,
+    user: dict = Depends(require_finance_access())
+):
+    """Delete a receipt from a budget item"""
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    await db.budget.update_one(
+        {"id": item_id},
+        {"$set": {
+            "receipt_url": None,
+            "receipt_filename": None,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Receipt deleted successfully"}
+
+
 # ================= DOCUMENT ROUTES =================
 
 @api_router.get("/documents", response_model=List[DocumentResponse])
