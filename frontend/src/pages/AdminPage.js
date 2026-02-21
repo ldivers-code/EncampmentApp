@@ -26,7 +26,7 @@ const AdminPage = () => {
   ];
 
   const squadrons = [
-    { value: '', label: 'Not Assigned' },
+    { value: 'none', label: 'Not Assigned' },
     { value: 'staff', label: 'Staff/Cadre' },
     { value: 'sq1', label: 'Squadron 1' },
     { value: 'sq2', label: 'Squadron 2' },
@@ -34,7 +34,7 @@ const AdminPage = () => {
   ];
 
   const flights = [
-    { value: '', label: 'Not Assigned' },
+    { value: 'none', label: 'Not Assigned' },
     { value: 'alpha', label: 'Alpha', squadron: 'sq1' },
     { value: 'bravo', label: 'Bravo', squadron: 'sq1' },
     { value: 'charlie', label: 'Charlie', squadron: 'sq2' },
