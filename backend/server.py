@@ -782,6 +782,140 @@ async def get_pending_payments(user: dict = Depends(get_current_user)):
     }
 
 
+from fastapi.responses import StreamingResponse
+
+@api_router.get("/participants/analytics/export")
+async def export_analytics(
+    format: str = "csv",
+    user: dict = Depends(get_current_user)
+):
+    """Export analytics data as CSV or Excel"""
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    if not participants:
+        raise HTTPException(status_code=404, detail="No participants found")
+    
+    # Create DataFrame with participant data
+    df = pd.DataFrame(participants)
+    
+    # Select and reorder columns for export
+    export_columns = [
+        'capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 'region',
+        'gender', 'age', 'age_at_event', 'member_type', 'participant_type',
+        'squadron', 'flight', 'email', 'phone', 'cell_phone',
+        'paid', 'paid_in_full', 'amount_paid', 'registration_status',
+        'unit_approved', 'wing_approved', 'slotted'
+    ]
+    
+    # Only include columns that exist
+    available_columns = [col for col in export_columns if col in df.columns]
+    df_export = df[available_columns]
+    
+    # Generate file
+    output = BytesIO()
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    
+    if format == "excel":
+        df_export.to_excel(output, index=False, sheet_name='Participants')
+        output.seek(0)
+        filename = f"cap_encampment_analytics_{timestamp}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        df_export.to_csv(output, index=False)
+        output.seek(0)
+        filename = f"cap_encampment_analytics_{timestamp}.csv"
+        media_type = "text/csv"
+    
+    return StreamingResponse(
+        output,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/participants/analytics/summary-export")
+async def export_analytics_summary(
+    user: dict = Depends(get_current_user)
+):
+    """Export analytics summary report as Excel with multiple sheets"""
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    if not participants:
+        raise HTTPException(status_code=404, detail="No participants found")
+    
+    output = BytesIO()
+    
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Full participant list
+        df_full = pd.DataFrame(participants)
+        export_columns = [
+            'capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 'region',
+            'gender', 'age', 'member_type', 'participant_type', 'squadron', 'flight',
+            'paid', 'amount_paid'
+        ]
+        available_columns = [col for col in export_columns if col in df_full.columns]
+        df_full[available_columns].to_excel(writer, sheet_name='All Participants', index=False)
+        
+        # Sheet 2: Summary by Role
+        role_summary = []
+        for p in participants:
+            member_type = (p.get('member_type') or '').upper()
+            ptype = p.get('participant_type', '')
+            gender = (p.get('gender') or 'Unknown').upper()
+            age = p.get('age') or p.get('age_at_event')
+            
+            role = 'Unknown'
+            if member_type == 'SENIOR':
+                role = 'Senior/Staff'
+            elif ptype == 'cadre':
+                role = 'Cadre'
+            else:
+                role = 'Student'
+            
+            role_summary.append({
+                'Role': role,
+                'Gender': gender,
+                'Age': age,
+                'Paid': 'Yes' if p.get('paid') or p.get('paid_in_full') else 'No'
+            })
+        
+        df_roles = pd.DataFrame(role_summary)
+        role_counts = df_roles.groupby('Role').agg({
+            'Gender': 'count',
+            'Age': 'mean'
+        }).reset_index()
+        role_counts.columns = ['Role', 'Count', 'Average Age']
+        role_counts.to_excel(writer, sheet_name='Summary by Role', index=False)
+        
+        # Sheet 3: Summary by Wing
+        wing_counts = df_full.groupby('wing').size().reset_index(name='Count')
+        wing_counts.to_excel(writer, sheet_name='By Wing', index=False)
+        
+        # Sheet 4: Summary by Unit
+        if 'unit' in df_full.columns:
+            unit_counts = df_full.groupby('unit').size().reset_index(name='Count')
+            unit_counts.to_excel(writer, sheet_name='By Unit', index=False)
+        
+        # Sheet 5: Pending Payments
+        unpaid = [p for p in participants if not p.get('paid') and not p.get('paid_in_full')]
+        if unpaid:
+            df_unpaid = pd.DataFrame(unpaid)
+            unpaid_columns = ['capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 
+                            'email', 'phone', 'cadet_parent_email', 'cadet_parent_phone']
+            available_unpaid = [col for col in unpaid_columns if col in df_unpaid.columns]
+            df_unpaid[available_unpaid].to_excel(writer, sheet_name='Pending Payments', index=False)
+    
+    output.seek(0)
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    filename = f"cap_encampment_full_report_{timestamp}.xlsx"
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/participants/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(participant_id: str, user: dict = Depends(get_current_user)):
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
