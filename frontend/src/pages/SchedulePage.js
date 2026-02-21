@@ -122,6 +122,21 @@ const SchedulePage = () => {
     { value: 'foxtrot', label: 'Foxtrot Flight', category: 'flight' }
   ];
 
+  // Schedule filter options - available to ALL members
+  const scheduleFilterOptions = [
+    { value: 'all', label: 'All Events' },
+    { value: 'staff', label: 'Staff Only' },
+    { value: 'sq1', label: 'Squadron 1' },
+    { value: 'sq2', label: 'Squadron 2' },
+    { value: 'sq3', label: 'Squadron 3' },
+    { value: 'alpha', label: 'Alpha Flight' },
+    { value: 'bravo', label: 'Bravo Flight' },
+    { value: 'charlie', label: 'Charlie Flight' },
+    { value: 'delta', label: 'Delta Flight' },
+    { value: 'echo', label: 'Echo Flight' },
+    { value: 'foxtrot', label: 'Foxtrot Flight' }
+  ];
+
   // Time slots for day view (0600-2200 in 30-min increments)
   const timeSlots = useMemo(() => {
     const slots = [];
