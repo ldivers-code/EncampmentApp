@@ -638,7 +638,7 @@ async def import_participants(
                     return default
                 try:
                     return float(val)
-                except:
+                except (ValueError, TypeError):
                     return default
             
             def get_int(key, default=None):
@@ -647,7 +647,7 @@ async def import_participants(
                     return default
                 try:
                     return int(float(val))
-                except:
+                except (ValueError, TypeError):
                     return default
             
             # Determine participant type based on member type and staff status
