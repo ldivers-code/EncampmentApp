@@ -142,6 +142,11 @@ const AdminPage = () => {
         </p>
       </div>
 
+      {/* Push Notifications */}
+      <div className="mb-6">
+        <NotificationManager />
+      </div>
+
       {/* Role Permissions Info */}
       <div className="bg-white border border-slate-200 rounded-sm mb-6">
         <div className="border-b border-slate-100 p-4">
