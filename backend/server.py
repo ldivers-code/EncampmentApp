@@ -472,6 +472,76 @@ async def get_participants(user: dict = Depends(get_current_user)):
     participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
     return [ParticipantResponse(**p) for p in participants]
 
+
+@api_router.get("/participants/stats")
+async def get_participant_stats(user: dict = Depends(get_current_user)):
+    """Get participant statistics for dashboard"""
+    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    stats = {
+        'total': len(participants),
+        'seniors': 0,
+        'cadets': 0,
+        'staff': 0,
+        'cadre': 0,
+        'students': 0,
+        'paid': 0,
+        'unpaid': 0,
+        'total_collected': 0.0,
+        'unit_approved': 0,
+        'wing_approved': 0,
+        'slotted': 0,
+        'by_wing': {},
+        'by_unit': {}
+    }
+    
+    for p in participants:
+        # Member type counts
+        member_type = (p.get('member_type') or '').upper()
+        if member_type == 'SENIOR':
+            stats['seniors'] += 1
+        elif member_type == 'CADET':
+            stats['cadets'] += 1
+        
+        # Role counts
+        ptype = p.get('participant_type', '')
+        if ptype == 'staff':
+            stats['staff'] += 1
+        elif ptype == 'cadre':
+            stats['cadre'] += 1
+        elif ptype in ['basic_student', 'advanced_student']:
+            stats['students'] += 1
+        
+        # Payment
+        if p.get('paid') or p.get('paid_in_full'):
+            stats['paid'] += 1
+        else:
+            stats['unpaid'] += 1
+        
+        if p.get('amount_paid'):
+            stats['total_collected'] += float(p.get('amount_paid', 0))
+        
+        # Approvals
+        if p.get('unit_approved'):
+            stats['unit_approved'] += 1
+        if p.get('wing_approved'):
+            stats['wing_approved'] += 1
+        if p.get('slotted'):
+            stats['slotted'] += 1
+        
+        # By wing
+        wing = p.get('wing', 'Unknown')
+        if wing:
+            stats['by_wing'][wing] = stats['by_wing'].get(wing, 0) + 1
+        
+        # By unit
+        unit = p.get('unit', 'Unknown')
+        if unit:
+            stats['by_unit'][unit] = stats['by_unit'].get(unit, 0) + 1
+    
+    return stats
+
+
 @api_router.get("/participants/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(participant_id: str, user: dict = Depends(get_current_user)):
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
