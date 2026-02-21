@@ -33,6 +33,26 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Feb 21, 2026 - Live Budget Tracking
+- **Real-Time Variance Tracking**: Dashboard shows 6 key metrics:
+  - Estimated Income vs Actual Income with variance
+  - Estimated Expenses vs Actual Expenses with under/over budget indicator
+  - Current Balance (actual income - actual expenses)
+  - Payment Status progress (X/Y items paid with progress bar)
+- **Inline Actual Value Editing**: Click any actual value to edit in-place
+  - Save with checkmark, cancel with X
+  - Quick API: PATCH `/api/budget/{id}/actual`
+- **Mark as Paid Quick Action**: Green checkmark button in Actions column
+  - Sets status = paid, payment_date = today
+  - If actual is 0, sets actual = estimated
+  - API: POST `/api/budget/{id}/mark-paid`
+- **Variance Column**: New column showing:
+  - Income items: Collection percentage (e.g., "88%", "0%")
+  - Expense items: Under/over budget amount (e.g., "+$11,000.00", "-$500.00")
+  - Color-coded badges (green = good, amber = warning, red = over)
+- **Status Filter**: Filter items by Pending, Paid, or Cancelled
+- **Payment Date Tracking**: Shows "Paid: YYYY-MM-DD" below item name
+
 ### Feb 21, 2026 - Enhanced Financial Tracker
 - **Finance Role**: New role with exclusive budget access (alongside Commander)
   - Added to role enum in backend
