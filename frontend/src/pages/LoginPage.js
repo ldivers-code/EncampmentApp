@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { Shield, Plane } from 'lucide-react';
 
@@ -122,6 +123,23 @@ const LoginPage = () => {
                       placeholder="123456"
                       data-testid="register-capid-input"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="role" className="text-xs uppercase tracking-wide text-slate-600">Role</Label>
+                    <Select
+                      value={formData.role}
+                      onValueChange={(value) => setFormData({ ...formData, role: value })}
+                    >
+                      <SelectTrigger className="mt-1 rounded-sm" data-testid="register-role-select">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="commander">Commander</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="cadet">Cadet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400 mt-1">First user is automatically Commander</p>
                   </div>
                 </>
               )}
