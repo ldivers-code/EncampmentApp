@@ -112,8 +112,8 @@ const AdminPage = () => {
   };
 
   const getFlightsForSquadron = (squadron) => {
-    if (!squadron || squadron === 'staff') return [];
-    return flights.filter(f => f.squadron === squadron || f.value === '');
+    if (!squadron || squadron === 'staff') return [{ value: 'none', label: 'N/A' }];
+    return flights.filter(f => f.squadron === squadron || f.value === 'none');
   };
 
   if (loading) {
