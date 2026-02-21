@@ -354,6 +354,16 @@ export const findMatchingParticipants = async (userId) => {
   return response.data;
 };
 
+export const updateUserPermissions = async (userId, permissions) => {
+  const response = await axios.put(`${API}/users/${userId}/permissions`, permissions, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const resetUserPermissions = async (userId) => {
+  const response = await axios.post(`${API}/users/${userId}/reset-permissions`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Org Chart
 export const getOrgChartRoles = async () => {
   const response = await axios.get(`${API}/org-chart/roles`, { headers: getAuthHeaders() });
