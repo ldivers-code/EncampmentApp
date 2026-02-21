@@ -155,7 +155,7 @@ const AdminPage = () => {
             Role Permissions
           </h2>
         </div>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="p-4 bg-[#00205B]/5 rounded-sm border border-[#00205B]/20">
             <div className="flex items-center gap-2 mb-2">
               <Shield className="w-5 h-5 text-[#00205B]" />
@@ -180,6 +180,18 @@ const AdminPage = () => {
               <li>• Manage documents</li>
             </ul>
           </div>
+          <div className="p-4 bg-emerald-50 rounded-sm border border-emerald-200">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-5 h-5 text-emerald-700" />
+              <span className="font-bold text-emerald-700">Finance</span>
+            </div>
+            <ul className="text-sm text-slate-600 space-y-1">
+              <li>• Full budget access</li>
+              <li>• Manage expenses & income</li>
+              <li>• Upload receipts</li>
+              <li>• Food expense planning</li>
+            </ul>
+          </div>
           <div className="p-4 bg-slate-50 rounded-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <Users className="w-5 h-5 text-slate-600" />
@@ -188,8 +200,8 @@ const AdminPage = () => {
             <ul className="text-sm text-slate-600 space-y-1">
               <li>• View roster</li>
               <li>• View their unit's schedule</li>
-              <li>• View budget</li>
               <li>• Access documents</li>
+              <li>• No budget access</li>
             </ul>
           </div>
         </div>
