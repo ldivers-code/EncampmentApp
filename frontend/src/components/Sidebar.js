@@ -12,9 +12,9 @@ import {
   LogOut,
   Menu,
   X,
-  Shield,
   ChevronLeft,
-  Network
+  Network,
+  Bell
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -60,9 +60,13 @@ const Sidebar = ({ children }) => {
   return (
     <div className="min-h-screen flex bg-slate-50">
       {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-[#00205B]" />
+          <img 
+            src="/tnwg-patch.png" 
+            alt="Tennessee Wing" 
+            className="w-10 h-10 object-contain"
+          />
           <span className="font-bold text-[#00205B] uppercase text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
             CAP Encampment
           </span>
@@ -88,26 +92,47 @@ const Sidebar = ({ children }) => {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
-        ${collapsed ? 'w-16' : 'w-64'}
+        ${collapsed ? 'w-20' : 'w-64'}
         bg-white border-r border-slate-200
         transform transition-all duration-200 ease-in-out
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`p-4 border-b border-slate-100 ${collapsed ? 'px-2' : ''}`}>
-            <div className="flex items-center gap-2">
-              <Shield className="w-8 h-8 text-[#00205B] flex-shrink-0" />
+          <div className={`p-4 border-b border-slate-100 ${collapsed ? 'px-3' : ''}`}>
+            <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+              <img 
+                src="/tnwg-patch.png" 
+                alt="Tennessee Wing CAP" 
+                className={`object-contain ${collapsed ? 'w-12 h-12' : 'w-14 h-14'}`}
+              />
               {!collapsed && (
                 <div>
                   <h1 className="font-black text-[#00205B] uppercase text-sm leading-tight" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                    Civil Air Patrol
+                    Tennessee Wing
                   </h1>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Encampment Roster</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Civil Air Patrol</p>
                 </div>
               )}
             </div>
           </div>
+
+          {/* 2026 Encampment Info */}
+          {!collapsed && (
+            <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-[#00205B] to-[#003087]">
+              <div className="flex items-center gap-2">
+                <img 
+                  src="/60th-ctg-patch.png" 
+                  alt="60th CTG" 
+                  className="w-8 h-8 object-contain"
+                />
+                <div>
+                  <p className="text-white font-bold text-xs uppercase">2026 Encampment</p>
+                  <p className="text-blue-200 text-[10px]">VTS Catoosa, GA</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Navigation */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -121,7 +146,14 @@ const Sidebar = ({ children }) => {
             {!collapsed && (
               <div className="mb-3 px-3">
                 <p className="text-sm font-semibold text-slate-900 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">{user?.role}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">{user?.role}</p>
+                  {user?.flight && (
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                      {user.flight.toUpperCase()}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             <button
