@@ -541,12 +541,16 @@ async def register(user_data: UserCreate):
     is_first_user = user_count == 0
     assigned_role = UserRole.COMMANDER if is_first_user else user_data.role
     
-    # Validate role selection - only allow staff or cadet for new registrations (not commander/finance)
-    if not is_first_user and assigned_role not in [UserRole.STAFF, UserRole.CADET]:
+    # Validate role selection - only allow staff or cadre for new registrations
+    valid_registration_roles = [UserRole.STAFF, UserRole.CADRE]
+    if not is_first_user and assigned_role not in valid_registration_roles:
         assigned_role = UserRole.STAFF  # Default to staff if invalid role selected
     
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    
+    # Get default permissions for the role
+    default_permissions = get_default_permissions(assigned_role)
     
     user_doc = {
         "id": user_id,
@@ -561,7 +565,9 @@ async def register(user_data: UserCreate):
         # First user (commander) is auto-approved, others need approval
         "is_approved": is_first_user,
         "approved_by": user_id if is_first_user else None,
-        "approved_at": now if is_first_user else None
+        "approved_at": now if is_first_user else None,
+        # Initialize with role-based default permissions
+        "permissions": default_permissions
     }
     await db.users.insert_one(user_doc)
     
@@ -578,7 +584,8 @@ async def register(user_data: UserCreate):
             squadron=user_data.squadron,
             flight=user_data.flight,
             created_at=now,
-            is_approved=is_first_user
+            is_approved=is_first_user,
+            permissions=default_permissions
         )
     )
 
