@@ -116,14 +116,56 @@ const AnalyticsPage = () => {
             {analytics.total_count} total participants
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          className="rounded-sm border-[#00205B] text-[#00205B]"
-          onClick={loadData}
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* Export Dropdown */}
+          <div className="relative group">
+            <Button 
+              variant="outline" 
+              className="rounded-sm border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              disabled={exporting}
+              data-testid="export-dropdown-btn"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {exporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              <button
+                onClick={() => handleExport('csv')}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                data-testid="export-csv-btn"
+              >
+                <FileText className="w-4 h-4 text-slate-400" />
+                Export as CSV
+              </button>
+              <button
+                onClick={() => handleExport('excel')}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                data-testid="export-excel-btn"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                Export as Excel
+              </button>
+              <div className="border-t border-slate-100" />
+              <button
+                onClick={() => handleExport('full-report')}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                data-testid="export-full-report-btn"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-blue-500" />
+                Full Report (Multi-sheet)
+              </button>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            className="rounded-sm border-[#00205B] text-[#00205B]"
+            onClick={loadData}
+            data-testid="refresh-analytics-btn"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
