@@ -518,7 +518,7 @@ def main():
                 "failed_test_names": failed_tests
             },
             "detailed_results": tester.test_results
-        }, indent=2)
+        }, f, indent=2)
     
     print(f"\n📄 Detailed results saved to: /app/backend_test_results.json")
     
