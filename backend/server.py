@@ -525,6 +525,228 @@ async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted successfully"}
 
+
+# ================= PROFILE ROUTES =================
+
+@api_router.get("/profile", response_model=UserResponse)
+async def get_profile(user: dict = Depends(get_current_user)):
+    """Get current user's full profile"""
+    return UserResponse(**user)
+
+
+@api_router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: UserProfileUpdate,
+    user: dict = Depends(get_current_user)
+):
+    """Update current user's profile"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Build update dict, excluding None values
+    update_fields = {k: v for k, v in profile_data.model_dump().items() if v is not None}
+    update_fields["updated_at"] = now
+    
+    # Users cannot change their own role or approval status
+    update_fields.pop("role", None)
+    update_fields.pop("is_approved", None)
+    update_fields.pop("approved_by", None)
+    update_fields.pop("approved_at", None)
+    
+    if update_fields:
+        await db.users.update_one({"id": user["id"]}, {"$set": update_fields})
+    
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return UserResponse(**updated_user)
+
+
+@api_router.post("/profile/photo")
+async def upload_profile_photo(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """Upload profile photo"""
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    
+    # Read and encode file
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="Image must be less than 5MB")
+    
+    import base64
+    encoded = base64.b64encode(contents).decode('utf-8')
+    photo_url = f"data:{file.content_type};base64,{encoded}"
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"photo_url": photo_url, "updated_at": now}}
+    )
+    
+    return {"message": "Photo uploaded successfully", "photo_url": photo_url}
+
+
+@api_router.delete("/profile/photo")
+async def delete_profile_photo(user: dict = Depends(get_current_user)):
+    """Delete profile photo"""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"photo_url": None, "updated_at": now}}
+    )
+    return {"message": "Photo deleted successfully"}
+
+
+# ================= USER APPROVAL ROUTES =================
+
+@api_router.get("/users/pending")
+async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
+    """Get users pending approval"""
+    pending_users = await db.users.find(
+        {"$or": [{"is_approved": False}, {"is_approved": None}]},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(1000)
+    return pending_users
+
+
+@api_router.post("/users/{user_id}/approve")
+async def approve_user(
+    user_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Approve a user account"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "is_approved": True,
+            "approved_by": user["id"],
+            "approved_at": now
+        }}
+    )
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return {"message": "User approved successfully", "user": updated_user}
+
+
+@api_router.post("/users/{user_id}/link-participant")
+async def link_user_to_participant(
+    user_id: str,
+    participant_id: str,
+    auto_populate: bool = True,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Link a user account to a roster participant by CAPID or participant ID"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Find participant by ID or CAPID
+    participant = await db.participants.find_one(
+        {"$or": [{"id": participant_id}, {"capid": participant_id}]},
+        {"_id": 0}
+    )
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    update_fields = {
+        "linked_participant_id": participant.get("id"),
+        "capid": participant.get("capid"),
+        "updated_at": now
+    }
+    
+    # Auto-populate profile from participant data
+    if auto_populate:
+        # Determine role based on participant type
+        ptype = participant.get("participant_type", "")
+        member_type = (participant.get("member_type") or "").upper()
+        
+        if member_type == "SENIOR" or ptype == "staff":
+            update_fields["role"] = UserRole.STAFF
+        elif ptype == "cadre":
+            update_fields["role"] = UserRole.STAFF  # Cadre gets staff role
+        else:
+            update_fields["role"] = UserRole.CADET
+        
+        # Copy profile fields from participant
+        profile_fields = [
+            "rank", "unit", "wing", "region", "gender", "age", "shirt_size",
+            "phone", "cell_phone", "email", "address", "city", "state", "zip_code",
+            "emergency_contact", "emergency_phone",
+            "cadet_parent_phone", "cadet_parent_email"
+        ]
+        for field in profile_fields:
+            if participant.get(field):
+                update_fields[field] = participant[field]
+        
+        # Use participant name if user name is generic
+        if participant.get("first_name") and participant.get("last_name"):
+            update_fields["name"] = f"{participant['first_name']} {participant['last_name']}"
+    
+    await db.users.update_one({"id": user_id}, {"$set": update_fields})
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return {
+        "message": "User linked to participant successfully",
+        "user": updated_user,
+        "participant": participant
+    }
+
+
+@api_router.get("/users/{user_id}/match-participants")
+async def find_matching_participants(
+    user_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Find potential participant matches for a user based on CAPID, name, or email"""
+    target_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    matches = []
+    
+    # Search by CAPID if provided
+    if target_user.get("capid"):
+        capid_match = await db.participants.find_one(
+            {"capid": target_user["capid"]},
+            {"_id": 0}
+        )
+        if capid_match:
+            matches.append({"match_type": "capid", "participant": capid_match, "confidence": "high"})
+    
+    # Search by email
+    if target_user.get("email"):
+        email_matches = await db.participants.find(
+            {"email": {"$regex": target_user["email"], "$options": "i"}},
+            {"_id": 0}
+        ).to_list(5)
+        for p in email_matches:
+            if not any(m["participant"]["id"] == p["id"] for m in matches):
+                matches.append({"match_type": "email", "participant": p, "confidence": "high"})
+    
+    # Search by name (partial match)
+    if target_user.get("name"):
+        name_parts = target_user["name"].split()
+        if len(name_parts) >= 1:
+            name_query = {
+                "$or": [
+                    {"first_name": {"$regex": name_parts[0], "$options": "i"}},
+                    {"last_name": {"$regex": name_parts[-1], "$options": "i"}}
+                ]
+            }
+            name_matches = await db.participants.find(name_query, {"_id": 0}).to_list(10)
+            for p in name_matches:
+                if not any(m["participant"]["id"] == p["id"] for m in matches):
+                    matches.append({"match_type": "name", "participant": p, "confidence": "medium"})
+    
+    return {"user": target_user, "matches": matches[:10]}  # Limit to 10 matches
+
+
 # ================= PARTICIPANT ROUTES =================
 
 @api_router.get("/participants", response_model=List[ParticipantResponse])
