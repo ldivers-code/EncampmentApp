@@ -491,6 +491,106 @@ const RosterPage = () => {
         )}
       </div>
 
+      {/* Import Results Banner */}
+      {importResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-4 mb-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <div>
+                <p className="font-medium text-emerald-800">Import Complete</p>
+                <p className="text-sm text-emerald-600">
+                  {importResult.imported} new participants, {importResult.updated} updated
+                </p>
+              </div>
+            </div>
+            <div className="text-right text-sm">
+              <div className="space-x-4">
+                <span className="text-emerald-700">Seniors: {importResult.stats?.seniors || 0}</span>
+                <span className="text-emerald-700">Cadets: {importResult.stats?.cadets || 0}</span>
+                <span className="text-emerald-700">Staff: {importResult.stats?.staff || 0}</span>
+                <span className="text-emerald-700">Cadre: {importResult.stats?.cadre || 0}</span>
+              </div>
+              <div className="mt-1">
+                <span className="text-emerald-600">Total Collected: {formatCurrency(importResult.stats?.total_collected || 0)}</span>
+              </div>
+            </div>
+            <button onClick={() => setImportResult(null)} className="text-emerald-400 hover:text-emerald-600">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Dashboard */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+                <p className="text-2xl font-bold text-[#00205B]">{stats.total}</p>
+              </div>
+              <Users className="w-5 h-5 text-[#00205B]" />
+            </div>
+          </div>
+          
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Seniors</p>
+                <p className="text-2xl font-bold text-slate-700">{stats.seniors}</p>
+                <p className="text-xs text-slate-400">{stats.staff} staff</p>
+              </div>
+              <UserCheck className="w-5 h-5 text-slate-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Cadets</p>
+                <p className="text-2xl font-bold text-slate-700">{stats.cadets}</p>
+                <p className="text-xs text-slate-400">{stats.cadre} cadre, {stats.students} students</p>
+              </div>
+              <Users className="w-5 h-5 text-slate-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Paid</p>
+                <p className="text-2xl font-bold text-emerald-600">{stats.paid}</p>
+                <p className="text-xs text-amber-600">{stats.unpaid} unpaid</p>
+              </div>
+              <DollarSign className="w-5 h-5 text-emerald-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Collected</p>
+                <p className="text-xl font-bold text-emerald-600 font-mono">{formatCurrency(stats.total_collected)}</p>
+              </div>
+              <DollarSign className="w-5 h-5 text-emerald-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Approved</p>
+                <p className="text-2xl font-bold text-[#00205B]">{stats.wing_approved}</p>
+                <p className="text-xs text-slate-400">{stats.slotted} slotted</p>
+              </div>
+              <CheckCircle className="w-5 h-5 text-[#00205B]" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -513,7 +613,7 @@ const RosterPage = () => {
               setTypeFilter(value);
               setCurrentPage(1);
             }}>
-              <SelectTrigger className="w-48 rounded-sm" data-testid="roster-type-filter">
+              <SelectTrigger className="w-40 rounded-sm" data-testid="roster-type-filter">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
@@ -521,6 +621,19 @@ const RosterPage = () => {
                 {participantTypes.map(type => (
                   <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={paidFilter} onValueChange={(value) => {
+              setPaidFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-32 rounded-sm" data-testid="roster-paid-filter">
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
               </SelectContent>
             </Select>
           </div>
