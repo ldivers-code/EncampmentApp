@@ -34,7 +34,10 @@ import {
   AlertCircle,
   RefreshCw,
   Users,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
@@ -53,8 +56,13 @@ const SchedulePage = () => {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [lastVersion, setLastVersion] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileDatePicker, setShowMobileDatePicker] = useState(false);
   const fileInputRef = useRef(null);
   const refreshIntervalRef = useRef(null);
+  const touchStartX = useRef(null);
+  const touchEndX = useRef(null);
+  const scheduleContainerRef = useRef(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -67,6 +75,16 @@ const SchedulePage = () => {
     target_groups: ['all']
   });
 
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // Encampment dates: July 17-24, 2026
   const encampmentDates = useMemo(() => {
     const dates = [];
@@ -78,15 +96,15 @@ const SchedulePage = () => {
   }, []);
 
   const eventTypes = [
-    { value: 'general', label: 'General', color: 'bg-slate-500' },
-    { value: 'training', label: 'Training', color: 'bg-blue-600' },
-    { value: 'ceremony', label: 'Ceremony', color: 'bg-purple-600' },
-    { value: 'meal', label: 'Meal', color: 'bg-amber-500' },
-    { value: 'recreation', label: 'Recreation', color: 'bg-emerald-500' },
-    { value: 'pt', label: 'Physical Training', color: 'bg-red-600' },
-    { value: 'admin', label: 'Admin/Logistics', color: 'bg-slate-600' },
-    { value: 'leadership', label: 'Leadership', color: 'bg-indigo-600' },
-    { value: 'academics', label: 'Academics', color: 'bg-teal-600' }
+    { value: 'general', label: 'General', color: 'bg-slate-500', mobileColor: 'border-l-slate-500' },
+    { value: 'training', label: 'Training', color: 'bg-blue-600', mobileColor: 'border-l-blue-600' },
+    { value: 'ceremony', label: 'Ceremony', color: 'bg-purple-600', mobileColor: 'border-l-purple-600' },
+    { value: 'meal', label: 'Meal', color: 'bg-amber-500', mobileColor: 'border-l-amber-500' },
+    { value: 'recreation', label: 'Recreation', color: 'bg-emerald-500', mobileColor: 'border-l-emerald-500' },
+    { value: 'pt', label: 'PT', color: 'bg-red-600', mobileColor: 'border-l-red-600' },
+    { value: 'admin', label: 'Admin', color: 'bg-slate-600', mobileColor: 'border-l-slate-600' },
+    { value: 'leadership', label: 'Leadership', color: 'bg-indigo-600', mobileColor: 'border-l-indigo-600' },
+    { value: 'academics', label: 'Academics', color: 'bg-teal-600', mobileColor: 'border-l-teal-600' }
   ];
 
   const targetGroupOptions = [
@@ -118,7 +136,6 @@ const SchedulePage = () => {
   const loadEvents = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
     try {
-      const showAll = canEdit() && showAllEvents;
       const data = await getSchedule();
       setEvents(data);
     } catch (error) {
@@ -127,7 +144,7 @@ const SchedulePage = () => {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [canEdit, showAllEvents]);
+  }, []);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -135,7 +152,6 @@ const SchedulePage = () => {
       setScheduleSettings(settings);
       setIsPublished(settings.is_published);
       
-      // Check if version changed (for real-time sync)
       if (settings.version !== lastVersion && lastVersion !== 0) {
         loadEvents(true);
         toast.info('Schedule updated');
@@ -146,20 +162,17 @@ const SchedulePage = () => {
     }
   }, [lastVersion, loadEvents]);
 
-  // Initial load
   useEffect(() => {
     loadEvents();
     loadSettings();
   }, []);
 
-  // Reload when showAllEvents changes
   useEffect(() => {
     if (!loading) {
       loadEvents();
     }
   }, [showAllEvents]);
 
-  // Real-time sync: poll for changes every 30 seconds
   useEffect(() => {
     refreshIntervalRef.current = setInterval(() => {
       loadSettings();
@@ -171,6 +184,45 @@ const SchedulePage = () => {
       }
     };
   }, [loadSettings]);
+
+  // Touch handlers for swipe navigation
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diff) > minSwipeDistance) {
+      if (diff > 0) {
+        // Swiped left - go to next day
+        navigateDay(1);
+      } else {
+        // Swiped right - go to previous day
+        navigateDay(-1);
+      }
+    }
+
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  const navigateDay = (direction) => {
+    const currentIndex = encampmentDates.findIndex(d => isSameDay(d, selectedDate));
+    const newIndex = currentIndex + direction;
+    if (newIndex >= 0 && newIndex < encampmentDates.length) {
+      setSelectedDate(encampmentDates[newIndex]);
+    }
+  };
+
+  const currentDayIndex = encampmentDates.findIndex(d => isSameDay(d, selectedDate));
 
   // Get events for selected date
   const eventsForDate = useMemo(() => {
@@ -191,6 +243,17 @@ const SchedulePage = () => {
     });
     return grouped;
   }, [eventsForDate, timeSlots]);
+
+  // Group consecutive events for mobile compact view
+  const compactEventsForDate = useMemo(() => {
+    const seen = new Set();
+    return eventsForDate.filter(e => {
+      const key = `${e.title}-${e.start_time}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [eventsForDate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -280,7 +343,7 @@ const SchedulePage = () => {
     try {
       await publishSchedule();
       setIsPublished(true);
-      toast.success('Schedule published! All users can now view it.');
+      toast.success('Schedule published!');
       loadSettings();
     } catch (error) {
       toast.error('Failed to publish schedule');
@@ -291,7 +354,7 @@ const SchedulePage = () => {
     try {
       await unpublishSchedule();
       setIsPublished(false);
-      toast.success('Schedule unpublished. Only editors can view it now.');
+      toast.success('Schedule unpublished');
       loadSettings();
     } catch (error) {
       toast.error('Failed to unpublish schedule');
@@ -302,10 +365,8 @@ const SchedulePage = () => {
     let newGroups = [...formData.target_groups];
     
     if (value === 'all') {
-      // If selecting 'all', clear everything else
       newGroups = ['all'];
     } else {
-      // Remove 'all' if selecting specific groups
       newGroups = newGroups.filter(g => g !== 'all');
       
       if (newGroups.includes(value)) {
@@ -314,7 +375,6 @@ const SchedulePage = () => {
         newGroups.push(value);
       }
       
-      // If no groups selected, default to 'all'
       if (newGroups.length === 0) {
         newGroups = ['all'];
       }
@@ -339,6 +399,14 @@ const SchedulePage = () => {
 
   const getEventTypeColor = (type) => {
     return eventTypes.find(t => t.value === type)?.color || 'bg-slate-500';
+  };
+
+  const getEventTypeMobileColor = (type) => {
+    return eventTypes.find(t => t.value === type)?.mobileColor || 'border-l-slate-500';
+  };
+
+  const getEventTypeLabel = (type) => {
+    return eventTypes.find(t => t.value === type)?.label || type;
   };
 
   const getDayLabel = (date) => {
@@ -373,7 +441,7 @@ const SchedulePage = () => {
 
   if (loading) {
     return (
-      <div className="p-6 lg:p-8 animate-fade-in">
+      <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
         <div className="flex items-center justify-center h-64">
           <div className="text-slate-400">Loading schedule...</div>
         </div>
@@ -382,164 +450,157 @@ const SchedulePage = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Training Schedule
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            TNWG Summer Encampment • July 17-24, 2026
-            {getUserUnitLabel() && (
-              <span className="ml-2 text-[#00205B] font-medium">• {getUserUnitLabel()}</span>
-            )}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Real-time sync indicator */}
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-sm text-xs ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
-            <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Auto-sync</span>
-          </div>
-
-          {/* Draft/Published Badge */}
-          {canEdit() && (
-            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium ${
-              isPublished 
-                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                : 'bg-amber-100 text-amber-700 border border-amber-200'
-            }`}>
-              {isPublished ? (
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
+      {/* Mobile Header */}
+      {isMobile ? (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              Schedule
+            </h1>
+            <div className="flex items-center gap-2">
+              {/* Sync indicator */}
+              <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </div>
+              {canEdit() && (
                 <>
-                  <Eye className="w-3 h-3" />
-                  <span>Published</span>
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-3 h-3" />
-                  <span>Draft</span>
+                  {isPublished ? (
+                    <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1">
+                      <Eye className="w-3 h-3" />
+                    </span>
+                  ) : (
+                    <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1">
+                      <EyeOff className="w-3 h-3" />
+                    </span>
+                  )}
                 </>
               )}
             </div>
-          )}
-
-          {/* Show All Toggle (for editors) */}
-          {canEdit() && (
-            <button
-              onClick={() => setShowAllEvents(!showAllEvents)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium border transition-colors ${
-                showAllEvents
-                  ? 'bg-[#00205B] text-white border-[#00205B]'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-              data-testid="show-all-toggle"
-            >
-              <Filter className="w-3 h-3" />
-              <span>{showAllEvents ? 'All Events' : 'Filtered'}</span>
-            </button>
-          )}
-
-          {/* View Toggle */}
-          <div className="flex border border-slate-200 rounded-sm overflow-hidden">
-            <button
-              onClick={() => setViewMode('day')}
-              className={`px-3 py-2 text-sm ${viewMode === 'day' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-              data-testid="view-day-btn"
-            >
-              <Grid3X3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-2 text-sm ${viewMode === 'list' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-              data-testid="view-list-btn"
-            >
-              <List className="w-4 h-4" />
-            </button>
+          </div>
+          
+          {/* Mobile Day Navigator with Swipe hint */}
+          <div className="bg-[#00205B] rounded-lg p-3 text-white">
+            <div className="flex items-center justify-between">
+              <button 
+                onClick={() => navigateDay(-1)}
+                disabled={currentDayIndex === 0}
+                className="p-2 rounded-full hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                data-testid="prev-day-btn"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              
+              <button 
+                onClick={() => setShowMobileDatePicker(!showMobileDatePicker)}
+                className="text-center flex-1"
+                data-testid="date-picker-toggle"
+              >
+                <div className="text-xs opacity-75 uppercase tracking-wider">
+                  {format(selectedDate, 'EEEE')}
+                </div>
+                <div className="text-2xl font-bold">
+                  {format(selectedDate, 'MMM d')}
+                </div>
+                <div className="text-xs opacity-75">{getDayLabel(selectedDate)}</div>
+              </button>
+              
+              <button 
+                onClick={() => navigateDay(1)}
+                disabled={currentDayIndex === encampmentDates.length - 1}
+                className="p-2 rounded-full hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                data-testid="next-day-btn"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {/* Swipe hint */}
+            <div className="text-center text-[10px] opacity-50 mt-1">
+              Swipe left/right to change day
+            </div>
           </div>
 
+          {/* Mobile Date Picker Dropdown */}
+          {showMobileDatePicker && (
+            <div className="mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-2 grid grid-cols-4 gap-1">
+              {encampmentDates.map((date, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setSelectedDate(date);
+                    setShowMobileDatePicker(false);
+                  }}
+                  className={`p-2 rounded text-center transition-colors ${
+                    isSameDay(date, selectedDate)
+                      ? 'bg-[#00205B] text-white'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="text-[10px] uppercase">{format(date, 'EEE')}</div>
+                  <div className="text-lg font-bold">{format(date, 'd')}</div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* User Unit Info (mobile) */}
+          {getUserUnitLabel() && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-600" />
+              <p className="text-blue-800 text-xs">
+                {getUserUnitLabel()}
+              </p>
+            </div>
+          )}
+
+          {/* Editor Actions (mobile) */}
           {canEdit() && (
-            <>
-              {/* Import Button */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImport}
-                className="hidden"
-                id="schedule-import"
-              />
+            <div className="mt-2 flex gap-2">
               <Button
                 variant="outline"
-                className="rounded-sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
-                data-testid="import-schedule-btn"
+                size="sm"
+                className="flex-1 text-xs"
+                onClick={() => setShowAllEvents(!showAllEvents)}
               >
-                <Upload className="w-4 h-4 mr-2" />
-                {importing ? 'Importing...' : 'Import'}
+                <Filter className="w-3 h-3 mr-1" />
+                {showAllEvents ? 'All' : 'Filtered'}
               </Button>
-
-              {/* Publish/Unpublish Button */}
-              {isPublished ? (
-                <Button
-                  variant="outline"
-                  className="rounded-sm border-amber-300 text-amber-700 hover:bg-amber-50"
-                  onClick={handleUnpublish}
-                  data-testid="unpublish-btn"
-                >
-                  <EyeOff className="w-4 h-4 mr-2" />
-                  Unpublish
-                </Button>
-              ) : (
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 rounded-sm"
-                  onClick={handlePublish}
-                  data-testid="publish-btn"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Publish
-                </Button>
-              )}
-
-              {/* Add Event Button */}
               <Dialog open={isModalOpen} onOpenChange={(open) => {
                 setIsModalOpen(open);
                 if (!open) resetForm();
               }}>
                 <DialogTrigger asChild>
-                  <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="add-event-btn">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Event
+                  <Button size="sm" className="bg-[#00205B] text-xs">
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto rounded-lg">
                   <DialogHeader>
-                    <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>
+                    <DialogTitle className="text-[#00205B] uppercase font-bold text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
                       {editingEvent ? 'Edit Event' : 'Add Event'}
                     </DialogTitle>
                   </DialogHeader>
-                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                  <form onSubmit={handleSubmit} className="space-y-3 mt-3">
                     <div>
                       <Label className="text-xs uppercase tracking-wide text-slate-600">Title *</Label>
                       <Input
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         required
-                        className="mt-1 rounded-sm"
-                        placeholder="Morning Formation"
+                        className="mt-1 rounded-sm text-sm"
                         data-testid="event-title-input"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Type</Label>
                         <Select
                           value={formData.event_type}
                           onValueChange={(value) => setFormData({ ...formData, event_type: value })}
                         >
-                          <SelectTrigger className="mt-1 rounded-sm">
+                          <SelectTrigger className="mt-1 rounded-sm text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -556,29 +617,29 @@ const SchedulePage = () => {
                           value={formData.date}
                           onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                           required
-                          className="mt-1 rounded-sm"
+                          className="mt-1 rounded-sm text-sm"
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label className="text-xs uppercase tracking-wide text-slate-600">Start Time *</Label>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Start *</Label>
                         <Input
                           type="time"
                           value={formData.start_time}
                           onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                           required
-                          className="mt-1 rounded-sm"
+                          className="mt-1 rounded-sm text-sm"
                         />
                       </div>
                       <div>
-                        <Label className="text-xs uppercase tracking-wide text-slate-600">End Time *</Label>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">End *</Label>
                         <Input
                           type="time"
                           value={formData.end_time}
                           onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                           required
-                          className="mt-1 rounded-sm"
+                          className="mt-1 rounded-sm text-sm"
                         />
                       </div>
                     </div>
@@ -587,149 +648,485 @@ const SchedulePage = () => {
                       <Input
                         value={formData.location}
                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        className="mt-1 rounded-sm"
-                        placeholder="Parade Ground, DFAC, TR-1..."
+                        className="mt-1 rounded-sm text-sm"
                       />
                     </div>
                     
-                    {/* Target Groups Selection */}
+                    {/* Target Groups - Compact for mobile */}
                     <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
+                      <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-1">
                         <Users className="w-3 h-3" />
                         Target Groups
                       </Label>
-                      <p className="text-xs text-slate-400 mt-1 mb-2">Select which groups should see this event</p>
-                      <div className="space-y-3 border border-slate-200 rounded-sm p-3 bg-slate-50">
-                        {/* General */}
-                        <div className="flex flex-wrap gap-3">
+                      <div className="mt-1 border border-slate-200 rounded-sm p-2 bg-slate-50 space-y-2">
+                        <div className="flex flex-wrap gap-2">
                           {targetGroupOptions.filter(o => o.category === 'general').map(option => (
-                            <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                            <label key={option.value} className="flex items-center gap-1 cursor-pointer text-xs">
                               <Checkbox
                                 checked={formData.target_groups.includes(option.value)}
                                 onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                className="w-4 h-4"
                               />
-                              <span className="text-sm">{option.label}</span>
+                              <span>{option.label}</span>
                             </label>
                           ))}
                         </div>
-                        
-                        {/* Squadrons */}
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Squadrons</p>
-                          <div className="flex flex-wrap gap-3">
-                            {targetGroupOptions.filter(o => o.category === 'squadron').map(option => (
-                              <label key={option.value} className="flex items-center gap-2 cursor-pointer">
-                                <Checkbox
-                                  checked={formData.target_groups.includes(option.value)}
-                                  onCheckedChange={() => handleTargetGroupToggle(option.value)}
-                                  disabled={formData.target_groups.includes('all')}
-                                />
-                                <span className="text-sm">{option.label}</span>
-                              </label>
-                            ))}
-                          </div>
+                        <div className="flex flex-wrap gap-2">
+                          {targetGroupOptions.filter(o => o.category === 'squadron').map(option => (
+                            <label key={option.value} className="flex items-center gap-1 cursor-pointer text-xs">
+                              <Checkbox
+                                checked={formData.target_groups.includes(option.value)}
+                                onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                disabled={formData.target_groups.includes('all')}
+                                className="w-4 h-4"
+                              />
+                              <span>{option.label.replace(' ', '')}</span>
+                            </label>
+                          ))}
                         </div>
-                        
-                        {/* Flights */}
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Flights</p>
-                          <div className="flex flex-wrap gap-3">
-                            {targetGroupOptions.filter(o => o.category === 'flight').map(option => (
-                              <label key={option.value} className="flex items-center gap-2 cursor-pointer">
-                                <Checkbox
-                                  checked={formData.target_groups.includes(option.value)}
-                                  onCheckedChange={() => handleTargetGroupToggle(option.value)}
-                                  disabled={formData.target_groups.includes('all')}
-                                />
-                                <span className="text-sm">{option.label}</span>
-                              </label>
-                            ))}
-                          </div>
+                        <div className="flex flex-wrap gap-2">
+                          {targetGroupOptions.filter(o => o.category === 'flight').map(option => (
+                            <label key={option.value} className="flex items-center gap-1 cursor-pointer text-xs">
+                              <Checkbox
+                                checked={formData.target_groups.includes(option.value)}
+                                onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                disabled={formData.target_groups.includes('all')}
+                                className="w-4 h-4"
+                              />
+                              <span>{option.value.charAt(0).toUpperCase() + option.value.slice(1)}</span>
+                            </label>
+                          ))}
                         </div>
                       </div>
                     </div>
                     
-                    <div>
-                      <Label className="text-xs uppercase tracking-wide text-slate-600">Description</Label>
-                      <Textarea
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="mt-1 rounded-sm"
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-sm">
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsModalOpen(false)}>
                         Cancel
                       </Button>
-                      <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
-                        {editingEvent ? 'Update' : 'Add'} Event
+                      <Button type="submit" size="sm" className="bg-[#00205B]">
+                        {editingEvent ? 'Update' : 'Add'}
                       </Button>
                     </div>
                   </form>
                 </DialogContent>
               </Dialog>
-            </>
+            </div>
           )}
         </div>
-      </div>
+      ) : (
+        /* Desktop Header */
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              Training Schedule
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              TNWG Summer Encampment • July 17-24, 2026
+              {getUserUnitLabel() && (
+                <span className="ml-2 text-[#00205B] font-medium">• {getUserUnitLabel()}</span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-sm text-xs ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Auto-sync</span>
+            </div>
+
+            {canEdit() && (
+              <div className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium ${
+                isPublished 
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                  : 'bg-amber-100 text-amber-700 border border-amber-200'
+              }`}>
+                {isPublished ? (
+                  <>
+                    <Eye className="w-3 h-3" />
+                    <span>Published</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3 h-3" />
+                    <span>Draft</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {canEdit() && (
+              <button
+                onClick={() => setShowAllEvents(!showAllEvents)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium border transition-colors ${
+                  showAllEvents
+                    ? 'bg-[#00205B] text-white border-[#00205B]'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+                data-testid="show-all-toggle"
+              >
+                <Filter className="w-3 h-3" />
+                <span>{showAllEvents ? 'All Events' : 'Filtered'}</span>
+              </button>
+            )}
+
+            <div className="flex border border-slate-200 rounded-sm overflow-hidden">
+              <button
+                onClick={() => setViewMode('day')}
+                className={`px-3 py-2 text-sm ${viewMode === 'day' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                data-testid="view-day-btn"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 text-sm ${viewMode === 'list' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                data-testid="view-list-btn"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
+            {canEdit() && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImport}
+                  className="hidden"
+                  id="schedule-import"
+                />
+                <Button
+                  variant="outline"
+                  className="rounded-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  data-testid="import-schedule-btn"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {importing ? 'Importing...' : 'Import'}
+                </Button>
+
+                {isPublished ? (
+                  <Button
+                    variant="outline"
+                    className="rounded-sm border-amber-300 text-amber-700 hover:bg-amber-50"
+                    onClick={handleUnpublish}
+                    data-testid="unpublish-btn"
+                  >
+                    <EyeOff className="w-4 h-4 mr-2" />
+                    Unpublish
+                  </Button>
+                ) : (
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 rounded-sm"
+                    onClick={handlePublish}
+                    data-testid="publish-btn"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Publish
+                  </Button>
+                )}
+
+                <Dialog open={isModalOpen} onOpenChange={(open) => {
+                  setIsModalOpen(open);
+                  if (!open) resetForm();
+                }}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="add-event-btn">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Event
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>
+                        {editingEvent ? 'Edit Event' : 'Add Event'}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Title *</Label>
+                        <Input
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          required
+                          className="mt-1 rounded-sm"
+                          placeholder="Morning Formation"
+                          data-testid="event-title-input"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
+                          <Select
+                            value={formData.event_type}
+                            onValueChange={(value) => setFormData({ ...formData, event_type: value })}
+                          >
+                            <SelectTrigger className="mt-1 rounded-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {eventTypes.map(type => (
+                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
+                          <Input
+                            type="date"
+                            value={formData.date}
+                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                            required
+                            className="mt-1 rounded-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs uppercase tracking-wide text-slate-600">Start Time *</Label>
+                          <Input
+                            type="time"
+                            value={formData.start_time}
+                            onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                            required
+                            className="mt-1 rounded-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs uppercase tracking-wide text-slate-600">End Time *</Label>
+                          <Input
+                            type="time"
+                            value={formData.end_time}
+                            onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                            required
+                            className="mt-1 rounded-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Location</Label>
+                        <Input
+                          value={formData.location}
+                          onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                          className="mt-1 rounded-sm"
+                          placeholder="Parade Ground, DFAC, TR-1..."
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
+                          <Users className="w-3 h-3" />
+                          Target Groups
+                        </Label>
+                        <p className="text-xs text-slate-400 mt-1 mb-2">Select which groups should see this event</p>
+                        <div className="space-y-3 border border-slate-200 rounded-sm p-3 bg-slate-50">
+                          <div className="flex flex-wrap gap-3">
+                            {targetGroupOptions.filter(o => o.category === 'general').map(option => (
+                              <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox
+                                  checked={formData.target_groups.includes(option.value)}
+                                  onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                />
+                                <span className="text-sm">{option.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Squadrons</p>
+                            <div className="flex flex-wrap gap-3">
+                              {targetGroupOptions.filter(o => o.category === 'squadron').map(option => (
+                                <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={formData.target_groups.includes(option.value)}
+                                    onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                    disabled={formData.target_groups.includes('all')}
+                                  />
+                                  <span className="text-sm">{option.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Flights</p>
+                            <div className="flex flex-wrap gap-3">
+                              {targetGroupOptions.filter(o => o.category === 'flight').map(option => (
+                                <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={formData.target_groups.includes(option.value)}
+                                    onCheckedChange={() => handleTargetGroupToggle(option.value)}
+                                    disabled={formData.target_groups.includes('all')}
+                                  />
+                                  <span className="text-sm">{option.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600">Description</Label>
+                        <Textarea
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          className="mt-1 rounded-sm"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-4">
+                        <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-sm">
+                          Cancel
+                        </Button>
+                        <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
+                          {editingEvent ? 'Update' : 'Add'} Event
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Draft Warning for non-editors */}
       {!canEdit() && !isPublished && (
-        <div className="bg-amber-50 border border-amber-200 rounded-sm p-4 mb-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600" />
-          <p className="text-amber-800 text-sm">
-            The schedule is currently being updated. Check back later for the published version.
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <p className="text-amber-800 text-xs">
+            The schedule is currently being updated.
           </p>
         </div>
       )}
 
-      {/* User Unit Info (for non-editors) */}
-      {!canEdit() && user?.flight && (
-        <div className="bg-blue-50 border border-blue-200 rounded-sm p-4 mb-4 flex items-center gap-3">
-          <Users className="w-5 h-5 text-blue-600" />
-          <p className="text-blue-800 text-sm">
-            Showing events for <strong>{getUserUnitLabel()}</strong> plus squadron and all-hands events.
-          </p>
+      {/* Desktop Date Selector Tabs (hidden on mobile) */}
+      {!isMobile && (
+        <div className="bg-white border border-slate-200 rounded-sm mb-4 overflow-x-auto">
+          <div className="flex min-w-max">
+            {encampmentDates.map((date, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedDate(date)}
+                className={`flex-1 min-w-[100px] px-4 py-3 text-center border-r border-slate-200 last:border-r-0 transition-colors ${
+                  isSameDay(date, selectedDate)
+                    ? 'bg-[#00205B] text-white'
+                    : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+                data-testid={`date-tab-${format(date, 'yyyy-MM-dd')}`}
+              >
+                <div className="text-xs uppercase tracking-wide opacity-75">{format(date, 'EEE')}</div>
+                <div className="text-lg font-bold">{format(date, 'd')}</div>
+                <div className="text-[10px] uppercase tracking-wide">{getDayLabel(date)}</div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
-
-      {/* Date Selector Tabs */}
-      <div className="bg-white border border-slate-200 rounded-sm mb-4 overflow-x-auto">
-        <div className="flex min-w-max">
-          {encampmentDates.map((date, idx) => (
-            <button
-              key={idx}
-              onClick={() => setSelectedDate(date)}
-              className={`flex-1 min-w-[100px] px-4 py-3 text-center border-r border-slate-200 last:border-r-0 transition-colors ${
-                isSameDay(date, selectedDate)
-                  ? 'bg-[#00205B] text-white'
-                  : 'bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-              data-testid={`date-tab-${format(date, 'yyyy-MM-dd')}`}
-            >
-              <div className="text-xs uppercase tracking-wide opacity-75">{format(date, 'EEE')}</div>
-              <div className="text-lg font-bold">{format(date, 'd')}</div>
-              <div className="text-[10px] uppercase tracking-wide">{getDayLabel(date)}</div>
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Event Type Legend */}
-      <div className="bg-white border border-slate-200 rounded-sm p-3 mb-4">
-        <div className="flex flex-wrap gap-3">
+      <div className={`bg-white border border-slate-200 rounded-lg p-2 mb-4 ${isMobile ? 'overflow-x-auto' : ''}`}>
+        <div className={`flex gap-2 ${isMobile ? 'flex-nowrap min-w-max' : 'flex-wrap gap-3'}`}>
           {eventTypes.map(type => (
-            <div key={type.value} className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-sm ${type.color}`}></span>
-              <span className="text-xs text-slate-600">{type.label}</span>
+            <div key={type.value} className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-sm ${type.color}`}></span>
+              <span className={`text-slate-600 ${isMobile ? 'text-[10px]' : 'text-xs'}`}>{type.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Day View */}
-      {viewMode === 'day' && (
+      {/* Mobile Compact List View with Touch Swipe */}
+      {isMobile && (
+        <div 
+          ref={scheduleContainerRef}
+          className="bg-white border border-slate-200 rounded-lg overflow-hidden"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="divide-y divide-slate-100">
+            {compactEventsForDate.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm">
+                No events scheduled
+                {canEdit() && (
+                  <div className="mt-2">
+                    <Button onClick={() => {
+                      setFormData({ ...formData, date: format(selectedDate, 'yyyy-MM-dd') });
+                      setIsModalOpen(true);
+                    }} variant="outline" size="sm" className="text-xs">
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Event
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              compactEventsForDate.map(event => (
+                <div 
+                  key={event.id} 
+                  className={`p-3 border-l-4 ${getEventTypeMobileColor(event.event_type)} active:bg-slate-50`}
+                  data-testid={`mobile-event-${event.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-slate-500 flex-shrink-0">
+                          {event.start_time.substring(0, 5)}
+                        </span>
+                        <span className="font-semibold text-sm text-slate-900 truncate">
+                          {event.title}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          → {event.end_time.substring(0, 5)}
+                        </span>
+                        {event.location && (
+                          <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                            <MapPin className="w-2.5 h-2.5" />
+                            {event.location}
+                          </span>
+                        )}
+                      </div>
+                      {getTargetGroupsLabel(event.target_groups) && (
+                        <span className="inline-block mt-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
+                          {getTargetGroupsLabel(event.target_groups)}
+                        </span>
+                      )}
+                    </div>
+                    {canEdit() && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button 
+                          onClick={() => handleEdit(event)} 
+                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(event.id)} 
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Day View */}
+      {!isMobile && viewMode === 'day' && (
         <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
           <div className="bg-[#00205B] text-white p-3 text-center">
             <h2 className="font-bold uppercase tracking-wide">
@@ -798,8 +1195,8 @@ const SchedulePage = () => {
         </div>
       )}
 
-      {/* List View */}
-      {viewMode === 'list' && (
+      {/* Desktop List View */}
+      {!isMobile && viewMode === 'list' && (
         <div className="bg-white border border-slate-200 rounded-sm">
           <div className="bg-[#00205B] text-white p-3 text-center">
             <h2 className="font-bold uppercase tracking-wide">
@@ -877,35 +1274,42 @@ const SchedulePage = () => {
       )}
 
       {/* Daily Summary */}
-      <div className="mt-4 bg-white border border-slate-200 rounded-sm p-4">
-        <h3 className="font-bold text-[#00205B] uppercase tracking-tight mb-3" style={{ fontFamily: 'Chivo, sans-serif' }}>
+      <div className={`mt-4 bg-white border border-slate-200 rounded-lg p-3 ${isMobile ? '' : 'p-4'}`}>
+        <h3 className={`font-bold text-[#00205B] uppercase tracking-tight mb-2 ${isMobile ? 'text-xs' : 'text-sm'}`} style={{ fontFamily: 'Chivo, sans-serif' }}>
           Day Summary
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="text-center p-3 bg-slate-50 rounded-sm">
-            <div className="text-2xl font-bold text-[#00205B]">{eventsForDate.length}</div>
-            <div className="text-xs uppercase tracking-wide text-slate-500">Total Events</div>
+        <div className={`grid gap-2 ${isMobile ? 'grid-cols-4' : 'grid-cols-2 sm:grid-cols-4 gap-4'}`}>
+          <div className={`text-center bg-slate-50 rounded ${isMobile ? 'p-2' : 'p-3'}`}>
+            <div className={`font-bold text-[#00205B] ${isMobile ? 'text-lg' : 'text-2xl'}`}>{eventsForDate.length}</div>
+            <div className={`uppercase tracking-wide text-slate-500 ${isMobile ? 'text-[8px]' : 'text-xs'}`}>Events</div>
           </div>
-          <div className="text-center p-3 bg-blue-50 rounded-sm">
-            <div className="text-2xl font-bold text-blue-600">
+          <div className={`text-center bg-blue-50 rounded ${isMobile ? 'p-2' : 'p-3'}`}>
+            <div className={`font-bold text-blue-600 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
               {eventsForDate.filter(e => e.event_type === 'training').length}
             </div>
-            <div className="text-xs uppercase tracking-wide text-slate-500">Training</div>
+            <div className={`uppercase tracking-wide text-slate-500 ${isMobile ? 'text-[8px]' : 'text-xs'}`}>Training</div>
           </div>
-          <div className="text-center p-3 bg-red-50 rounded-sm">
-            <div className="text-2xl font-bold text-red-600">
+          <div className={`text-center bg-red-50 rounded ${isMobile ? 'p-2' : 'p-3'}`}>
+            <div className={`font-bold text-red-600 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
               {eventsForDate.filter(e => e.event_type === 'pt').length}
             </div>
-            <div className="text-xs uppercase tracking-wide text-slate-500">PT Sessions</div>
+            <div className={`uppercase tracking-wide text-slate-500 ${isMobile ? 'text-[8px]' : 'text-xs'}`}>PT</div>
           </div>
-          <div className="text-center p-3 bg-amber-50 rounded-sm">
-            <div className="text-2xl font-bold text-amber-600">
+          <div className={`text-center bg-amber-50 rounded ${isMobile ? 'p-2' : 'p-3'}`}>
+            <div className={`font-bold text-amber-600 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
               {eventsForDate.filter(e => e.event_type === 'meal').length}
             </div>
-            <div className="text-xs uppercase tracking-wide text-slate-500">Meals</div>
+            <div className={`uppercase tracking-wide text-slate-500 ${isMobile ? 'text-[8px]' : 'text-xs'}`}>Meals</div>
           </div>
         </div>
       </div>
+
+      {/* Mobile Navigation Hint */}
+      {isMobile && (
+        <div className="mt-4 text-center text-[10px] text-slate-400">
+          Day {currentDayIndex + 1} of {encampmentDates.length}
+        </div>
+      )}
     </div>
   );
 };
