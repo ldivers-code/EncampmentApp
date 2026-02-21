@@ -459,6 +459,8 @@ const SchedulePage = () => {
               Schedule
             </h1>
             <div className="flex items-center gap-2">
+              {/* Notification toggle */}
+              <NotificationManager compact />
               {/* Sync indicator */}
               <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                 <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
