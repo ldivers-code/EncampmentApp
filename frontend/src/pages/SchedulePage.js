@@ -613,17 +613,40 @@ const SchedulePage = () => {
           )}
 
           {/* Editor Actions (mobile) */}
-          {canEdit() && (
-            <div className="mt-2 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs"
-                onClick={() => setShowAllEvents(!showAllEvents)}
+          <div className="mt-2 flex gap-2">
+            {/* Schedule Filter - Available to ALL users */}
+            <div className="relative flex-1">
+              <button
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className="w-full flex items-center justify-between gap-1 px-3 py-2 text-xs border border-slate-200 rounded-sm bg-white hover:bg-slate-50"
+                data-testid="mobile-schedule-filter"
               >
-                <Filter className="w-3 h-3 mr-1" />
-                {showAllEvents ? 'All' : 'Filtered'}
-              </Button>
+                <span className="flex items-center gap-1">
+                  <Filter className="w-3 h-3 text-slate-400" />
+                  <span className="truncate">{getFilterLabel()}</span>
+                </span>
+                <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${showFilterDropdown ? 'rotate-90' : ''}`} />
+              </button>
+              {showFilterDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg z-20 max-h-64 overflow-y-auto">
+                  {scheduleFilterOptions.map(option => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setScheduleFilter(option.value);
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
+                        scheduleFilter === option.value ? 'bg-[#00205B] text-white' : ''
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {canEdit() && (
               <Dialog open={isModalOpen} onOpenChange={(open) => {
                 setIsModalOpen(open);
                 if (!open) resetForm();
