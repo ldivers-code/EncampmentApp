@@ -27,6 +27,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Feb 21, 2026 - Mobile Optimization
+- **Mobile-First Schedule View**: Compact card-based layout for phones
+  - Large date navigator with day labels
+  - Swipe left/right to change days
+  - Tap date to show day picker grid
+  - Color-coded event borders
+  - Compact time display (start → end)
+- **Touch-Friendly UI**: 
+  - Larger touch targets
+  - Responsive breakpoints at 768px
+  - Simplified header controls on mobile
+- **Day Summary**: Compact 4-column grid on mobile
+
 ### Feb 21, 2026 - Flight-Specific Schedules & Real-Time Sync
 - **User Unit Assignment**: Admin page now allows assigning users to squadrons and flights
   - Squadron options: Staff/Cadre, Squadron 1, 2, 3
