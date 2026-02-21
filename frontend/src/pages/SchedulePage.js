@@ -36,9 +36,9 @@ import {
   Users,
   Filter,
   ChevronLeft,
-  ChevronRight,
-  Calendar
+  ChevronRight
 } from 'lucide-react';
+import NotificationManager from '../components/NotificationManager';
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
