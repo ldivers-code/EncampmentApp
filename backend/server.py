@@ -435,6 +435,75 @@ def create_token(user_id: str, email: str, role: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+def get_default_permissions(role: str) -> dict:
+    """Get default permissions for a given role"""
+    default = DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS[UserRole.CADRE])
+    return default.model_dump()
+
+def get_user_permissions(user: dict) -> dict:
+    """Get user's permissions - custom if set, otherwise role defaults"""
+    if user.get('permissions'):
+        return user['permissions']
+    return get_default_permissions(user.get('role', UserRole.CADRE))
+
+async def send_approval_email(to_email: str, user_name: str, app_url: str = ""):
+    """Send email notification when user account is approved"""
+    if not SENDGRID_API_KEY:
+        logging.warning("SendGrid API key not configured - skipping email notification")
+        return False
+    
+    subject = "Your CAP Encampment Account Has Been Approved"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #00205B; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #f5f5f5; }}
+            .button {{ display: inline-block; padding: 12px 24px; background-color: #00205B; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
+            .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Civil Air Patrol</h1>
+                <h2>Tennessee Wing Encampment</h2>
+            </div>
+            <div class="content">
+                <h3>Welcome, {user_name}!</h3>
+                <p>Great news! Your account for the CAP Encampment Management System has been approved.</p>
+                <p>You now have full access to the system based on your assigned role and permissions.</p>
+                <p>You can log in using your registered email address and password.</p>
+                <a href="{app_url}/login" class="button">Log In Now</a>
+            </div>
+            <div class="footer">
+                <p>Civil Air Patrol - United States Air Force Auxiliary</p>
+                <p>Volunteers Serving America</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    message = Mail(
+        from_email=SENDGRID_SENDER_EMAIL,
+        to_emails=to_email,
+        subject=subject,
+        html_content=html_content
+    )
+    
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logging.info(f"Approval email sent to {to_email}, status: {response.status_code}")
+        return response.status_code == 202
+    except Exception as e:
+        logging.error(f"Failed to send approval email to {to_email}: {str(e)}")
+        return False
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -444,6 +513,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        # Add computed permissions to user object
+        user['permissions'] = get_user_permissions(user)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
