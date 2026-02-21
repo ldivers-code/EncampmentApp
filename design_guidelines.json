@@ -1,0 +1,137 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "The Anti-AI Designer",
+    "mission": "Create a Civil Air Patrol (CAP) Encampment Roster that feels authoritative, tactical, and militarily precise. Avoid generic SaaS aesthetics. Prioritize density and clarity.",
+    "tone": "Professional, Disciplined, Efficient, Patriotic"
+  },
+  "theme": {
+    "mode": "light",
+    "strategy": "High Contrast & Data Density",
+    "description": "A clean, white-dominant interface with deep navy (#00205B) for structure and bold red (#BF0D3E) for critical actions. The aesthetic should feel like a modern military command center—functional, not decorative."
+  },
+  "colors": {
+    "primary": "#00205B",
+    "primary_foreground": "#FFFFFF",
+    "secondary": "#F1F5F9",
+    "secondary_foreground": "#0F172A",
+    "accent": "#F8FAFC",
+    "accent_foreground": "#00205B",
+    "destructive": "#BF0D3E",
+    "destructive_foreground": "#FFFFFF",
+    "background": "#F8FAFC",
+    "foreground": "#0F172A",
+    "card": "#FFFFFF",
+    "card_foreground": "#0F172A",
+    "border": "#E2E8F0",
+    "input": "#E2E8F0",
+    "ring": "#00205B",
+    "chart": {
+      "1": "#00205B",
+      "2": "#BF0D3E",
+      "3": "#475569",
+      "4": "#94A3B8",
+      "5": "#CBD5E1"
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "Chivo, sans-serif",
+      "weights": ["900", "700"],
+      "usage": "Use for all page titles, section headers, and major metrics. Must be uppercase for H1/H2."
+    },
+    "body": {
+      "family": "Inter, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "General UI text, labels, and descriptions."
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["400", "500"],
+      "usage": "CAPIDs, financial figures, budget codes, tabular data."
+    }
+  },
+  "spacing": {
+    "scale": "dense",
+    "base": "0.25rem",
+    "container_padding": "p-4 md:p-6 lg:p-8",
+    "component_gap": "gap-2",
+    "section_gap": "gap-6"
+  },
+  "layout": {
+    "grid_mode": "Mode B: High Density Grid",
+    "strategy": "Dashboard First. Use a sidebar navigation (collapsible) to maximize horizontal space for data tables. Dashboard should use a 12-column grid where widgets span 3, 4, or 6 columns based on importance.",
+    "container_style": "Sharp corners (rounded-none or rounded-sm). 1px solid borders. No drop shadows for cards—use borders to define hierarchy."
+  },
+  "components": {
+    "Button": {
+      "style": "Sharp corners (rounded-sm), uppercase text, tracking-wide, font-bold.",
+      "variants": {
+        "default": "bg-[#00205B] text-white hover:bg-[#001540]",
+        "destructive": "bg-[#BF0D3E] text-white hover:bg-[#990a31]",
+        "outline": "border-2 border-[#00205B] text-[#00205B] hover:bg-[#00205B]/10"
+      }
+    },
+    "Card": {
+      "style": "bg-white border border-slate-200 rounded-sm shadow-sm",
+      "header": "border-b border-slate-100 p-4 font-heading uppercase tracking-tight text-[#00205B]",
+      "content": "p-4"
+    },
+    "Table": {
+      "style": "dense, compact, alternating rows (zebra striping: even:bg-slate-50)",
+      "header": "bg-[#00205B] text-white uppercase text-xs tracking-wider sticky top-0 z-10",
+      "cell": "py-2 px-3 text-sm font-mono border-b border-slate-200"
+    },
+    "Badge": {
+      "style": "rounded-sm px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold",
+      "variants": {
+        "success": "bg-emerald-100 text-emerald-800 border border-emerald-200",
+        "warning": "bg-amber-100 text-amber-800 border border-amber-200",
+        "error": "bg-red-100 text-red-800 border border-red-200",
+        "neutral": "bg-slate-100 text-slate-800 border border-slate-200"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "textures": "Subtle noise on the main background (#F8FAFC) to reduce sterility.",
+    "icons": "Lucide-react. Use thin strokes (1.5px) for a technical look.",
+    "charts": "Recharts. Use simple bar and line charts. Avoid 3D or donut charts unless strictly necessary for 'parts of a whole'.",
+    "logo_fallback": "Use a shield or plane icon if the official logo fails to load."
+  },
+  "image_urls": {
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Civil_Air_Patrol_2022_logo.svg",
+    "hero": "https://images.pexels.com/photos/32567920/pexels-photo-32567920.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "placeholders": [
+      "https://images.unsplash.com/photo-1757691079287-eb6a8d167287?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHxjaXZpbCUyMGFpciUyMHBhdHJvbCUyMGNhZGV0JTIwc2FsdXRpbmclMjB1bmlmb3JtfGVufDB8fHx8MTc3MTY5MTM5M3ww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1769202844188-8d349378b9ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwxfHxlbmNhbXBtZW50JTIwdGVudHMlMjBtaWxpdGFyeSUyMGZpZWxkfGVufDB8fHx8MTc3MTY5MTM5NHww&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "accessibility": {
+    "contrast": "Ensure text contrast ratio is at least 4.5:1. Blue text on white meets this. Red text should only be used on white backgrounds.",
+    "focus_states": "Visible focus ring (2px solid #00205B) on all interactive elements.",
+    "aria_labels": "Required for all icon-only buttons."
+  },
+  "instructions_to_main_agent": [
+    "Install 'lucide-react', 'recharts', 'clsx', 'tailwind-merge' if not present.",
+    "Use 'Barlow Condensed' or 'Chivo' from Google Fonts for headings. Add import to index.css.",
+    "Use 'Inter' for body and 'JetBrains Mono' for data.",
+    "Create a 'Sidebar' layout component that persists across all authenticated pages.",
+    "The 'Roster' page is the core feature. It must handle 100+ rows efficiently. Use virtualization if necessary, or simple pagination.",
+    "Implement 'Role-Based Access Control' logic in the frontend (e.g., a simple 'useRole' hook) to show/hide edit buttons.",
+    "For the 'Financial Tracker', use a dense grid of summary cards at the top, followed by a detailed transaction table.",
+    "Ensure the 'Login' page looks official—use the CAP logo and a clean form on a split background (image left, form right)."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic outputs. Avoid this: make it look 'Tactical' and 'Official'.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts. Use grids.",
+    "Create depth through borders and subtle background differences, not heavy shadows.",
+    "You MUST NOT apply universal transition 'transition: all'.",
+    "You MUST NOT center align the app container.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable in layout containers, but KEEP DATA DENSE.",
+    "Subtle grain textures, noise overlays, custom cursors: separates good from extraordinary.",
+    "Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN. Use the provided logo URL.",
+    "Use 'sonner' for toasts."
+  ]
+}
