@@ -13,6 +13,7 @@ import HandbooksPage from "./pages/HandbooksPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import ProfilePage from "./pages/ProfilePage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -126,6 +127,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['commander', 'staff', 'finance']}>
             <AnalyticsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />
