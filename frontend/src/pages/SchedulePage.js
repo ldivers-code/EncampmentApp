@@ -53,11 +53,12 @@ const SchedulePage = () => {
   const [isPublished, setIsPublished] = useState(false);
   const [scheduleSettings, setScheduleSettings] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [showAllEvents, setShowAllEvents] = useState(false);
+  const [scheduleFilter, setScheduleFilter] = useState('all'); // Allow all members to filter
   const [lastVersion, setLastVersion] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileDatePicker, setShowMobileDatePicker] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const fileInputRef = useRef(null);
   const refreshIntervalRef = useRef(null);
   const touchStartX = useRef(null);
