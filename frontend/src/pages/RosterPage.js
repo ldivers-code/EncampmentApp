@@ -157,12 +157,17 @@ const RosterPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    setImporting(true);
     try {
       const result = await importParticipants(file);
-      toast.success(result.message);
+      setImportResult(result);
+      toast.success(`Import complete: ${result.imported} new, ${result.updated} updated`);
       loadParticipants();
+      loadStats();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Import failed');
+    } finally {
+      setImporting(false);
     }
     e.target.value = '';
   };
