@@ -161,6 +161,11 @@ class BudgetItemBase(BaseModel):
     estimated: float = 0.0
     actual: float = 0.0
     notes: Optional[str] = None
+    receipt_url: Optional[str] = None
+    receipt_data: Optional[str] = None  # Base64 encoded receipt image
+    payment_status: str = "pending"  # pending, paid, cancelled
+    payment_date: Optional[str] = None
+    vendor: Optional[str] = None
 
 class BudgetItemCreate(BudgetItemBase):
     pass
