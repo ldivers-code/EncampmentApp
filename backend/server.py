@@ -89,22 +89,58 @@ class ParticipantBase(BaseModel):
     rank: str
     last_name: str
     first_name: str
+    middle_name: Optional[str] = None
     unit: str
     wing: Optional[str] = None
     region: Optional[str] = None
     gender: Optional[str] = None
     age: Optional[int] = None
+    age_at_event: Optional[int] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    cell_phone: Optional[str] = None
     shirt_size: Optional[str] = None
+    member_type: Optional[str] = None  # SENIOR, CADET
     participant_type: str = "basic_student"  # basic_student, advanced_student, cadre, staff, senior_member
     squadron: Optional[str] = None
     flight: Optional[str] = None
     position: Optional[str] = None
+    # Payment & Registration
     paid: bool = False
-    first_encampment: bool = True
-    religious_preference: Optional[str] = None
+    paid_in_full: bool = False
+    amount_paid: Optional[float] = None
+    registration_status: Optional[str] = None
+    staff_member: bool = False
+    # Approvals
+    unit_approved: bool = False
+    unit_approval_date: Optional[str] = None
+    wing_approved: bool = False
+    wing_approval_date: Optional[str] = None
+    slotted: bool = False
+    # Address
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    # Emergency Contact
     emergency_contact: Optional[str] = None
+    emergency_phone: Optional[str] = None
+    # Parent Info (for cadets)
+    cadet_parent_phone: Optional[str] = None
+    cadet_parent_email: Optional[str] = None
+    # Unit/Wing CC
+    unit_cc_name: Optional[str] = None
+    unit_cc_email: Optional[str] = None
+    # Training & Certifications
+    last_encampment: Optional[str] = None
+    cppt_expiration: Optional[str] = None
+    first_aid: Optional[str] = None
+    is100_date: Optional[str] = None
+    is700_date: Optional[str] = None
+    first_encampment: bool = True
+    # Other
+    religious_preference: Optional[str] = None
+    comments: Optional[str] = None
     notes: Optional[str] = None
 
 class ParticipantCreate(ParticipantBase):
