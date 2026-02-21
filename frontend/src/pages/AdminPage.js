@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Plane
 } from 'lucide-react';
+import NotificationManager from '../components/NotificationManager';
 
 const AdminPage = () => {
   const { user: currentUser } = useAuth();
