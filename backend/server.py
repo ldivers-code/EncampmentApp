@@ -314,7 +314,7 @@ async def create_participant(
         "updated_at": now
     }
     await db.participants.insert_one(doc)
-    del doc["_id"] if "_id" in doc else None
+    doc.pop("_id", None)
     return ParticipantResponse(**doc)
 
 @api_router.put("/participants/{participant_id}", response_model=ParticipantResponse)
@@ -446,7 +446,7 @@ async def create_schedule_event(
         "updated_at": now
     }
     await db.schedule.insert_one(doc)
-    del doc["_id"] if "_id" in doc else None
+    doc.pop("_id", None)
     return ScheduleEventResponse(**doc)
 
 @api_router.put("/schedule/{event_id}", response_model=ScheduleEventResponse)
@@ -497,7 +497,7 @@ async def create_budget_item(
         "updated_at": now
     }
     await db.budget.insert_one(doc)
-    del doc["_id"] if "_id" in doc else None
+    doc.pop("_id", None)
     return BudgetItemResponse(**doc)
 
 @api_router.put("/budget/{item_id}", response_model=BudgetItemResponse)
@@ -622,7 +622,7 @@ async def create_document(
         "updated_at": now
     }
     await db.documents.insert_one(doc)
-    del doc["_id"] if "_id" in doc else None
+    doc.pop("_id", None)
     return DocumentResponse(**doc)
 
 @api_router.put("/documents/{doc_id}", response_model=DocumentResponse)
