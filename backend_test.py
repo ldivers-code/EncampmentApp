@@ -693,6 +693,13 @@ def main():
         ("Get Documents", tester.test_get_documents),
         ("Get Users (Commander)", tester.test_get_users),
         ("Role Access Control", tester.test_role_access_control),
+        ("Seed Default Org Chart", tester.test_seed_default_org_chart),
+        ("Get Org Chart Roles", tester.test_get_org_chart_roles),
+        ("Get Single Org Role", tester.test_get_single_org_role),
+        ("Update Org Role", tester.test_update_org_role),
+        ("Assign Role to Participant", tester.test_assign_role_to_participant),
+        ("Unassign Role", tester.test_unassign_role),
+        ("Org Chart Role Access Control", tester.test_org_chart_role_access_control),
         ("Delete Operations", tester.test_delete_operations)
     ]
     
