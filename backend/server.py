@@ -46,6 +46,7 @@ security = HTTPBearer()
 class UserRole:
     COMMANDER = "commander"
     STAFF = "staff"
+    FINANCE = "finance"
     CADET = "cadet"
 
 class UserBase(BaseModel):
