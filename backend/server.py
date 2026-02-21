@@ -649,10 +649,11 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
 async def assign_user_unit(
     user_id: str, 
     assignment: UserUnitAssignment,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Assign a user to a squadron and flight"""
-    valid_squadrons = [None, "", "staff", "sq1", "sq2", "sq3"]
+    # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and Squadrons 1-3
+    valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "sq1", "sq2", "sq3"]
     valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
     
     if assignment.squadron and assignment.squadron not in valid_squadrons:
@@ -660,7 +661,14 @@ async def assign_user_unit(
     if assignment.flight and assignment.flight not in valid_flights:
         raise HTTPException(status_code=400, detail="Invalid flight")
     
-    # Validate flight belongs to squadron
+    # Units that don't need flight assignments
+    no_flight_units = ["staff", "support_cadre", "exec_cadre"]
+    
+    # Clear flight if unit doesn't need one
+    if assignment.squadron in no_flight_units:
+        assignment.flight = None
+    
+    # Validate flight belongs to squadron (only for sq1, sq2, sq3, ops_cadre)
     flight_squadron_map = {
         "alpha": "sq1", "bravo": "sq1",
         "charlie": "sq2", "delta": "sq2",
@@ -669,13 +677,17 @@ async def assign_user_unit(
     
     if assignment.flight and assignment.flight in flight_squadron_map:
         expected_squadron = flight_squadron_map[assignment.flight]
-        if assignment.squadron and assignment.squadron != expected_squadron:
+        # For ops_cadre, allow any flight
+        if assignment.squadron == "ops_cadre":
+            pass  # Allow any flight in ops_cadre
+        elif assignment.squadron and assignment.squadron != expected_squadron:
             raise HTTPException(
                 status_code=400, 
                 detail=f"Flight {assignment.flight} belongs to {expected_squadron}"
             )
-        # Auto-assign squadron based on flight
-        assignment.squadron = expected_squadron
+        else:
+            # Auto-assign squadron based on flight
+            assignment.squadron = expected_squadron
     
     result = await db.users.update_one(
         {"id": user_id}, 
