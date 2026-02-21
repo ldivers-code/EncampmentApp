@@ -451,21 +451,23 @@ const AdminPage = () => {
                 <th className="text-left">Name</th>
                 <th className="text-left">Email</th>
                 <th className="text-left">Role</th>
-                <th className="text-left">Squadron</th>
+                <th className="text-left">Unit</th>
                 <th className="text-left">Flight</th>
+                <th className="text-left">Access</th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-slate-400">
+                  <td colSpan={7} className="text-center py-8 text-slate-400">
                     No users registered yet
                   </td>
                 </tr>
               ) : (
                 users.map(user => (
-                  <tr key={user.id} className="hover:bg-slate-50" data-testid={`user-row-${user.id}`}>
+                  <React.Fragment key={user.id}>
+                  <tr className="hover:bg-slate-50" data-testid={`user-row-${user.id}`}>
                     <td className="font-medium">
                       {user.name}
                       {user.id === currentUser?.id && (
@@ -480,7 +482,7 @@ const AdminPage = () => {
                         disabled={user.id === currentUser?.id}
                       >
                         <SelectTrigger 
-                          className={`w-28 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
+                          className={`w-32 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
                           data-testid={`role-select-${user.id}`}
                         >
                           <SelectValue />
@@ -511,14 +513,14 @@ const AdminPage = () => {
                       <Select
                         value={user.flight || 'none'}
                         onValueChange={(value) => handleFlightChange(user.id, value)}
-                        disabled={!user.squadron || user.squadron === 'staff'}
+                        disabled={!['sq1', 'sq2', 'sq3', 'ops_cadre'].includes(user.squadron)}
                       >
                         <SelectTrigger 
-                          className="w-28 rounded-sm text-xs" 
+                          className="w-24 rounded-sm text-xs" 
                           data-testid={`flight-select-${user.id}`}
-                          disabled={!user.squadron || user.squadron === 'staff'}
+                          disabled={!['sq1', 'sq2', 'sq3', 'ops_cadre'].includes(user.squadron)}
                         >
-                          <SelectValue placeholder="Not Assigned" />
+                          <SelectValue placeholder="N/A" />
                         </SelectTrigger>
                         <SelectContent>
                           {getFlightsForSquadron(user.squadron).map(fl => (
@@ -526,6 +528,18 @@ const AdminPage = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => editingPermissions === user.id ? setEditingPermissions(null) : handleEditPermissions(user)}
+                        className={`rounded-sm text-xs ${editingPermissions === user.id ? 'bg-blue-50 border-blue-300' : ''}`}
+                        data-testid={`edit-permissions-${user.id}`}
+                      >
+                        {editingPermissions === user.id ? <Unlock className="w-3 h-3 mr-1" /> : <Lock className="w-3 h-3 mr-1" />}
+                        {editingPermissions === user.id ? 'Editing...' : 'Permissions'}
+                      </Button>
                     </td>
                     <td className="text-right">
                       {user.id !== currentUser?.id && (
@@ -541,6 +555,62 @@ const AdminPage = () => {
                       )}
                     </td>
                   </tr>
+                  {/* Permissions Edit Row */}
+                  {editingPermissions === user.id && (
+                    <tr className="bg-blue-50/50">
+                      <td colSpan={7} className="p-4">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-[#00205B] uppercase tracking-tight">
+                              Edit Access Permissions for {user.name}
+                            </h4>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResetPermissions(user.id)}
+                                className="rounded-sm text-xs"
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" />
+                                Reset to Role Defaults
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingPermissions(null)}
+                                className="rounded-sm text-xs"
+                              >
+                                <X className="w-3 h-3 mr-1" />
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleSavePermissions(user.id)}
+                                className="rounded-sm text-xs bg-[#00205B] hover:bg-[#001540]"
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Save Permissions
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+                            {Object.entries(permissionLabels).map(([key, label]) => (
+                              <label key={key} className="flex items-center gap-2 p-2 bg-white rounded border cursor-pointer hover:bg-slate-50">
+                                <input
+                                  type="checkbox"
+                                  checked={permissionsForm[key] || false}
+                                  onChange={(e) => setPermissionsForm(prev => ({ ...prev, [key]: e.target.checked }))}
+                                  className="w-4 h-4 rounded border-slate-300"
+                                />
+                                <span className="text-xs text-slate-700">{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
