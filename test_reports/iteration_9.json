@@ -1,0 +1,77 @@
+{
+  "summary": "Completed testing of granular permissions, updated roles/units features. Backend: 17/17 tests passed (100%). Frontend: All features verified - registration shows Staff/Cadre options, Admin page shows all 6 roles (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre), unit dropdown with Staff/Support Cadre/Exec Cadre/Ops Cadre/Squadron 1/2/3, inline permissions editor with 12 access checkboxes and Save/Reset buttons. SendGrid warning logged when API key not configured.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_warnings": [
+      {
+        "type": "hydration_warning",
+        "issue": "React hydration warning: <tr> cannot be child of <span>, dev tools wrapper elements around table rows",
+        "location": "AdminPage.js users table",
+        "impact": "LOW - cosmetic console warning, no functional impact",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "passed_tests": [
+    "Backend - Registration with staff role creates user with is_approved=false and staff default permissions",
+    "Backend - Registration with cadre role creates user with is_approved=false and cadre default permissions",
+    "Backend - Registration with commander role defaults to staff (invalid for self-registration)",
+    "Backend - GET /api/users returns users with role info",
+    "Backend - PUT /api/users/{id}/role?role=commander updates role successfully",
+    "Backend - PUT /api/users/{id}/role?role=finance updates role successfully",
+    "Backend - PUT /api/users/{id}/unit assigns user to Staff unit",
+    "Backend - PUT /api/users/{id}/unit assigns user to Squadron 1 with Alpha flight",
+    "Backend - PUT /api/users/{id}/permissions updates granular permissions",
+    "Backend - POST /api/users/{id}/reset-permissions resets to role defaults",
+    "Backend - Permissions endpoint returns 404 for invalid user",
+    "Backend - POST /api/users/{id}/approve sends email notification (SendGrid warning logged)",
+    "Backend - GET /api/profile returns permissions in response",
+    "Backend - GET /api/auth/me returns user info (permissions computed on backend)",
+    "Backend - Commander role gets all permissions by default",
+    "Backend - Staff role gets roster_edit, schedule_edit but not budget or admin",
+    "Backend - Cadre role gets view-only permissions",
+    "Frontend - Registration form shows 'I AM REGISTERING AS' dropdown",
+    "Frontend - Registration role dropdown has 'Staff / Senior Member' and 'Cadre' options",
+    "Frontend - Admin page has 3 tabs: Pending Approval, All Users, Settings",
+    "Frontend - All Users tab shows users table with Name, Email, Role, Unit, Flight, Access, Actions columns",
+    "Frontend - Role dropdown shows all 6 roles (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre)",
+    "Frontend - Unit dropdown shows all options (Not Assigned, Staff, Support Cadre, Exec Cadre, Ops Cadre, Squadron 1/2/3)",
+    "Frontend - Permissions button opens inline editor with 12 checkboxes",
+    "Frontend - Permissions editor has Save Permissions and Reset to Role Defaults buttons"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_permissions_roles_units.py",
+    "/app/test_reports/pytest/permissions_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "bug_fixed": [
+    {
+      "file": "/app/backend/server.py",
+      "issue": "update_user_role endpoint was validating against incorrect role list (included non-existent UserRole.CADET instead of new roles)",
+      "fix": "Updated role validation to include all 6 valid roles: COMMANDER, FINANCE, PLANS_PROGRAMS, EXEC_CADRE, STAFF, CADRE",
+      "line": "635-639"
+    }
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_permissions_roles_units.py",
+    "/app/backend/server.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "commander": "ldivers@cap.gov / Password123!"
+  },
+  "seed_data_creation": "Test users created with TEST_perms_ prefix during pytest run and cleaned up automatically by fixtures",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Granular permissions system fully tested. Key features: 1) Registration only allows Staff or Cadre role selection - other roles default to Staff. 2) New users created with is_approved=false and default permissions based on role. 3) Admin page All Users tab shows all 6 roles in dropdown (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre). 4) Unit dropdown shows Staff, Support Cadre, Exec Cadre, Ops Cadre, Squadron 1/2/3. 5) Inline permissions editor with 12 checkboxes (Dashboard, Roster View/Edit, Schedule View/Edit, Budget View/Edit, Analytics, Org Chart, Handbooks, Documents, Admin Panel). 6) Save Permissions and Reset to Role Defaults buttons. 7) POST /api/users/{id}/approve sends approval email (SendGrid API key not configured - warning logged but doesn't fail). 8) GET /api/profile returns user permissions. 9) One bug fixed: role validation in update_user_role endpoint."
+}
