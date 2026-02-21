@@ -8,8 +8,7 @@ import {
   TrendingUp, 
   TrendingDown,
   UserCheck,
-  UserX,
-  Plane
+  UserX
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -69,15 +68,25 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
-      {/* Header */}
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
+      {/* Encampment Banner */}
+      <div className="mb-6 rounded-lg overflow-hidden shadow-lg">
+        <img 
+          src="/encampment-banner.png" 
+          alt="2026 Tennessee Wing Encampment" 
+          className="w-full h-auto object-cover"
+        />
+      </div>
+
+      {/* Welcome Message */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Plane className="w-8 h-8 text-[#00205B]" />
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Encampment Dashboard
-          </h1>
-        </div>
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+          Welcome back, {user?.name?.split(' ')[0]}
+        </h1>
+        <p className="text-slate-500 text-sm mt-1">
+          July 17-24, 2026 • VTS Catoosa, GA
+        </p>
+      </div>
         <p className="text-slate-500">
           Welcome back, <span className="font-semibold text-slate-700">{user?.name}</span>
         </p>
