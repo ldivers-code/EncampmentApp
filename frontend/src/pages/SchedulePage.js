@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getSchedule, createScheduleEvent, updateScheduleEvent, deleteScheduleEvent } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { format, parseISO, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, parseISO, addDays, isSameDay, startOfDay } from 'date-fns';
 import { 
   Plus, 
   Calendar as CalendarIcon, 
@@ -17,17 +17,20 @@ import {
   Edit2, 
   Trash2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  List,
+  Grid3X3,
+  Users
 } from 'lucide-react';
 
 const SchedulePage = () => {
   const { canEdit } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [selectedDate, setSelectedDate] = useState(new Date('2026-06-14')); // Default to encampment start
+  const [viewMode, setViewMode] = useState('day'); // 'day' or 'list'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -36,16 +39,43 @@ const SchedulePage = () => {
     start_time: '',
     end_time: '',
     location: '',
-    event_type: 'general'
+    event_type: 'training',
+    squadron: '' // For squadron-specific events
   });
 
+  // Encampment dates: June 14-21, 2026
+  const encampmentDates = useMemo(() => {
+    const dates = [];
+    const startDate = new Date('2026-06-14');
+    for (let i = 0; i < 8; i++) {
+      dates.push(addDays(startDate, i));
+    }
+    return dates;
+  }, []);
+
   const eventTypes = [
-    { value: 'general', label: 'General', color: 'bg-slate-100 border-slate-300 text-slate-700' },
-    { value: 'training', label: 'Training', color: 'bg-blue-100 border-blue-300 text-blue-700' },
-    { value: 'ceremony', label: 'Ceremony', color: 'bg-purple-100 border-purple-300 text-purple-700' },
-    { value: 'meal', label: 'Meal', color: 'bg-amber-100 border-amber-300 text-amber-700' },
-    { value: 'recreation', label: 'Recreation', color: 'bg-emerald-100 border-emerald-300 text-emerald-700' }
+    { value: 'general', label: 'General', color: 'bg-slate-500' },
+    { value: 'training', label: 'Training', color: 'bg-blue-600' },
+    { value: 'ceremony', label: 'Ceremony', color: 'bg-purple-600' },
+    { value: 'meal', label: 'Meal', color: 'bg-amber-500' },
+    { value: 'recreation', label: 'Recreation', color: 'bg-emerald-500' },
+    { value: 'pt', label: 'Physical Training', color: 'bg-red-600' },
+    { value: 'admin', label: 'Admin/Logistics', color: 'bg-slate-600' },
+    { value: 'leadership', label: 'Leadership', color: 'bg-indigo-600' },
+    { value: 'academics', label: 'Academics', color: 'bg-teal-600' }
   ];
+
+  // Time slots for day view (0600-2200 in 30-min increments)
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let hour = 6; hour <= 22; hour++) {
+      for (let min of [0, 30]) {
+        if (hour === 22 && min === 30) continue;
+        slots.push(`${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`);
+      }
+    }
+    return slots;
+  }, []);
 
   useEffect(() => {
     loadEvents();
@@ -61,6 +91,26 @@ const SchedulePage = () => {
       setLoading(false);
     }
   };
+
+  // Get events for selected date
+  const eventsForDate = useMemo(() => {
+    return events
+      .filter(e => isSameDay(parseISO(e.date), selectedDate))
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [events, selectedDate]);
+
+  // Group events by time slot for day view
+  const eventsByTimeSlot = useMemo(() => {
+    const grouped = {};
+    timeSlots.forEach(slot => {
+      grouped[slot] = eventsForDate.filter(e => {
+        const eventStart = e.start_time.substring(0, 5);
+        const eventEnd = e.end_time.substring(0, 5);
+        return eventStart <= slot && slot < eventEnd;
+      });
+    });
+    return grouped;
+  }, [eventsForDate, timeSlots]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -89,13 +139,14 @@ const SchedulePage = () => {
       start_time: event.start_time,
       end_time: event.end_time,
       location: event.location || '',
-      event_type: event.event_type
+      event_type: event.event_type,
+      squadron: event.squadron || ''
     });
     setIsModalOpen(true);
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
+    if (window.confirm('Delete this event?')) {
       try {
         await deleteScheduleEvent(id);
         toast.success('Event deleted');
@@ -106,16 +157,24 @@ const SchedulePage = () => {
     }
   };
 
-  const handleDateClick = (date) => {
+  const handleTimeSlotClick = (timeSlot) => {
     if (!canEdit()) return;
-    setSelectedDate(date);
-    setFormData({ ...formData, date: format(date, 'yyyy-MM-dd') });
+    setFormData({
+      ...formData,
+      date: format(selectedDate, 'yyyy-MM-dd'),
+      start_time: timeSlot,
+      end_time: timeSlot.replace(/(\d{2}):(\d{2})/, (_, h, m) => {
+        const hour = parseInt(h);
+        const min = parseInt(m);
+        if (min === 30) return `${(hour + 1).toString().padStart(2, '0')}:00`;
+        return `${h}:30`;
+      })
+    });
     setIsModalOpen(true);
   };
 
   const resetForm = () => {
     setEditingEvent(null);
-    setSelectedDate(null);
     setFormData({
       title: '',
       description: '',
@@ -123,19 +182,20 @@ const SchedulePage = () => {
       start_time: '',
       end_time: '',
       location: '',
-      event_type: 'general'
+      event_type: 'training',
+      squadron: ''
     });
   };
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
-
-  const getEventsForDay = (date) => {
-    return events.filter(e => isSameDay(parseISO(e.date), date))
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const getEventTypeColor = (type) => {
+    return eventTypes.find(t => t.value === type)?.color || 'bg-slate-500';
   };
 
-  const getEventTypeColor = (type) => {
-    return eventTypes.find(t => t.value === type)?.color || eventTypes[0].color;
+  const getDayLabel = (date) => {
+    const dayIndex = encampmentDates.findIndex(d => isSameDay(d, date));
+    if (dayIndex === 0) return 'Arrival Day';
+    if (dayIndex === 7) return 'Graduation Day';
+    return `Day ${dayIndex}`;
   };
 
   if (loading) {
@@ -154,35 +214,28 @@ const SchedulePage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Encampment Schedule
+            Training Schedule
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {events.length} events scheduled
+            TNWG Summer Encampment • June 14-21, 2026
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Week Navigation */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))}
-              className="rounded-sm"
+        <div className="flex items-center gap-2">
+          {/* View Toggle */}
+          <div className="flex border border-slate-200 rounded-sm overflow-hidden">
+            <button
+              onClick={() => setViewMode('day')}
+              className={`px-3 py-2 text-sm ${viewMode === 'day' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-medium text-slate-600 min-w-[180px] text-center">
-              {format(currentWeekStart, 'MMM d')} - {format(addDays(currentWeekStart, 6), 'MMM d, yyyy')}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}
-              className="rounded-sm"
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-2 text-sm ${viewMode === 'list' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+              <List className="w-4 h-4" />
+            </button>
           </div>
 
           {canEdit() && (
@@ -214,21 +267,41 @@ const SchedulePage = () => {
                       data-testid="event-title-input"
                     />
                   </div>
-                  <div>
-                    <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
-                    <Select
-                      value={formData.event_type}
-                      onValueChange={(value) => setFormData({ ...formData, event_type: value })}
-                    >
-                      <SelectTrigger className="mt-1 rounded-sm" data-testid="event-type-select">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {eventTypes.map(type => (
-                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Event Type</Label>
+                      <Select
+                        value={formData.event_type}
+                        onValueChange={(value) => setFormData({ ...formData, event_type: value })}
+                      >
+                        <SelectTrigger className="mt-1 rounded-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eventTypes.map(type => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600">Squadron</Label>
+                      <Select
+                        value={formData.squadron || 'all'}
+                        onValueChange={(value) => setFormData({ ...formData, squadron: value === 'all' ? '' : value })}
+                      >
+                        <SelectTrigger className="mt-1 rounded-sm">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Squadrons</SelectItem>
+                          <SelectItem value="sq1">Squadron 1</SelectItem>
+                          <SelectItem value="sq2">Squadron 2</SelectItem>
+                          <SelectItem value="sq3">Squadron 3</SelectItem>
+                          <SelectItem value="staff">Staff/Cadre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
@@ -238,7 +311,6 @@ const SchedulePage = () => {
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       required
                       className="mt-1 rounded-sm"
-                      data-testid="event-date-input"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -250,7 +322,6 @@ const SchedulePage = () => {
                         onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                         required
                         className="mt-1 rounded-sm"
-                        data-testid="event-start-time-input"
                       />
                     </div>
                     <div>
@@ -261,7 +332,6 @@ const SchedulePage = () => {
                         onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                         required
                         className="mt-1 rounded-sm"
-                        data-testid="event-end-time-input"
                       />
                     </div>
                   </div>
@@ -271,7 +341,7 @@ const SchedulePage = () => {
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                       className="mt-1 rounded-sm"
-                      placeholder="Parade Ground"
+                      placeholder="Parade Ground, DFAC, TR-1..."
                     />
                   </div>
                   <div>
@@ -280,14 +350,14 @@ const SchedulePage = () => {
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       className="mt-1 rounded-sm"
-                      rows={3}
+                      rows={2}
                     />
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="rounded-sm">
                       Cancel
                     </Button>
-                    <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="save-event-btn">
+                    <Button type="submit" className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
                       {editingEvent ? 'Update' : 'Add'} Event
                     </Button>
                   </div>
@@ -298,127 +368,147 @@ const SchedulePage = () => {
         </div>
       </div>
 
-      {/* Event Type Legend */}
-      <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
-        <div className="flex flex-wrap gap-4">
-          {eventTypes.map(type => (
-            <div key={type.value} className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-sm border ${type.color}`}></span>
-              <span className="text-xs uppercase tracking-wide text-slate-600">{type.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Calendar Grid */}
-      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
-        {/* Day Headers */}
-        <div className="grid grid-cols-7 border-b border-slate-200">
-          {weekDays.map((day, i) => (
-            <div 
-              key={i}
-              className={`p-3 text-center border-r border-slate-200 last:border-r-0 ${
-                isSameDay(day, new Date()) ? 'bg-[#00205B]/5' : ''
+      {/* Date Selector Tabs */}
+      <div className="bg-white border border-slate-200 rounded-sm mb-4 overflow-x-auto">
+        <div className="flex min-w-max">
+          {encampmentDates.map((date, idx) => (
+            <button
+              key={idx}
+              onClick={() => setSelectedDate(date)}
+              className={`flex-1 min-w-[100px] px-4 py-3 text-center border-r border-slate-200 last:border-r-0 transition-colors ${
+                isSameDay(date, selectedDate)
+                  ? 'bg-[#00205B] text-white'
+                  : 'bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <p className="text-xs uppercase tracking-wide text-slate-500">{format(day, 'EEE')}</p>
-              <p className={`text-lg font-bold ${isSameDay(day, new Date()) ? 'text-[#00205B]' : 'text-slate-700'}`}>
-                {format(day, 'd')}
-              </p>
-            </div>
+              <div className="text-xs uppercase tracking-wide opacity-75">{format(date, 'EEE')}</div>
+              <div className="text-lg font-bold">{format(date, 'd')}</div>
+              <div className="text-[10px] uppercase tracking-wide">{getDayLabel(date)}</div>
+            </button>
           ))}
-        </div>
-
-        {/* Events Grid */}
-        <div className="grid grid-cols-7 min-h-[400px]">
-          {weekDays.map((day, i) => {
-            const dayEvents = getEventsForDay(day);
-            return (
-              <div 
-                key={i}
-                className={`border-r border-slate-200 last:border-r-0 p-2 ${
-                  canEdit() ? 'cursor-pointer hover:bg-slate-50' : ''
-                } ${isSameDay(day, new Date()) ? 'bg-[#00205B]/5' : ''}`}
-                onClick={() => handleDateClick(day)}
-                data-testid={`calendar-day-${format(day, 'yyyy-MM-dd')}`}
-              >
-                <div className="space-y-1">
-                  {dayEvents.map(event => (
-                    <div
-                      key={event.id}
-                      className={`p-2 rounded-sm border text-xs ${getEventTypeColor(event.event_type)}`}
-                      onClick={(e) => e.stopPropagation()}
-                      data-testid={`event-${event.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{event.title}</p>
-                          <div className="flex items-center gap-1 mt-1 text-[10px] opacity-75">
-                            <Clock className="w-3 h-3" />
-                            <span>{event.start_time} - {event.end_time}</span>
-                          </div>
-                          {event.location && (
-                            <div className="flex items-center gap-1 mt-0.5 text-[10px] opacity-75">
-                              <MapPin className="w-3 h-3" />
-                              <span className="truncate">{event.location}</span>
-                            </div>
-                          )}
-                        </div>
-                        {canEdit() && (
-                          <div className="flex flex-col gap-1">
-                            <button
-                              onClick={() => handleEdit(event)}
-                              className="p-1 hover:bg-black/10 rounded"
-                              data-testid={`edit-event-${event.id}`}
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(event.id)}
-                              className="p-1 hover:bg-black/10 rounded text-red-600"
-                              data-testid={`delete-event-${event.id}`}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
-      {/* Upcoming Events List */}
-      <div className="mt-6 bg-white border border-slate-200 rounded-sm">
-        <div className="border-b border-slate-100 p-4">
-          <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            All Events
-          </h2>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {events.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">
-              No events scheduled yet.
+      {/* Event Type Legend */}
+      <div className="bg-white border border-slate-200 rounded-sm p-3 mb-4">
+        <div className="flex flex-wrap gap-3">
+          {eventTypes.map(type => (
+            <div key={type.value} className="flex items-center gap-2">
+              <span className={`w-3 h-3 rounded-sm ${type.color}`}></span>
+              <span className="text-xs text-slate-600">{type.label}</span>
             </div>
-          ) : (
-            events
-              .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
-              .map(event => (
+          ))}
+        </div>
+      </div>
+
+      {/* Day View */}
+      {viewMode === 'day' && (
+        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+          <div className="bg-[#00205B] text-white p-3 text-center">
+            <h2 className="font-bold uppercase tracking-wide">
+              {format(selectedDate, 'EEEE, MMMM d, yyyy')} - {getDayLabel(selectedDate)}
+            </h2>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-200">
+                  <th className="w-20 px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-600">Time</th>
+                  <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-600">Activities</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timeSlots.map((slot, idx) => {
+                  const slotEvents = eventsByTimeSlot[slot] || [];
+                  const isHourMark = slot.endsWith(':00');
+                  
+                  return (
+                    <tr 
+                      key={slot} 
+                      className={`border-b border-slate-100 ${isHourMark ? 'bg-slate-50/50' : ''} ${canEdit() ? 'hover:bg-blue-50/30 cursor-pointer' : ''}`}
+                      onClick={() => slotEvents.length === 0 && handleTimeSlotClick(slot)}
+                    >
+                      <td className={`px-3 py-1 font-mono text-sm ${isHourMark ? 'font-bold text-[#00205B]' : 'text-slate-400'}`}>
+                        {slot}
+                      </td>
+                      <td className="px-3 py-1">
+                        <div className="flex flex-wrap gap-2">
+                          {slotEvents.map(event => (
+                            <div
+                              key={event.id}
+                              className={`${getEventTypeColor(event.event_type)} text-white px-2 py-1 rounded text-xs flex items-center gap-2`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="font-medium">{event.title}</span>
+                              {event.location && <span className="opacity-75">@ {event.location}</span>}
+                              {event.squadron && (
+                                <span className="bg-white/20 px-1 rounded text-[10px]">{event.squadron.toUpperCase()}</span>
+                              )}
+                              {canEdit() && (
+                                <div className="flex gap-1 ml-1">
+                                  <button onClick={() => handleEdit(event)} className="hover:bg-white/20 p-0.5 rounded">
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button onClick={() => handleDelete(event.id)} className="hover:bg-white/20 p-0.5 rounded">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <div className="bg-white border border-slate-200 rounded-sm">
+          <div className="bg-[#00205B] text-white p-3 text-center">
+            <h2 className="font-bold uppercase tracking-wide">
+              {format(selectedDate, 'EEEE, MMMM d, yyyy')} - {getDayLabel(selectedDate)}
+            </h2>
+          </div>
+          
+          <div className="divide-y divide-slate-100">
+            {eventsForDate.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                No events scheduled for this day.
+                {canEdit() && (
+                  <div className="mt-2">
+                    <Button onClick={() => {
+                      setFormData({ ...formData, date: format(selectedDate, 'yyyy-MM-dd') });
+                      setIsModalOpen(true);
+                    }} variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add First Event
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              eventsForDate.map(event => (
                 <div key={event.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
                   <div className="flex items-center gap-4">
-                    <div className={`w-1 h-12 rounded-full ${getEventTypeColor(event.event_type).split(' ')[0]}`}></div>
+                    <div className={`w-1 h-12 rounded-full ${getEventTypeColor(event.event_type)}`}></div>
                     <div>
-                      <p className="font-semibold text-slate-900">{event.title}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{event.title}</p>
+                        {event.squadron && (
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs uppercase">
+                            {event.squadron}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <CalendarIcon className="w-4 h-4" />
-                          {format(parseISO(event.date), 'MMM d, yyyy')}
-                        </span>
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 font-mono">
                           <Clock className="w-4 h-4" />
                           {event.start_time} - {event.end_time}
                         </span>
@@ -429,16 +519,14 @@ const SchedulePage = () => {
                           </span>
                         )}
                       </div>
+                      {event.description && (
+                        <p className="text-sm text-slate-500 mt-1">{event.description}</p>
+                      )}
                     </div>
                   </div>
                   {canEdit() && (
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(event)}
-                        className="h-8 w-8 p-0"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(event)} className="h-8 w-8 p-0">
                         <Edit2 className="w-4 h-4" />
                       </Button>
                       <Button
@@ -453,7 +541,39 @@ const SchedulePage = () => {
                   )}
                 </div>
               ))
-          )}
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Daily Summary */}
+      <div className="mt-4 bg-white border border-slate-200 rounded-sm p-4">
+        <h3 className="font-bold text-[#00205B] uppercase tracking-tight mb-3" style={{ fontFamily: 'Chivo, sans-serif' }}>
+          Day Summary
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="text-center p-3 bg-slate-50 rounded-sm">
+            <div className="text-2xl font-bold text-[#00205B]">{eventsForDate.length}</div>
+            <div className="text-xs uppercase tracking-wide text-slate-500">Total Events</div>
+          </div>
+          <div className="text-center p-3 bg-blue-50 rounded-sm">
+            <div className="text-2xl font-bold text-blue-600">
+              {eventsForDate.filter(e => e.event_type === 'training').length}
+            </div>
+            <div className="text-xs uppercase tracking-wide text-slate-500">Training</div>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-sm">
+            <div className="text-2xl font-bold text-red-600">
+              {eventsForDate.filter(e => e.event_type === 'pt').length}
+            </div>
+            <div className="text-xs uppercase tracking-wide text-slate-500">PT Sessions</div>
+          </div>
+          <div className="text-center p-3 bg-amber-50 rounded-sm">
+            <div className="text-2xl font-bold text-amber-600">
+              {eventsForDate.filter(e => e.event_type === 'meal').length}
+            </div>
+            <div className="text-xs uppercase tracking-wide text-slate-500">Meals</div>
+          </div>
         </div>
       </div>
     </div>
