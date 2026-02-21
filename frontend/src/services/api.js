@@ -171,6 +171,11 @@ export const updateUserRole = async (userId, role) => {
   return response.data;
 };
 
+export const assignUserUnit = async (userId, squadron, flight) => {
+  const response = await axios.put(`${API}/users/${userId}/unit`, { squadron, flight }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const deleteUser = async (userId) => {
   const response = await axios.delete(`${API}/users/${userId}`, { headers: getAuthHeaders() });
   return response.data;
