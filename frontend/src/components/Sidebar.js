@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Shield,
-  ChevronLeft
+  ChevronLeft,
+  Network
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -26,6 +27,7 @@ const Sidebar = ({ children }) => {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/roster', icon: Users, label: 'Roster' },
+    { path: '/org-chart', icon: Network, label: 'Org Chart' },
     { path: '/schedule', icon: Calendar, label: 'Schedule' },
     { path: '/budget', icon: DollarSign, label: 'Financial Tracker' },
     { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
