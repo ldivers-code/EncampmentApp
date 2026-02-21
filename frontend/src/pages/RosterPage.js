@@ -275,16 +275,6 @@ const RosterPage = () => {
                 </span>
               </Button>
             </label>
-                className="hidden"
-                data-testid="import-file-input"
-              />
-              <Button variant="outline" className="rounded-sm border-[#00205B] text-[#00205B] hover:bg-[#00205B]/10" asChild>
-                <span>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import Excel
-                </span>
-              </Button>
-            </label>
             
             <Dialog open={isModalOpen} onOpenChange={(open) => {
               setIsModalOpen(open);
