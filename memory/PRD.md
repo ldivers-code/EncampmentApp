@@ -5,58 +5,54 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## User Personas
 1. **Commander** - Full access to all features, user management, CRUD on all entities
-2. **Staff** - Can edit roster, schedule, budget, documents; cannot manage users
-3. **Cadet** - View-only access to all pages
+2. **Staff** - Can edit roster, schedule, budget, documents; assign users to units
+3. **Cadet** - View-only access, sees only their unit's schedule
 
 ## Core Requirements
 - [x] Master Roster management with participant CRUD
 - [x] Excel import for roster data
 - [x] Schedule calendar with event management
 - [x] Financial budget tracker with estimated vs actual
-- [x] Handbooks document repository
-- [x] Official documents section
+- [x] Handbooks document repository (placeholder)
+- [x] Official documents section (placeholder)
 - [x] Role-based access control (Commander/Staff/Cadet)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
 - [x] Schedule import from Excel with date correction (July 17-24, 2026)
 - [x] Draft/Publish workflow for schedule
+- [x] Real-time schedule sync (auto-refresh every 30 seconds)
+- [x] Flight-specific schedules with target groups
+- [x] User unit assignment (squadron/flight) in Admin page
 
 ## What's Been Implemented
 
-### Backend (FastAPI + MongoDB)
-- JWT authentication with role-based permissions
-- Users API (register, login, role management)
-- Participants API (CRUD + Excel import)
-- Schedule API (CRUD + Excel import + publish/unpublish + settings)
-- Budget API (CRUD + Excel import + summary)
-- Documents API (handbooks + official docs)
-- Org Chart API (CRUD + seed defaults + assignments)
-- Dashboard statistics endpoint
+### Feb 21, 2026 - Flight-Specific Schedules & Real-Time Sync
+- **User Unit Assignment**: Admin page now allows assigning users to squadrons and flights
+  - Squadron options: Staff/Cadre, Squadron 1, 2, 3
+  - Flight options: Alpha/Bravo (SQ1), Charlie/Delta (SQ2), Echo/Foxtrot (SQ3)
+- **Target Groups for Events**: Events can now target specific groups
+  - All Participants, Staff/Cadre
+  - Squadrons: sq1, sq2, sq3
+  - Flights: alpha, bravo, charlie, delta, echo, foxtrot
+- **Real-Time Sync**: Schedule page auto-refreshes every 30 seconds
+  - Version tracking in schedule settings
+  - "Auto-sync" indicator in header
+- **Filter Toggle**: Editors can switch between viewing all events or filtered view
+- **Cadet View**: Cadets see only events targeting their flight + squadron + all-hands
 
-### Frontend (React + Tailwind + Shadcn)
-- Login/Registration page with CAP branding
-- Collapsible sidebar navigation
-- Dashboard with statistics cards and charts
-- Master Roster with search, filter, pagination
-- Org Chart page with hierarchical tree view
-- Role Details side panel with view/edit modes
-- Schedule page with day-by-day grid view (July 17-24)
-  - Import button for Excel schedule import
-  - Publish/Unpublish toggle for draft workflow
-  - Published/Draft badge indicator
-  - 8 day tabs: Staff Arrival, In-Processing, Day 1-5, Graduation
-- Financial Tracker with summary cards and table
-- Handbooks page with document viewer
-- Official Documents grid
-- Admin page for user management
-
-### Schedule Import Feature (Feb 21, 2026)
+### Feb 21, 2026 - Schedule Import & Publish
 - Imported 113 events from Excel template
 - Corrected dates to July 17-24, 2026
 - Events categorized by type (training, ceremony, meal, PT, etc.)
 - Color-coded event display
 - Draft/Publish workflow implemented
-- Import button for admins to re-import schedule
+
+### Earlier Implementation
+- JWT authentication with role-based permissions
+- Users, Participants, Budget, Documents, Org Chart APIs
+- Dashboard with statistics
+- Master Roster with search, filter, pagination
+- Org Chart page with hierarchical tree view
 
 ## Architecture
 
@@ -67,27 +63,44 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Auth**: JWT tokens, bcrypt password hashing
 
 ### Key API Endpoints
-- `/api/auth/register`, `/api/auth/login` - Authentication
+- `/api/auth/register`, `/api/auth/login`, `/api/auth/me` - Authentication
+- `/api/users`, `/api/users/{id}/role`, `/api/users/{id}/unit` - User management
 - `/api/participants`, `/api/participants/import` - Roster management
-- `/api/schedule`, `/api/schedule/import`, `/api/schedule/publish`, `/api/schedule/settings` - Schedule management
+- `/api/schedule`, `/api/schedule/import`, `/api/schedule/publish`, `/api/schedule/settings` - Schedule
 - `/api/budget`, `/api/budget/summary` - Financial tracking
-- `/api/org-chart/roles`, `/api/org-chart/seed-defaults` - Org chart management
-- `/api/users` - User management (Commander only)
+- `/api/org-chart/roles`, `/api/org-chart/seed-defaults` - Org chart
 
 ### Database Collections
-- `users` - User accounts and roles
+- `users` - User accounts with role, squadron, flight
 - `participants` - Roster participants
-- `schedule` - Schedule events
-- `schedule_settings` - Draft/publish status
+- `schedule` - Schedule events with target_groups
+- `schedule_settings` - Draft/publish status and version
 - `budget` - Budget items
 - `org_chart_roles` - Org chart positions
 - `documents` - Handbooks and official docs
+
+### Unit Structure
+```
+Staff/Cadre
+├── Squadron 1
+│   ├── Alpha Flight
+│   └── Bravo Flight
+├── Squadron 2
+│   ├── Charlie Flight
+│   └── Delta Flight
+└── Squadron 3
+    ├── Echo Flight
+    └── Foxtrot Flight
+```
 
 ## Prioritized Backlog
 
 ### P0 (Critical) - COMPLETED
 - [x] Schedule import with date correction
 - [x] Draft/Publish workflow for schedule
+- [x] Real-time schedule sync
+- [x] Flight-specific schedules
+- [x] User unit assignment
 
 ### P1 (High Priority)
 - [ ] Implement Handbooks page (upload/view PDF documents)
@@ -101,7 +114,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [ ] Bulk participant import validation
 
 ### P3 (Low Priority)
-- [ ] Flight/Squadron assignment interface
+- [ ] Flight/Squadron assignment interface in Roster
 - [ ] Print-friendly roster and org chart views
 - [ ] Enhanced financial reports
 
@@ -121,3 +134,5 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - July 18: Student In-Processing  
   - July 19-23: Training Days 1-5
   - July 24: Graduation Day
+- Assigning a flight automatically sets the correct squadron
+- Cadets without unit assignment see all events
