@@ -241,12 +241,51 @@ const SchedulePage = () => {
 
   const currentDayIndex = encampmentDates.findIndex(d => isSameDay(d, selectedDate));
 
-  // Get events for selected date
+  // Get events for selected date with filter applied
   const eventsForDate = useMemo(() => {
-    return events
-      .filter(e => isSameDay(parseISO(e.date), selectedDate))
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [events, selectedDate]);
+    let filtered = events.filter(e => isSameDay(parseISO(e.date), selectedDate));
+    
+    // Apply schedule filter
+    if (scheduleFilter !== 'all') {
+      filtered = filtered.filter(e => {
+        // Show event if it targets 'all' or matches the selected filter
+        if (!e.target_groups || e.target_groups.includes('all')) return true;
+        
+        // Check if event targets the selected group
+        if (e.target_groups.includes(scheduleFilter)) return true;
+        
+        // Check squadron membership for flight filters
+        const flightToSquadron = {
+          'alpha': 'sq1', 'bravo': 'sq1',
+          'charlie': 'sq2', 'delta': 'sq2',
+          'echo': 'sq3', 'foxtrot': 'sq3'
+        };
+        
+        // If filtering by squadron, also show events for its flights
+        if (['sq1', 'sq2', 'sq3'].includes(scheduleFilter)) {
+          const squadronFlights = Object.entries(flightToSquadron)
+            .filter(([_, sq]) => sq === scheduleFilter)
+            .map(([fl, _]) => fl);
+          if (e.target_groups.some(g => squadronFlights.includes(g))) return true;
+        }
+        
+        // If filtering by flight, also show squadron-level events
+        if (flightToSquadron[scheduleFilter]) {
+          const parentSquadron = flightToSquadron[scheduleFilter];
+          if (e.target_groups.includes(parentSquadron)) return true;
+        }
+        
+        return false;
+      });
+    }
+    
+    return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [events, selectedDate, scheduleFilter]);
+
+  const getFilterLabel = () => {
+    const option = scheduleFilterOptions.find(o => o.value === scheduleFilter);
+    return option ? option.label : 'All Events';
+  };
 
   // Group events by time slot for day view
   const eventsByTimeSlot = useMemo(() => {
