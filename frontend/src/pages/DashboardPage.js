@@ -87,10 +87,6 @@ const DashboardPage = () => {
           July 17-24, 2026 • VTS Catoosa, GA
         </p>
       </div>
-        <p className="text-slate-500">
-          Welcome back, <span className="font-semibold text-slate-700">{user?.name}</span>
-        </p>
-      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
