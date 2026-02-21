@@ -9,7 +9,8 @@ import {
   getFoodExpenseSettings,
   updateFoodExpenseSettings,
   uploadReceipt,
-  deleteReceipt
+  deleteReceipt,
+  seedTNWGBudgetTemplate
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
