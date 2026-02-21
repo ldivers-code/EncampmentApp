@@ -53,7 +53,7 @@ class UserRole:
 class UserBase(BaseModel):
     email: EmailStr
     name: str
-    role: str = UserRole.CADET
+    role: str = UserRole.STAFF  # Default to staff (can choose staff/cadre during registration)
     capid: Optional[str] = None
     squadron: Optional[str] = None  # sq1, sq2, sq3, staff
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
@@ -69,6 +69,40 @@ class UserUnitAssignment(BaseModel):
     squadron: Optional[str] = None
     flight: Optional[str] = None
 
+# Extended user profile model
+class UserProfile(BaseModel):
+    # Basic info
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    cell_phone: Optional[str] = None
+    # CAP info
+    capid: Optional[str] = None
+    rank: Optional[str] = None
+    unit: Optional[str] = None
+    wing: Optional[str] = None
+    region: Optional[str] = None
+    # Personal
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    shirt_size: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    # Emergency contact
+    emergency_contact: Optional[str] = None
+    emergency_phone: Optional[str] = None
+    # Parent info (for cadets)
+    cadet_parent_name: Optional[str] = None
+    cadet_parent_phone: Optional[str] = None
+    cadet_parent_email: Optional[str] = None
+    # Profile photo
+    photo_url: Optional[str] = None
+
+class UserProfileUpdate(UserProfile):
+    pass
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -79,6 +113,31 @@ class UserResponse(BaseModel):
     squadron: Optional[str] = None
     flight: Optional[str] = None
     created_at: str
+    # Extended profile fields
+    phone: Optional[str] = None
+    cell_phone: Optional[str] = None
+    rank: Optional[str] = None
+    unit: Optional[str] = None
+    wing: Optional[str] = None
+    region: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    shirt_size: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_phone: Optional[str] = None
+    cadet_parent_name: Optional[str] = None
+    cadet_parent_phone: Optional[str] = None
+    cadet_parent_email: Optional[str] = None
+    photo_url: Optional[str] = None
+    # Approval status
+    is_approved: Optional[bool] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    linked_participant_id: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
