@@ -484,31 +484,48 @@ const RosterPage = () => {
       {/* Import Results Banner */}
       {importResult && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-4 mb-6">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
               <div>
-                <p className="font-medium text-emerald-800">Import Complete</p>
+                <p className="font-medium text-emerald-800">Import & Sync Complete</p>
                 <p className="text-sm text-emerald-600">
-                  {importResult.imported} new participants, {importResult.updated} updated
+                  {importResult.imported} new, {importResult.updated} updated ({importResult.total} total)
                 </p>
               </div>
             </div>
-            <div className="text-right text-sm">
-              <div className="space-x-4">
+            <div className="text-right text-sm flex-shrink-0">
+              <div className="flex gap-4">
                 <span className="text-emerald-700">Seniors: {importResult.stats?.seniors || 0}</span>
                 <span className="text-emerald-700">Cadets: {importResult.stats?.cadets || 0}</span>
                 <span className="text-emerald-700">Staff: {importResult.stats?.staff || 0}</span>
                 <span className="text-emerald-700">Cadre: {importResult.stats?.cadre || 0}</span>
               </div>
-              <div className="mt-1">
-                <span className="text-emerald-600">Total Collected: {formatCurrency(importResult.stats?.total_collected || 0)}</span>
+              <div className="mt-1 flex gap-4 justify-end">
+                <span className="text-emerald-600">Collected: {formatCurrency(importResult.stats?.total_collected || 0)}</span>
+                {importResult.budget_sync && (
+                  <span className="text-[#00205B] font-medium">Budget synced!</span>
+                )}
               </div>
             </div>
-            <button onClick={() => setImportResult(null)} className="text-emerald-400 hover:text-emerald-600">
+            <button onClick={() => setImportResult(null)} className="text-emerald-400 hover:text-emerald-600 text-xl leading-none">
               ×
             </button>
           </div>
+          
+          {/* Budget Sync Details */}
+          {importResult.budget_sync?.updates?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-emerald-200">
+              <p className="text-xs uppercase tracking-wide text-emerald-700 mb-2">Budget Income Updated:</p>
+              <div className="flex gap-4 text-sm">
+                {importResult.budget_sync.updates.map((u, i) => (
+                  <span key={i} className="text-emerald-600">
+                    {u.item}: {formatCurrency(u.actual)} ({u.count} participants)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
