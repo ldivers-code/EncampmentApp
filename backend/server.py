@@ -1249,6 +1249,129 @@ async def import_budget(
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
 
+@api_router.post("/budget/seed-tnwg-template")
+async def seed_tnwg_budget_template(
+    user: dict = Depends(require_finance_access())
+):
+    """Seed budget with 2026 TNWG Encampment Budget template items"""
+    
+    # Check if budget already has items
+    existing_count = await db.budget.count_documents({})
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Budget already has {existing_count} items. Clear budget first or use import."
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # 2026 TNWG Encampment Budget Template Items
+    template_items = [
+        # Income Sources
+        {"category": "Participant Fees", "item_name": "Senior Members Staff", "estimated": 2400.0, "item_type": "income", "notes": "42 SM @ varies"},
+        {"category": "Participant Fees", "item_name": "Cadet Cadre", "estimated": 9500.0, "item_type": "income", "notes": "38 Cadre @ $250"},
+        {"category": "Participant Fees", "item_name": "Basic Students", "estimated": 22500.0, "item_type": "income", "notes": "90 Students @ $250"},
+        {"category": "NHQ Allocations", "item_name": "CEAP Funds (Students)", "estimated": 0.0, "item_type": "income", "notes": "NHQ CEAP allocation for students"},
+        {"category": "NHQ Allocations", "item_name": "CEAP Funds (Cadre)", "estimated": 0.0, "item_type": "income", "notes": "NHQ CEAP allocation for cadre"},
+        {"category": "Donations", "item_name": "Heritage Wing Donations", "estimated": 560.0, "item_type": "income"},
+        {"category": "Donations", "item_name": "Other Donations", "estimated": 0.0, "item_type": "income"},
+        
+        # Facility Expenses
+        {"category": "Facility", "item_name": "VTS Catoosa Facility Rental", "estimated": 11000.0, "item_type": "expense", "vendor": "VTS Catoosa"},
+        
+        # DFAC Budget
+        {"category": "DFAC Budget", "item_name": "Meals Contract", "estimated": 0.0, "item_type": "expense", "notes": "$13.15/person/day - see Food Planner"},
+        {"category": "DFAC Budget", "item_name": "Hydration Supplies", "estimated": 200.0, "item_type": "expense"},
+        {"category": "DFAC Budget", "item_name": "DFAC Supplies", "estimated": 150.0, "item_type": "expense"},
+        {"category": "DFAC Budget", "item_name": "Bathroom/DFAC Supplies", "estimated": 100.0, "item_type": "expense"},
+        
+        # Graduation Budget
+        {"category": "Graduation Budget", "item_name": "Awards / Challenge Coins", "estimated": 670.0, "item_type": "expense"},
+        {"category": "Graduation Budget", "item_name": "Honors/Grad Packages", "estimated": 3500.0, "item_type": "expense"},
+        {"category": "Graduation Budget", "item_name": "Honor Flight Streamers", "estimated": 20.0, "item_type": "expense"},
+        
+        # Commandants Budget
+        {"category": "Commandants Budget", "item_name": "Miscellaneous", "estimated": 500.0, "item_type": "expense"},
+        {"category": "Commandants Budget", "item_name": "Sport Event Equipment", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Commandants Budget", "item_name": "Esprit de Corps", "estimated": 100.0, "item_type": "expense"},
+        
+        # Deputy Commander Support
+        {"category": "Deputy Commander Support", "item_name": "Support Budget", "estimated": 450.0, "item_type": "expense"},
+        {"category": "Deputy Commander Support", "item_name": "Cleaning Equipment", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Deputy Commander Support", "item_name": "Laundry Materials", "estimated": 100.0, "item_type": "expense"},
+        
+        # Advanced Training School
+        {"category": "Advanced Training School", "item_name": "Academic Materials", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Advanced Training School", "item_name": "AE Track", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Advanced Training School", "item_name": "CP Track", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Advanced Training School", "item_name": "ES Track", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Advanced Training School", "item_name": "Streamer Holder", "estimated": 0.0, "item_type": "expense"},
+        
+        # Public Affairs
+        {"category": "Public Affairs", "item_name": "Computer Discs", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Public Affairs", "item_name": "Printer Materials", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Public Affairs", "item_name": "Office Supplies", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Public Affairs", "item_name": "Student Supplies", "estimated": 100.0, "item_type": "expense"},
+        
+        # Logistics
+        {"category": "Logistics", "item_name": "Communications Budget", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Logistics", "item_name": "Activities", "estimated": 100.0, "item_type": "expense"},
+        {"category": "Logistics", "item_name": "Equipment", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Logistics", "item_name": "In-Processing Materials", "estimated": 100.0, "item_type": "expense"},
+        
+        # Health Services
+        {"category": "Health Services", "item_name": "Support Budget", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Health Services", "item_name": "Swim Fee", "estimated": 345.0, "item_type": "expense"},
+        
+        # T-Shirts & Merchandise
+        {"category": "T-Shirts & Merchandise", "item_name": "Encampment T-Shirts", "estimated": 7000.0, "item_type": "expense"},
+        {"category": "T-Shirts & Merchandise", "item_name": "Cadre Equipment", "estimated": 600.0, "item_type": "expense"},
+        
+        # Refunds
+        {"category": "Refunds", "item_name": "CEAP Refunds", "estimated": 0.0, "item_type": "expense"},
+        {"category": "Refunds", "item_name": "Registration Refunds", "estimated": 0.0, "item_type": "expense"},
+    ]
+    
+    inserted_count = 0
+    for item_data in template_items:
+        item_id = str(uuid.uuid4())
+        doc = {
+            "id": item_id,
+            "category": item_data["category"],
+            "subcategory": item_data.get("subcategory"),
+            "item_name": item_data["item_name"],
+            "estimated": item_data.get("estimated", 0.0),
+            "actual": item_data.get("actual", 0.0),
+            "notes": item_data.get("notes"),
+            "vendor": item_data.get("vendor"),
+            "item_type": item_data.get("item_type", "expense"),
+            "payment_status": "pending",
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.budget.insert_one(doc)
+        inserted_count += 1
+    
+    # Also update food settings with TNWG defaults
+    await db.food_expense_settings.update_one(
+        {"_id": "settings"},
+        {"$set": {
+            "cost_per_person_per_day": 13.15,
+            "total_participants": 170,  # 42 SM + 38 Cadre + 90 Students
+            "total_days": 8,
+            "notes": "2026 TNWG Encampment: $13.15/day (Breakfast + Lunch + Dinner)",
+            "updated_at": now
+        }},
+        upsert=True
+    )
+    
+    return {
+        "message": f"Successfully seeded {inserted_count} budget items from TNWG template",
+        "items_created": inserted_count,
+        "food_settings_updated": True
+    }
+
+
 # Receipt upload helper
 import base64
 
