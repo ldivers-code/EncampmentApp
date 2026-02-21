@@ -133,26 +133,43 @@ const BudgetPage = () => {
     }
   };
 
-  // Calculate totals
+  // Calculate totals with detailed variance tracking
   const totals = useMemo(() => {
-    const income = items
-      .filter(i => i.item_type === 'income' || i.category === 'Income')
-      .reduce((sum, i) => sum + (i.actual || 0), 0);
+    // Income totals
+    const incomeItems = items.filter(i => i.item_type === 'income' || i.category?.includes('Fees') || i.category?.includes('Allocations') || i.category?.includes('Donations'));
+    const estimatedIncome = incomeItems.reduce((sum, i) => sum + (i.estimated || 0), 0);
+    const actualIncome = incomeItems.reduce((sum, i) => sum + (i.actual || 0), 0);
     
-    const expenses = items
-      .filter(i => i.item_type !== 'income' && i.category !== 'Income')
-      .reduce((sum, i) => sum + (i.actual || 0), 0);
-    
-    const estimatedExpenses = items
-      .filter(i => i.item_type !== 'income' && i.category !== 'Income')
-      .reduce((sum, i) => sum + (i.estimated || 0), 0);
+    // Expense totals
+    const expenseItems = items.filter(i => i.item_type !== 'income' && !i.category?.includes('Fees') && !i.category?.includes('Allocations') && !i.category?.includes('Donations'));
+    const estimatedExpenses = expenseItems.reduce((sum, i) => sum + (i.estimated || 0), 0);
+    const actualExpenses = expenseItems.reduce((sum, i) => sum + (i.actual || 0), 0);
 
+    // Payment tracking
+    const paidItems = items.filter(i => i.payment_status === 'paid');
+    const pendingItems = items.filter(i => i.payment_status === 'pending');
+    
     return {
-      income,
-      expenses,
+      // Income metrics
+      estimatedIncome,
+      actualIncome,
+      incomeVariance: actualIncome - estimatedIncome,
+      incomeCollectionRate: estimatedIncome > 0 ? (actualIncome / estimatedIncome * 100) : 0,
+      
+      // Expense metrics
       estimatedExpenses,
-      balance: income - expenses,
-      budgetRemaining: income - estimatedExpenses
+      actualExpenses,
+      expenseVariance: estimatedExpenses - actualExpenses, // Positive = under budget
+      budgetUtilization: estimatedExpenses > 0 ? (actualExpenses / estimatedExpenses * 100) : 0,
+      
+      // Balance metrics
+      projectedBalance: estimatedIncome - estimatedExpenses,
+      currentBalance: actualIncome - actualExpenses,
+      
+      // Payment tracking
+      paidCount: paidItems.length,
+      pendingCount: pendingItems.length,
+      totalItems: items.length
     };
   }, [items]);
 
