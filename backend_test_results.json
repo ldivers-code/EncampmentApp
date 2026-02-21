@@ -1,0 +1,566 @@
+{
+  "summary": {
+    "total_tests": 26,
+    "passed": 26,
+    "failed": 0,
+    "success_rate": 100.0,
+    "failed_test_names": []
+  },
+  "detailed_results": [
+    {
+      "test_name": "Root Endpoint",
+      "method": "GET",
+      "endpoint": "/",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "message": "CAP Encampment Roster API",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "test_name": "User Registration (Commander)",
+      "method": "POST",
+      "endpoint": "/auth/register",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZDUxZGQ4Yy0xN2VmLTQ5MjYtYTAwMC02MDZmNWNlZmZkMjciLCJlbWFpbCI6ImNvbW1hbmRlcjE2NTE0MkBjYXB1bml0Lm9yZyIsInJvbGUiOiJjb21tYW5kZXIiLCJleHAiOjE3NzE3NzkxMDN9.nqczoqw5dus1QuFo8QnBZr_PKaWUwnrg8C-yNU5opcE",
+        "token_type": "bearer",
+        "user": {
+          "id": "6d51dd8c-17ef-4926-a000-606f5ceffd27",
+          "email": "commander165142@capunit.org",
+          "name": "Commander Test User 165142",
+          "role": "commander",
+          "capid": "CMD165142",
+          "created_at": "2026-02-21T16:51:42.912050+00:00"
+        }
+      }
+    },
+    {
+      "test_name": "User Login",
+      "method": "POST",
+      "endpoint": "/auth/login",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZDUxZGQ4Yy0xN2VmLTQ5MjYtYTAwMC02MDZmNWNlZmZkMjciLCJlbWFpbCI6ImNvbW1hbmRlcjE2NTE0MkBjYXB1bml0Lm9yZyIsInJvbGUiOiJjb21tYW5kZXIiLCJleHAiOjE3NzE3NzkxMDN9.nqczoqw5dus1QuFo8QnBZr_PKaWUwnrg8C-yNU5opcE",
+        "token_type": "bearer",
+        "user": {
+          "id": "6d51dd8c-17ef-4926-a000-606f5ceffd27",
+          "email": "commander165142@capunit.org",
+          "name": "Commander Test User 165142",
+          "role": "commander",
+          "capid": "CMD165142",
+          "created_at": "2026-02-21T16:51:42.912050+00:00"
+        }
+      }
+    },
+    {
+      "test_name": "Get Current User",
+      "method": "GET",
+      "endpoint": "/auth/me",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "id": "6d51dd8c-17ef-4926-a000-606f5ceffd27",
+        "email": "commander165142@capunit.org",
+        "name": "Commander Test User 165142",
+        "role": "commander",
+        "capid": "CMD165142",
+        "created_at": "2026-02-21T16:51:42.912050+00:00"
+      }
+    },
+    {
+      "test_name": "Dashboard Stats",
+      "method": "GET",
+      "endpoint": "/stats/dashboard",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "participants": {
+          "total": 1,
+          "by_type": {
+            "basic_student": 1
+          },
+          "by_gender": {
+            "M": 0,
+            "F": 0,
+            "Other": 1
+          },
+          "paid": 0,
+          "unpaid": 1
+        },
+        "budget": {
+          "total_estimated": 0,
+          "total_actual": 0,
+          "variance": 0
+        },
+        "schedule": {
+          "total_events": 0,
+          "upcoming_events": 0
+        }
+      }
+    },
+    {
+      "test_name": "Create Participant",
+      "method": "POST",
+      "endpoint": "/participants",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "capid": "CADET165143",
+        "rank": "C/Amn",
+        "last_name": "TestLastName",
+        "first_name": "TestFirstName",
+        "unit": "TN001",
+        "wing": "TN",
+        "region": "SER",
+        "gender": "M",
+        "age": 16,
+        "email": "cadet165143@capunit.org",
+        "phone": "555-1234",
+        "shirt_size": "M",
+        "participant_type": "basic_student",
+        "squadron": "Alpha",
+        "flight": "1",
+        "position": "Element Leader",
+        "paid": false,
+        "first_encampment": true,
+        "religious_preference": "Protestant",
+        "emergency_contact": "Parent: 555-5678",
+        "notes": "Test participant",
+        "id": "292197ac-0234-444a-9135-33741595b1a2",
+        "created_at": "2026-02-21T16:51:43.814639+00:00",
+        "updated_at": "2026-02-21T16:51:43.814639+00:00"
+      }
+    },
+    {
+      "test_name": "Get Participants",
+      "method": "GET",
+      "endpoint": "/participants",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": [
+        {
+          "capid": "654321",
+          "rank": "C/Amn",
+          "last_name": "Doe",
+          "first_name": "John",
+          "unit": "TN001",
+          "wing": "",
+          "region": "",
+          "gender": "",
+          "age": null,
+          "email": "",
+          "phone": "",
+          "shirt_size": "",
+          "participant_type": "basic_student",
+          "squadron": "",
+          "flight": "",
+          "position": "",
+          "paid": false,
+          "first_encampment": true,
+          "religious_preference": "",
+          "emergency_contact": "",
+          "notes": "",
+          "id": "06201199-0756-4494-9e6c-45a9df7a8cd8",
+          "created_at": "2026-02-21T16:49:08.857200+00:00",
+          "updated_at": "2026-02-21T16:49:08.857200+00:00"
+        },
+        {
+          "capid": "CADET165143",
+          "rank": "C/Amn",
+          "last_name": "TestLastName",
+          "first_name": "TestFirstName",
+          "unit": "TN001",
+          "wing": "TN",
+          "region": "SER",
+          "gender": "M",
+          "age": 16,
+          "email": "cadet165143@capunit.org",
+          "phone": "555-1234",
+          "shirt_size": "M",
+          "participant_type": "basic_student",
+          "squadron": "Alpha",
+          "flight": "1",
+          "position": "Element Leader",
+          "paid": false,
+          "first_encampment": true,
+          "religious_preference": "Protestant",
+          "emergency_contact": "Parent: 555-5678",
+          "notes": "Test participant",
+          "id": "292197ac-0234-444a-9135-33741595b1a2",
+          "created_at": "2026-02-21T16:51:43.814639+00:00",
+          "updated_at": "2026-02-21T16:51:43.814639+00:00"
+        }
+      ]
+    },
+    {
+      "test_name": "Get Participant by ID",
+      "method": "GET",
+      "endpoint": "/participants/292197ac-0234-444a-9135-33741595b1a2",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "capid": "CADET165143",
+        "rank": "C/Amn",
+        "last_name": "TestLastName",
+        "first_name": "TestFirstName",
+        "unit": "TN001",
+        "wing": "TN",
+        "region": "SER",
+        "gender": "M",
+        "age": 16,
+        "email": "cadet165143@capunit.org",
+        "phone": "555-1234",
+        "shirt_size": "M",
+        "participant_type": "basic_student",
+        "squadron": "Alpha",
+        "flight": "1",
+        "position": "Element Leader",
+        "paid": false,
+        "first_encampment": true,
+        "religious_preference": "Protestant",
+        "emergency_contact": "Parent: 555-5678",
+        "notes": "Test participant",
+        "id": "292197ac-0234-444a-9135-33741595b1a2",
+        "created_at": "2026-02-21T16:51:43.814639+00:00",
+        "updated_at": "2026-02-21T16:51:43.814639+00:00"
+      }
+    },
+    {
+      "test_name": "Update Participant",
+      "method": "PUT",
+      "endpoint": "/participants/292197ac-0234-444a-9135-33741595b1a2",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "capid": "CADET999",
+        "rank": "C/A1C",
+        "last_name": "UpdatedLastName",
+        "first_name": "UpdatedFirstName",
+        "unit": "TN002",
+        "wing": "TN",
+        "region": "SER",
+        "gender": "F",
+        "age": 17,
+        "email": "updated@capunit.org",
+        "phone": "555-9999",
+        "shirt_size": "L",
+        "participant_type": "advanced_student",
+        "squadron": "Bravo",
+        "flight": "2",
+        "position": "Flight Sergeant",
+        "paid": true,
+        "first_encampment": false,
+        "religious_preference": "Catholic",
+        "emergency_contact": "Guardian: 555-0000",
+        "notes": "Updated test participant",
+        "id": "292197ac-0234-444a-9135-33741595b1a2",
+        "created_at": "2026-02-21T16:51:43.814639+00:00",
+        "updated_at": "2026-02-21T16:51:44.217141+00:00"
+      }
+    },
+    {
+      "test_name": "Create Schedule Event",
+      "method": "POST",
+      "endpoint": "/schedule",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "title": "Test Event 165144",
+        "description": "This is a test event for API validation",
+        "date": "2024-08-15",
+        "start_time": "08:00",
+        "end_time": "09:00",
+        "location": "Parade Ground",
+        "event_type": "training",
+        "id": "ed41f930-0c38-424a-896c-1d228fcf3f38",
+        "created_at": "2026-02-21T16:51:44.354753+00:00",
+        "updated_at": "2026-02-21T16:51:44.354753+00:00"
+      }
+    },
+    {
+      "test_name": "Get Schedule",
+      "method": "GET",
+      "endpoint": "/schedule",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": [
+        {
+          "title": "Test Event 165144",
+          "description": "This is a test event for API validation",
+          "date": "2024-08-15",
+          "start_time": "08:00",
+          "end_time": "09:00",
+          "location": "Parade Ground",
+          "event_type": "training",
+          "id": "ed41f930-0c38-424a-896c-1d228fcf3f38",
+          "created_at": "2026-02-21T16:51:44.354753+00:00",
+          "updated_at": "2026-02-21T16:51:44.354753+00:00"
+        }
+      ]
+    },
+    {
+      "test_name": "Update Schedule Event",
+      "method": "PUT",
+      "endpoint": "/schedule/ed41f930-0c38-424a-896c-1d228fcf3f38",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "title": "Updated Test Event",
+        "description": "Updated description",
+        "date": "2024-08-16",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "location": "Updated Location",
+        "event_type": "ceremony",
+        "id": "ed41f930-0c38-424a-896c-1d228fcf3f38",
+        "created_at": "2026-02-21T16:51:44.354753+00:00",
+        "updated_at": "2026-02-21T16:51:44.637530+00:00"
+      }
+    },
+    {
+      "test_name": "Create Budget Item",
+      "method": "POST",
+      "endpoint": "/budget",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "category": "Commandants Budget",
+        "subcategory": "Test Category",
+        "item_name": "Test Budget Item 165144",
+        "estimated": 100.5,
+        "actual": 95.25,
+        "notes": "Test budget item for API validation",
+        "id": "305beba1-95d2-4c8c-82a8-7b45f4366a8c",
+        "created_at": "2026-02-21T16:51:44.738744+00:00",
+        "updated_at": "2026-02-21T16:51:44.738744+00:00"
+      }
+    },
+    {
+      "test_name": "Get Budget",
+      "method": "GET",
+      "endpoint": "/budget",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": [
+        {
+          "category": "Commandants Budget",
+          "subcategory": "Test Category",
+          "item_name": "Test Budget Item 165144",
+          "estimated": 100.5,
+          "actual": 95.25,
+          "notes": "Test budget item for API validation",
+          "id": "305beba1-95d2-4c8c-82a8-7b45f4366a8c",
+          "created_at": "2026-02-21T16:51:44.738744+00:00",
+          "updated_at": "2026-02-21T16:51:44.738744+00:00"
+        }
+      ]
+    },
+    {
+      "test_name": "Budget Summary",
+      "method": "GET",
+      "endpoint": "/budget/summary",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "total_estimated": 100.5,
+        "total_actual": 95.25,
+        "variance": 5.25,
+        "by_category": {
+          "Commandants Budget": {
+            "estimated": 100.5,
+            "actual": 95.25
+          }
+        }
+      }
+    },
+    {
+      "test_name": "Create Document",
+      "method": "POST",
+      "endpoint": "/documents",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "title": "Test Document 165144",
+        "description": "Test document for API validation",
+        "doc_type": "handbook",
+        "content": "This is test content for the document",
+        "file_url": null,
+        "id": "cacf3c7f-24c2-45e5-a09f-28432a6ddc39",
+        "created_at": "2026-02-21T16:51:45.076976+00:00",
+        "updated_at": "2026-02-21T16:51:45.076976+00:00"
+      }
+    },
+    {
+      "test_name": "Get Documents",
+      "method": "GET",
+      "endpoint": "/documents",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": [
+        {
+          "title": "Test Document 165144",
+          "description": "Test document for API validation",
+          "doc_type": "handbook",
+          "content": "This is test content for the document",
+          "file_url": null,
+          "id": "cacf3c7f-24c2-45e5-a09f-28432a6ddc39",
+          "created_at": "2026-02-21T16:51:45.076976+00:00",
+          "updated_at": "2026-02-21T16:51:45.076976+00:00"
+        }
+      ]
+    },
+    {
+      "test_name": "Get Users (Commander Only)",
+      "method": "GET",
+      "endpoint": "/users",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": [
+        {
+          "id": "6a539e40-9626-47f9-a606-1c33b6ed90c2",
+          "email": "commander@captest.org",
+          "name": "Encampment Commander",
+          "role": "commander",
+          "capid": "123456",
+          "created_at": "2026-02-21T16:48:45.592308+00:00"
+        },
+        {
+          "id": "6d51dd8c-17ef-4926-a000-606f5ceffd27",
+          "email": "commander165142@capunit.org",
+          "name": "Commander Test User 165142",
+          "role": "commander",
+          "capid": "CMD165142",
+          "created_at": "2026-02-21T16:51:42.912050+00:00"
+        }
+      ]
+    },
+    {
+      "test_name": "Create Cadet User",
+      "method": "POST",
+      "endpoint": "/auth/register",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmYxOTNmZS01OTEzLTQ2NjEtYWY4OC05MjIyN2I0NDkwMWQiLCJlbWFpbCI6ImNhZGV0MTY1MTQ1QGNhcHVuaXQub3JnIiwicm9sZSI6ImNhZGV0IiwiZXhwIjoxNzcxNzc5MTA1fQ.vf6lEaflS_yZyOPeNKmLRhnmfYVkG1CoMmu8x7yOtH0",
+        "token_type": "bearer",
+        "user": {
+          "id": "9bf193fe-5913-4661-af88-92227b44901d",
+          "email": "cadet165145@capunit.org",
+          "name": "Cadet Test User 165145",
+          "role": "cadet",
+          "capid": "CDT165145",
+          "created_at": "2026-02-21T16:51:45.422598+00:00"
+        }
+      }
+    },
+    {
+      "test_name": "Cadet Login",
+      "method": "POST",
+      "endpoint": "/auth/login",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5YmYxOTNmZS01OTEzLTQ2NjEtYWY4OC05MjIyN2I0NDkwMWQiLCJlbWFpbCI6ImNhZGV0MTY1MTQ1QGNhcHVuaXQub3JnIiwicm9sZSI6ImNhZGV0IiwiZXhwIjoxNzcxNzc5MTA2fQ.eu-x4cxKoSy-zGuZ1F11oDCCnwcw0iSifeIMRS7TjSQ",
+        "token_type": "bearer",
+        "user": {
+          "id": "9bf193fe-5913-4661-af88-92227b44901d",
+          "email": "cadet165145@capunit.org",
+          "name": "Cadet Test User 165145",
+          "role": "cadet",
+          "capid": "CDT165145",
+          "created_at": "2026-02-21T16:51:45.422598+00:00"
+        }
+      }
+    },
+    {
+      "test_name": "Cadet Create Participant (Should Fail)",
+      "method": "POST",
+      "endpoint": "/participants",
+      "expected_status": 403,
+      "actual_status": 403,
+      "success": true,
+      "response_data": {
+        "detail": "Insufficient permissions"
+      }
+    },
+    {
+      "test_name": "Cadet Get Users (Should Fail)",
+      "method": "GET",
+      "endpoint": "/users",
+      "expected_status": 403,
+      "actual_status": 403,
+      "success": true,
+      "response_data": {
+        "detail": "Insufficient permissions"
+      }
+    },
+    {
+      "test_name": "Delete Budget Item",
+      "method": "DELETE",
+      "endpoint": "/budget/305beba1-95d2-4c8c-82a8-7b45f4366a8c",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "message": "Budget item deleted successfully"
+      }
+    },
+    {
+      "test_name": "Delete Schedule Event",
+      "method": "DELETE",
+      "endpoint": "/schedule/ed41f930-0c38-424a-896c-1d228fcf3f38",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "message": "Event deleted successfully"
+      }
+    },
+    {
+      "test_name": "Delete Document",
+      "method": "DELETE",
+      "endpoint": "/documents/cacf3c7f-24c2-45e5-a09f-28432a6ddc39",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "message": "Document deleted successfully"
+      }
+    },
+    {
+      "test_name": "Delete Participant",
+      "method": "DELETE",
+      "endpoint": "/participants/292197ac-0234-444a-9135-33741595b1a2",
+      "expected_status": 200,
+      "actual_status": 200,
+      "success": true,
+      "response_data": {
+        "message": "Participant deleted successfully"
+      }
+    }
+  ]
+}
