@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getBudget, 
   getBudgetSummary, 
@@ -10,7 +10,9 @@ import {
   updateFoodExpenseSettings,
   uploadReceipt,
   deleteReceipt,
-  seedTNWGBudgetTemplate
+  seedTNWGBudgetTemplate,
+  updateBudgetActual,
+  markBudgetItemPaid
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
