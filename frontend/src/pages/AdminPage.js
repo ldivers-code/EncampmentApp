@@ -57,6 +57,7 @@ const AdminPage = () => {
 
   useEffect(() => {
     loadUsers();
+    loadPendingUsers();
   }, []);
 
   const loadUsers = async () => {
@@ -67,6 +68,50 @@ const AdminPage = () => {
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingUsers = async () => {
+    try {
+      const data = await getPendingUsers();
+      setPendingUsers(data);
+    } catch (error) {
+      console.error('Failed to load pending users', error);
+    }
+  };
+
+  const handleApproveUser = async (userId) => {
+    try {
+      await approveUser(userId);
+      toast.success('User approved successfully');
+      loadPendingUsers();
+      loadUsers();
+    } catch (error) {
+      toast.error('Failed to approve user');
+    }
+  };
+
+  const handleFindMatches = async (userId) => {
+    setLoadingMatches(prev => ({ ...prev, [userId]: true }));
+    try {
+      const data = await findMatchingParticipants(userId);
+      setMatchingParticipants(prev => ({ ...prev, [userId]: data.matches }));
+    } catch (error) {
+      toast.error('Failed to find matches');
+    } finally {
+      setLoadingMatches(prev => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleLinkParticipant = async (userId, participantId) => {
+    try {
+      await linkUserToParticipant(userId, participantId, true);
+      toast.success('User linked and profile populated');
+      loadPendingUsers();
+      loadUsers();
+      setMatchingParticipants(prev => ({ ...prev, [userId]: null }));
+    } catch (error) {
+      toast.error('Failed to link participant');
     }
   };
 
