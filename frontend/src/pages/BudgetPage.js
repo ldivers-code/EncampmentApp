@@ -998,27 +998,92 @@ const BudgetPage = () => {
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-slate-400">
+                  <td colSpan={9} className="text-center py-8 text-slate-400">
                     No budget items yet. Add your first item or import from Excel.
                   </td>
                 </tr>
               ) : (
                 filteredItems.map((item) => {
-                  const isIncome = item.item_type === 'income' || item.category === 'Income';
+                  const isIncome = item.item_type === 'income' || item.category?.includes('Fees') || item.category?.includes('Allocations') || item.category?.includes('Donations');
+                  const variance = (item.estimated || 0) - (item.actual || 0);
+                  const isOverBudget = !isIncome && variance < 0;
+                  const isUnderBudget = !isIncome && variance > 0 && item.actual > 0;
+                  
                   return (
-                    <tr key={item.id} className={`hover:bg-slate-50 ${isIncome ? 'bg-emerald-50/30' : ''}`} data-testid={`budget-row-${item.id}`}>
+                    <tr key={item.id} className={`hover:bg-slate-50 ${isIncome ? 'bg-emerald-50/30' : ''} ${item.payment_status === 'paid' ? 'opacity-75' : ''}`} data-testid={`budget-row-${item.id}`}>
                       <td>
                         <div className="flex items-center gap-2">
                           {isIncome && <TrendingUp className="w-3 h-3 text-emerald-600" />}
                           <span className="text-xs uppercase tracking-wide text-slate-500">{item.category}</span>
                         </div>
                       </td>
-                      <td className="font-medium">{item.item_name}</td>
-                      <td className="text-sm text-slate-500">{item.vendor || '-'}</td>
-                      <td className="text-right font-mono">{formatCurrency(item.estimated)}</td>
-                      <td className={`text-right font-mono font-medium ${isIncome ? 'text-emerald-600' : ''}`}>
-                        {formatCurrency(item.actual)}
+                      <td className="font-medium">
+                        {item.item_name}
+                        {item.payment_date && (
+                          <span className="block text-xs text-slate-400">Paid: {item.payment_date}</span>
+                        )}
                       </td>
+                      <td className="text-sm text-slate-500">{item.vendor || '-'}</td>
+                      <td className="text-right font-mono text-slate-600">{formatCurrency(item.estimated)}</td>
+                      
+                      {/* Inline editable actual value */}
+                      <td className="text-right">
+                        {editingActual === item.id ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editingActualValue}
+                              onChange={(e) => setEditingActualValue(e.target.value)}
+                              className="w-24 h-7 text-right font-mono text-sm rounded-sm"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveActual(item.id);
+                                if (e.key === 'Escape') handleCancelEditActual();
+                              }}
+                            />
+                            <button onClick={() => handleSaveActual(item.id)} className="text-emerald-600 hover:text-emerald-700">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={handleCancelEditActual} className="text-slate-400 hover:text-slate-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleStartEditActual(item)}
+                            className={`font-mono font-medium hover:underline cursor-pointer ${isIncome ? 'text-emerald-600' : 'text-slate-900'}`}
+                            title="Click to edit"
+                          >
+                            {formatCurrency(item.actual)}
+                          </button>
+                        )}
+                      </td>
+                      
+                      {/* Variance column */}
+                      <td className="text-center">
+                        {item.actual > 0 || item.estimated > 0 ? (
+                          <span className={`text-xs font-mono px-2 py-0.5 rounded ${
+                            isIncome 
+                              ? (item.actual >= item.estimated ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')
+                              : isOverBudget 
+                                ? 'bg-red-100 text-red-700' 
+                                : isUnderBudget 
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {isIncome 
+                              ? (item.actual >= item.estimated ? 'Collected' : `${Math.round((item.actual / item.estimated) * 100)}%`)
+                              : variance === 0 
+                                ? 'On Budget'
+                                : `${variance > 0 ? '+' : ''}${formatCurrency(variance)}`
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-300">-</span>
+                        )}
+                      </td>
+                      
                       <td className="text-center">
                         {item.receipt_url ? (
                           <div className="flex items-center justify-center gap-1">
@@ -1060,6 +1125,19 @@ const BudgetPage = () => {
                       </td>
                       <td className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {/* Quick Mark as Paid button */}
+                          {item.payment_status !== 'paid' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMarkPaid(item.id)}
+                              className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              title="Mark as paid"
+                              data-testid={`mark-paid-${item.id}`}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
