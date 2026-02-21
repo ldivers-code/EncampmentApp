@@ -265,6 +265,8 @@ async def register(user_data: UserCreate):
         "name": user_data.name,
         "role": assigned_role,
         "capid": user_data.capid,
+        "squadron": user_data.squadron,
+        "flight": user_data.flight,
         "password_hash": hash_password(user_data.password),
         "created_at": now
     }
@@ -280,6 +282,8 @@ async def register(user_data: UserCreate):
             name=user_data.name,
             role=assigned_role,
             capid=user_data.capid,
+            squadron=user_data.squadron,
+            flight=user_data.flight,
             created_at=now
         )
     )
@@ -300,6 +304,8 @@ async def login(credentials: UserLogin):
             name=user["name"],
             role=user["role"],
             capid=user.get("capid"),
+            squadron=user.get("squadron"),
+            flight=user.get("flight"),
             created_at=user["created_at"]
         )
     )
@@ -312,6 +318,8 @@ async def get_me(user: dict = Depends(get_current_user)):
         name=user["name"],
         role=user["role"],
         capid=user.get("capid"),
+        squadron=user.get("squadron"),
+        flight=user.get("flight"),
         created_at=user["created_at"]
     )
 
