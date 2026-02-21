@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
@@ -17,6 +17,10 @@ import bcrypt
 import pandas as pd
 from io import BytesIO
 
+# SendGrid Email
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -33,6 +37,10 @@ JWT_EXPIRATION_HOURS = 24
 # VAPID Keys for Push Notifications (these should be in .env for production)
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', 'UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls')
+
+# SendGrid Configuration
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDGRID_SENDER_EMAIL = os.environ.get('SENDGRID_SENDER_EMAIL', 'noreply@cap-encampment.org')
 
 # Create the main app
 app = FastAPI(title="CAP Encampment Roster API")
