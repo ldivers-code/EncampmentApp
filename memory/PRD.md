@@ -45,14 +45,18 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Estimated Expenses
   - Budget Left
 - **Food Expense Planner**: 
-  - Editable cost per person per day
-  - Total participants (from roster or manual)
+  - Editable cost per person per day ($13.15 default from TNWG Budget)
+  - Total participants (170 default: 42 SM + 38 Cadre + 90 Students)
   - Total days (default 8 for July 17-24)
   - Live calculated total food budget
 - **Receipt Upload**:
   - Upload images/PDFs to budget items
   - Preview receipts in modal
   - Delete receipts
+- **TNWG Budget Template**:
+  - 40 pre-configured budget items from 2026 TNWG Encampment Budget
+  - Categories: Participant Fees, NHQ Allocations, Donations, Facility, DFAC Budget, Graduation, Commandants, Deputy Commander, Advanced Training School, Public Affairs, Logistics, Health Services, T-Shirts, Refunds
+  - "TNWG Template" button to seed budget (only shows when budget is empty)
 - **Enhanced Budget Table**:
   - Income/Expense type indicator
   - Vendor column
