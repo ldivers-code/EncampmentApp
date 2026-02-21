@@ -783,8 +783,6 @@ async def get_pending_payments(user: dict = Depends(get_current_user)):
     }
 
 
-from fastapi.responses import StreamingResponse
-
 @api_router.get("/participants/analytics/export")
 async def export_analytics(
     format: str = "csv",
