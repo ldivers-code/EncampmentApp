@@ -36,8 +36,35 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Profile photo upload**
 - [x] **User approval workflow for new accounts**
 - [x] **Link users to roster participants by CAPID**
+- [x] **Expanded role system (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre)**
+- [x] **Updated unit structure (Staff, Support/Exec/Ops Cadre, Squadrons 1-3)**
+- [x] **Granular permissions system (12 access types per user)**
+- [x] **Admin inline permissions editor**
+- [x] **SendGrid email notifications for account approval**
 
 ## What's Been Implemented
+
+### Feb 21, 2026 - Roles, Units & Granular Permissions System
+- **Expanded Role System** (6 roles):
+  - **Commander**: Full access to all features
+  - **Finance**: Budget view/edit, analytics
+  - **Plans & Programs**: Schedule/admin, roster edit
+  - **Executive Cadre**: View-only with analytics
+  - **Staff**: Roster/schedule edit, no budget
+  - **Cadre**: View-only permissions
+- **Updated Unit Structure**:
+  - Staff, Support Cadre, Exec Cadre, Ops Cadre
+  - Squadron 1 (Alpha, Bravo), Squadron 2 (Charlie, Delta), Squadron 3 (Echo, Foxtrot)
+- **Granular Permissions System** (12 access types):
+  - Dashboard, Roster (View/Edit), Schedule (View/Edit), Budget (View/Edit)
+  - Analytics, Org Chart, Handbooks, Documents, Admin Panel
+- **Admin Permissions Editor**:
+  - Inline checkbox editor for each user
+  - "Save Permissions" and "Reset to Role Defaults" buttons
+  - Role-based default permissions automatically assigned at registration
+- **Email Notifications** (SendGrid integration):
+  - Approval email sent when user account is approved
+  - HTML email with CAP branding
 
 ### Feb 21, 2026 - Member Profiles & User Approval System
 - **Profile Page** (`/profile`): New page with 4 editable sections:
