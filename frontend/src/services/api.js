@@ -156,6 +156,25 @@ export const updateBudgetItem = async (id, data) => {
   return response.data;
 };
 
+// Quick update for actual value only
+export const updateBudgetActual = async (id, actual, paymentStatus = null) => {
+  const data = { actual };
+  if (paymentStatus) {
+    data.payment_status = paymentStatus;
+    if (paymentStatus === 'paid') {
+      data.payment_date = new Date().toISOString().split('T')[0];
+    }
+  }
+  const response = await axios.patch(`${API}/budget/${id}/actual`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Mark item as paid (sets actual = estimated if no actual, and status = paid)
+export const markBudgetItemPaid = async (id) => {
+  const response = await axios.post(`${API}/budget/${id}/mark-paid`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const deleteBudgetItem = async (id) => {
   const response = await axios.delete(`${API}/budget/${id}`, { headers: getAuthHeaders() });
   return response.data;
