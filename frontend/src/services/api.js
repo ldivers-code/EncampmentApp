@@ -196,6 +196,12 @@ export const deleteReceipt = async (itemId) => {
   return response.data;
 };
 
+// Seed TNWG Budget Template
+export const seedTNWGBudgetTemplate = async () => {
+  const response = await axios.post(`${API}/budget/seed-tnwg-template`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Documents
 export const getDocuments = async () => {
   const response = await axios.get(`${API}/documents`, { headers: getAuthHeaders() });
