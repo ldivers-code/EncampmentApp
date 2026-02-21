@@ -153,6 +153,41 @@ class DocumentResponse(DocumentBase):
     created_at: str
     updated_at: str
 
+
+# ================= ORG CHART MODELS =================
+
+class OrgChartRoleBase(BaseModel):
+    role_id: str  # Unique identifier for the role position
+    title: str  # Role title (e.g., "Encampment Commander")
+    summary: Optional[str] = None  # Short description
+    responsibilities: Optional[str] = None  # Markdown/rich text for responsibilities
+    reports_to: Optional[str] = None  # role_id of supervisor
+    level: int = 0  # Hierarchy level (0 = top)
+    order: int = 0  # Display order within level
+    assigned_participant_id: Optional[str] = None  # ID of assigned participant
+
+class OrgChartRoleCreate(OrgChartRoleBase):
+    pass
+
+class OrgChartRoleUpdate(BaseModel):
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    responsibilities: Optional[str] = None
+    reports_to: Optional[str] = None
+    level: Optional[int] = None
+    order: Optional[int] = None
+    assigned_participant_id: Optional[str] = None
+
+class OrgChartRoleResponse(OrgChartRoleBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    assigned_member_name: Optional[str] = None  # Populated from participant lookup
+    assigned_member_rank: Optional[str] = None
+    direct_subordinates: List[str] = []  # List of role_ids
+    created_at: str
+    updated_at: str
+
+
 # ================= AUTH HELPERS =================
 
 def hash_password(password: str) -> str:
