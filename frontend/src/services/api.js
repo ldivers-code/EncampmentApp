@@ -146,3 +146,44 @@ export const deleteUser = async (userId) => {
   const response = await axios.delete(`${API}/users/${userId}`, { headers: getAuthHeaders() });
   return response.data;
 };
+
+// Org Chart
+export const getOrgChartRoles = async () => {
+  const response = await axios.get(`${API}/org-chart/roles`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getOrgChartRole = async (roleId) => {
+  const response = await axios.get(`${API}/org-chart/roles/${roleId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createOrgChartRole = async (data) => {
+  const response = await axios.post(`${API}/org-chart/roles`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateOrgChartRole = async (roleId, data) => {
+  const response = await axios.put(`${API}/org-chart/roles/${roleId}`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const assignOrgChartRole = async (roleId, participantId) => {
+  const response = await axios.put(
+    `${API}/org-chart/roles/${roleId}/assign${participantId ? `?participant_id=${participantId}` : ''}`, 
+    {}, 
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const deleteOrgChartRole = async (roleId) => {
+  const response = await axios.delete(`${API}/org-chart/roles/${roleId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const seedDefaultOrgChart = async () => {
+  const response = await axios.post(`${API}/org-chart/seed-defaults`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
