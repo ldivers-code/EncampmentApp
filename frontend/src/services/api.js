@@ -170,6 +170,32 @@ export const importBudget = async (file) => {
   return response.data;
 };
 
+// Food Expense Settings
+export const getFoodExpenseSettings = async () => {
+  const response = await axios.get(`${API}/budget/food-settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateFoodExpenseSettings = async (data) => {
+  const response = await axios.put(`${API}/budget/food-settings`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Receipt Upload
+export const uploadReceipt = async (itemId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/budget/${itemId}/receipt`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const deleteReceipt = async (itemId) => {
+  const response = await axios.delete(`${API}/budget/${itemId}/receipt`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Documents
 export const getDocuments = async () => {
   const response = await axios.get(`${API}/documents`, { headers: getAuthHeaders() });
