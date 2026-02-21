@@ -779,9 +779,10 @@ async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDE
 @api_router.post("/users/{user_id}/approve")
 async def approve_user(
     user_id: str,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(require_role([UserRole.COMMANDER]))
 ):
-    """Approve a user account"""
+    """Approve a user account and send email notification"""
     target_user = await db.users.find_one({"id": user_id})
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -796,8 +797,68 @@ async def approve_user(
         }}
     )
     
+    # Send approval email in background
+    app_url = os.environ.get('APP_URL', 'https://attendance-pulse-12.preview.emergentagent.com')
+    background_tasks.add_task(
+        send_approval_email,
+        target_user.get('email'),
+        target_user.get('name', 'Member'),
+        app_url
+    )
+    
     updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    return {"message": "User approved successfully", "user": updated_user}
+    return {"message": "User approved successfully", "user": updated_user, "email_sent": True}
+
+
+@api_router.put("/users/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: str,
+    permissions: AccessPermissions,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Update a user's granular permissions"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "permissions": permissions.model_dump(),
+            "permissions_updated_at": now,
+            "permissions_updated_by": user["id"]
+        }}
+    )
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return {"message": "Permissions updated successfully", "user": updated_user}
+
+
+@api_router.post("/users/{user_id}/reset-permissions")
+async def reset_user_permissions(
+    user_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Reset a user's permissions to role defaults"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    default_perms = get_default_permissions(target_user.get('role', UserRole.CADRE))
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "permissions": default_perms,
+            "permissions_updated_at": now,
+            "permissions_updated_by": user["id"]
+        }}
+    )
+    
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return {"message": "Permissions reset to role defaults", "user": updated_user}
 
 
 @api_router.post("/users/{user_id}/link-participant")
