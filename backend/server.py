@@ -1372,6 +1372,67 @@ async def seed_tnwg_budget_template(
     }
 
 
+# ================= QUICK UPDATE ENDPOINTS =================
+
+class QuickActualUpdate(BaseModel):
+    actual: float
+    payment_status: Optional[str] = None
+    payment_date: Optional[str] = None
+
+
+@api_router.patch("/budget/{item_id}/actual")
+async def quick_update_actual(
+    item_id: str,
+    data: QuickActualUpdate,
+    user: dict = Depends(require_finance_access())
+):
+    """Quick update for actual value - for live budget tracking"""
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    update_data = {
+        "actual": data.actual,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if data.payment_status:
+        update_data["payment_status"] = data.payment_status
+    if data.payment_date:
+        update_data["payment_date"] = data.payment_date
+    
+    await db.budget.update_one({"id": item_id}, {"$set": update_data})
+    
+    updated_item = await db.budget.find_one({"id": item_id}, {"_id": 0})
+    return BudgetItemResponse(**updated_item)
+
+
+@api_router.post("/budget/{item_id}/mark-paid")
+async def mark_budget_item_paid(
+    item_id: str,
+    user: dict = Depends(require_finance_access())
+):
+    """Mark a budget item as paid - sets actual=estimated if no actual, status=paid"""
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    # If no actual value set, use estimated
+    actual = item.get("actual", 0) or item.get("estimated", 0)
+    
+    update_data = {
+        "actual": actual,
+        "payment_status": "paid",
+        "payment_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.budget.update_one({"id": item_id}, {"$set": update_data})
+    
+    updated_item = await db.budget.find_one({"id": item_id}, {"_id": 0})
+    return BudgetItemResponse(**updated_item)
+
+
 # Receipt upload helper
 import base64
 
