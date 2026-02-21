@@ -109,7 +109,8 @@ class ScheduleEventBase(BaseModel):
     start_time: str
     end_time: str
     location: Optional[str] = None
-    event_type: str = "general"  # general, training, ceremony, meal, recreation
+    event_type: str = "general"  # general, training, ceremony, meal, recreation, pt, admin, leadership, academics
+    squadron: Optional[str] = None  # sq1, sq2, sq3, staff, or None for all
 
 class ScheduleEventCreate(ScheduleEventBase):
     pass
@@ -117,8 +118,15 @@ class ScheduleEventCreate(ScheduleEventBase):
 class ScheduleEventResponse(ScheduleEventBase):
     model_config = ConfigDict(extra="ignore")
     id: str
+    is_published: bool = False
     created_at: str
     updated_at: str
+
+# Schedule Settings for draft/publish status
+class ScheduleSettings(BaseModel):
+    is_published: bool = False
+    last_published_at: Optional[str] = None
+    last_modified_at: Optional[str] = None
 
 class BudgetItemBase(BaseModel):
     category: str
