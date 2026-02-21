@@ -1113,6 +1113,210 @@ async def create_budget_item(
     doc.pop("_id", None)
     return BudgetItemResponse(**doc)
 
+
+@api_router.get("/budget/summary")
+async def get_budget_summary(user: dict = Depends(require_finance_access())):
+    """Get budget summary - restricted to Commander and Finance roles"""
+    items = await db.budget.find({}, {"_id": 0}).to_list(1000)
+    
+    total_estimated = sum(i.get("estimated", 0) for i in items)
+    total_actual = sum(i.get("actual", 0) for i in items)
+    
+    # Group by category
+    categories = {}
+    for item in items:
+        cat = item.get("category", "General")
+        if cat not in categories:
+            categories[cat] = {"estimated": 0, "actual": 0}
+        categories[cat]["estimated"] += item.get("estimated", 0)
+        categories[cat]["actual"] += item.get("actual", 0)
+    
+    return {
+        "total_estimated": total_estimated,
+        "total_actual": total_actual,
+        "variance": total_estimated - total_actual,
+        "by_category": categories
+    }
+
+
+@api_router.get("/budget/food-settings")
+async def get_food_expense_settings(user: dict = Depends(require_finance_access())):
+    """Get food expense settings for cost-per-person-per-day calculation"""
+    settings = await db.food_expense_settings.find_one({"_id": "settings"})
+    
+    # Get participant count from roster
+    participant_count = await db.participants.count_documents({})
+    
+    if not settings:
+        return {
+            "cost_per_person_per_day": 15.0,
+            "total_participants": participant_count,
+            "total_days": 8,
+            "notes": "Default: July 17-24 (8 days)",
+            "total_food_budget": 15.0 * participant_count * 8
+        }
+    
+    cost = settings.get("cost_per_person_per_day", 15.0)
+    participants = settings.get("total_participants") or participant_count
+    days = settings.get("total_days", 8)
+    
+    return {
+        "cost_per_person_per_day": cost,
+        "total_participants": participants,
+        "total_days": days,
+        "notes": settings.get("notes", ""),
+        "total_food_budget": cost * participants * days
+    }
+
+
+@api_router.put("/budget/food-settings")
+async def update_food_expense_settings(
+    data: FoodExpenseSettingsUpdate,
+    user: dict = Depends(require_finance_access())
+):
+    """Update food expense settings"""
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.food_expense_settings.update_one(
+        {"_id": "settings"},
+        {"$set": update_data},
+        upsert=True
+    )
+    
+    # Fetch and return updated settings
+    settings = await db.food_expense_settings.find_one({"_id": "settings"})
+    participant_count = await db.participants.count_documents({})
+    
+    cost = settings.get("cost_per_person_per_day", 15.0)
+    participants = settings.get("total_participants") or participant_count
+    days = settings.get("total_days", 8)
+    
+    return {
+        "cost_per_person_per_day": cost,
+        "total_participants": participants,
+        "total_days": days,
+        "notes": settings.get("notes", ""),
+        "total_food_budget": cost * participants * days
+    }
+
+
+@api_router.post("/budget/import")
+async def import_budget(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_finance_access())
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        
+        imported_count = 0
+        now = datetime.now(timezone.utc).isoformat()
+        
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            item_name = str(row_dict.get('item_name', row_dict.get('item', ''))).strip()
+            if not item_name or item_name == 'nan':
+                continue
+            
+            item_id = str(uuid.uuid4())
+            
+            doc = {
+                "id": item_id,
+                "category": str(row_dict.get('category', 'General')).strip() if pd.notna(row_dict.get('category')) else 'General',
+                "subcategory": str(row_dict.get('subcategory', '')).strip() if pd.notna(row_dict.get('subcategory')) else None,
+                "item_name": item_name,
+                "estimated": float(row_dict.get('estimated', 0)) if pd.notna(row_dict.get('estimated')) else 0.0,
+                "actual": float(row_dict.get('actual', 0)) if pd.notna(row_dict.get('actual')) else 0.0,
+                "notes": str(row_dict.get('notes', '')).strip() if pd.notna(row_dict.get('notes')) else None,
+                "created_at": now,
+                "updated_at": now
+            }
+            
+            await db.budget.insert_one(doc)
+            imported_count += 1
+        
+        return {"message": f"Successfully imported {imported_count} budget items"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+# Receipt upload helper
+import base64
+
+@api_router.post("/budget/{item_id}/receipt")
+async def upload_receipt(
+    item_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_finance_access())
+):
+    """Upload a receipt image for a budget item"""
+    # Verify budget item exists
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    # Check file type
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf']
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid file type. Allowed: JPEG, PNG, GIF, PDF"
+        )
+    
+    # Read file and encode as base64
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed.")
+    
+    # Store receipt as base64 data URL
+    b64_content = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{b64_content}"
+    
+    # Update budget item with receipt
+    await db.budget.update_one(
+        {"id": item_id},
+        {"$set": {
+            "receipt_url": data_url,
+            "receipt_filename": file.filename,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": "Receipt uploaded successfully",
+        "filename": file.filename,
+        "item_id": item_id
+    }
+
+
+@api_router.delete("/budget/{item_id}/receipt")
+async def delete_receipt(
+    item_id: str,
+    user: dict = Depends(require_finance_access())
+):
+    """Delete a receipt from a budget item"""
+    item = await db.budget.find_one({"id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Budget item not found")
+    
+    await db.budget.update_one(
+        {"id": item_id},
+        {"$set": {
+            "receipt_url": None,
+            "receipt_filename": None,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Receipt deleted successfully"}
+
+
 @api_router.put("/budget/{item_id}", response_model=BudgetItemResponse)
 async def update_budget_item(
     item_id: str,
