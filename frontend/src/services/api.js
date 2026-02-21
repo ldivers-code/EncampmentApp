@@ -54,6 +54,11 @@ export const getParticipantStats = async () => {
   return response.data;
 };
 
+export const syncRosterToBudget = async () => {
+  const response = await axios.post(`${API}/participants/sync-to-budget`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Push Notifications
 export const getVapidKey = async () => {
   const response = await axios.get(`${API}/notifications/vapid-key`);
