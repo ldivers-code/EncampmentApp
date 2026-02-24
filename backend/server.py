@@ -1256,13 +1256,17 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
             analytics['by_role']['seniors']['avg_age'] = round(sum(ages) / len(ages), 1)
     del analytics['by_role']['seniors']['ages']
     
-    # Calculate age statistics
-    all_ages = analytics['age_stats']['total']['ages']
-    if all_ages:
-        analytics['age_stats']['total']['avg'] = round(sum(all_ages) / len(all_ages), 1)
-        analytics['age_stats']['total']['min'] = min(all_ages)
-        analytics['age_stats']['total']['max'] = max(all_ages)
+    # Calculate age statistics - CADETS ONLY
+    cadet_ages = analytics['age_stats']['total']['ages']
+    if cadet_ages:
+        analytics['age_stats']['total']['avg'] = round(sum(cadet_ages) / len(cadet_ages), 1)
+        analytics['age_stats']['total']['min'] = min(cadet_ages)
+        analytics['age_stats']['total']['max'] = max(cadet_ages)
+        analytics['age_stats']['total']['count'] = len(cadet_ages)
     del analytics['age_stats']['total']['ages']
+    # Remove the temp tracking field if it exists
+    if 'cadets_only' in analytics['age_stats']:
+        del analytics['age_stats']['cadets_only']
     
     # Squadron averages
     for sq, ages in analytics['age_stats']['by_squadron'].items():
