@@ -45,8 +45,24 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Schedule filter dropdown for all users**
 - [x] **Individual Awards Tracking System**
 - [x] **My Flight Page with Flight Roster and Documents**
+- [x] **Active Users / Who's Online Feature**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - Active Users / Who's Online
+- **Real-time Presence System** with heartbeat tracking:
+  - Heartbeat sent every 30 seconds while app is open
+  - Users considered "active" if heartbeat within last 60 seconds
+  - Automatic offline marking when tab closes or user logs out
+- **Sidebar Indicator**: Shows "X online now" with green pulse animation
+- **Dashboard Widget**: "Who's Online" card showing:
+  - Active user count with green indicator
+  - List of online users with name, role, and avatar
+  - Green status dot for each active user
+- **Backend Endpoints**:
+  - `POST /api/presence/heartbeat` - Update user's active timestamp
+  - `GET /api/presence/active-users` - Get list of currently active users
+  - `POST /api/presence/offline` - Mark user as offline
 
 ### Feb 24, 2026 - My Flight Page (Flight Roster & Documents)
 - **My Flight Page** (`/my-flight`) with two main tabs:
