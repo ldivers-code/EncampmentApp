@@ -190,6 +190,33 @@ const AdminPage = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetPasswordModal) return;
+    
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    setResettingPassword(true);
+    try {
+      await adminResetPassword(resetPasswordModal.id, newPassword);
+      toast.success(`Password reset for ${resetPasswordModal.name}`);
+      setResetPasswordModal(null);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reset password');
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const handleRoleChange = async (userId, newRole) => {
     try {
       await updateUserRole(userId, newRole);
