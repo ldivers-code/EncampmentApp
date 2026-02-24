@@ -24,6 +24,30 @@ export const goOffline = async () => {
   return response.data;
 };
 
+// Password Reset
+export const forgotPassword = async (email, capid) => {
+  const params = new URLSearchParams({ email, capid });
+  const response = await axios.post(`${API}/auth/forgot-password?${params}`);
+  return response.data;
+};
+
+export const verifyResetToken = async (token) => {
+  const response = await axios.post(`${API}/auth/verify-reset-token?token=${token}`);
+  return response.data;
+};
+
+export const resetPassword = async (token, newPassword) => {
+  const params = new URLSearchParams({ token, new_password: newPassword });
+  const response = await axios.post(`${API}/auth/reset-password?${params}`);
+  return response.data;
+};
+
+export const adminResetPassword = async (userId, newPassword) => {
+  const params = new URLSearchParams({ new_password: newPassword });
+  const response = await axios.post(`${API}/users/${userId}/reset-password?${params}`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Dashboard Stats
 export const getDashboardStats = async () => {
   const response = await axios.get(`${API}/stats/dashboard`, { headers: getAuthHeaders() });
