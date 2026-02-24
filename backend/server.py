@@ -438,9 +438,14 @@ class BudgetItemResponse(BudgetItemBase):
 class DocumentBase(BaseModel):
     title: str
     description: Optional[str] = None
-    doc_type: str  # handbook, official_document, form
+    doc_type: str  # handbook, official_document, form, tlp, pocket_class
+    category: Optional[str] = None  # Custom category for organization
     content: Optional[str] = None
     file_url: Optional[str] = None
+    # Flight/Squadron scope
+    flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot, or None for all
+    squadron: Optional[str] = None  # sq1, sq2, sq3, or None for all
+    scope: str = "global"  # global, squadron, flight
 
 class DocumentCreate(DocumentBase):
     pass
@@ -450,6 +455,9 @@ class DocumentResponse(DocumentBase):
     id: str
     created_at: str
     updated_at: str
+    uploaded_by: Optional[str] = None
+    version: int = 1
+    version_history: Optional[List[Dict[str, Any]]] = None
 
 
 # ================= ORG CHART MODELS =================
