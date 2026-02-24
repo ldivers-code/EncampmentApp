@@ -1248,14 +1248,12 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
         # Remove raw ages list from response
         del analytics['by_role'][role]['ages']
     
-    # Also calculate for seniors
+    # Also calculate gender stats for seniors (but NOT age stats)
     if analytics['by_role']['seniors']['count'] > 0:
         total = analytics['by_role']['seniors']['count']
         analytics['by_role']['seniors']['male_pct'] = round(analytics['by_role']['seniors']['male'] / total * 100, 1)
         analytics['by_role']['seniors']['female_pct'] = round(analytics['by_role']['seniors']['female'] / total * 100, 1)
-        ages = analytics['by_role']['seniors']['ages']
-        if ages:
-            analytics['by_role']['seniors']['avg_age'] = round(sum(ages) / len(ages), 1)
+    # Remove seniors ages - we don't track/display senior age stats
     del analytics['by_role']['seniors']['ages']
     
     # Calculate age statistics - CADETS ONLY
