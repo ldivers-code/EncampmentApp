@@ -16,7 +16,8 @@ import {
   Network,
   Bell,
   BarChart3,
-  UserCircle
+  UserCircle,
+  Trophy
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -31,6 +32,7 @@ const Sidebar = ({ children }) => {
     { path: '/roster', icon: Users, label: 'Roster' },
     { path: '/org-chart', icon: Network, label: 'Org Chart' },
     { path: '/schedule', icon: Calendar, label: 'Schedule' },
+    { path: '/points', icon: Trophy, label: 'Point Tracking' },
     { path: '/budget', icon: DollarSign, label: 'Financial Tracker' },
     { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
     { path: '/documents', icon: FileText, label: 'Official Documents' },
