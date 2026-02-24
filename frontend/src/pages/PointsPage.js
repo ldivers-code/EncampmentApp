@@ -480,11 +480,18 @@ const PointsPage = () => {
                           <SelectValue placeholder="Select participant" />
                         </SelectTrigger>
                         <SelectContent>
-                          {participants.map(p => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.rank} {p.first_name} {p.last_name}
-                            </SelectItem>
-                          ))}
+                          {participants
+                            .filter(p => {
+                              // Full access users can score any participant
+                              if (hasFullAccess()) return true;
+                              // Others can only score participants in their assigned flights
+                              return flights.some(f => f.value === p.flight?.toLowerCase());
+                            })
+                            .map(p => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.rank} {p.first_name} {p.last_name} {p.flight ? `(${p.flight})` : ''}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
