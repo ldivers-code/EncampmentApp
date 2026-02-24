@@ -8,12 +8,22 @@ import {
   TrendingUp, 
   TrendingDown,
   UserCheck,
-  UserX
+  UserX,
+  Radio
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+const ROLE_LABELS = {
+  commander: 'Commander',
+  finance: 'Finance',
+  plans_programs: 'Plans & Programs',
+  exec_cadre: 'Executive Cadre',
+  staff: 'Staff',
+  cadre: 'Cadre'
+};
+
 const DashboardPage = () => {
-  const { user } = useAuth();
+  const { user, activeUsers } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
