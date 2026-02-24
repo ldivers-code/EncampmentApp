@@ -360,8 +360,8 @@ const PointsPage = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flight">Flight</SelectItem>
-                          <SelectItem value="squadron">Squadron</SelectItem>
+                          {flights.length > 0 && <SelectItem value="flight">Flight</SelectItem>}
+                          {squadrons.length > 0 && <SelectItem value="squadron">Squadron</SelectItem>}
                           <SelectItem value="individual">Individual</SelectItem>
                         </SelectContent>
                       </Select>
@@ -382,11 +382,18 @@ const PointsPage = () => {
                           {scoreForm.target_type === 'squadron' && squadrons.map(s => (
                             <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                           ))}
-                          {scoreForm.target_type === 'individual' && participants.map(p => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.rank} {p.first_name} {p.last_name}
-                            </SelectItem>
-                          ))}
+                          {scoreForm.target_type === 'individual' && participants
+                            .filter(p => {
+                              // Full access users can score any participant
+                              if (hasFullAccess()) return true;
+                              // Others can only score participants in their assigned flights
+                              return flights.some(f => f.value === p.flight?.toLowerCase());
+                            })
+                            .map(p => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.rank} {p.first_name} {p.last_name} {p.flight ? `(${p.flight})` : ''}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
