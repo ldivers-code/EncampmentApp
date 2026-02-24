@@ -1510,6 +1510,62 @@ async def delete_participant(
         raise HTTPException(status_code=404, detail="Participant not found")
     return {"message": "Participant deleted successfully"}
 
+
+@api_router.post("/participants/{participant_id}/remove")
+async def remove_participant_from_encampment(
+    participant_id: str,
+    removal_data: ParticipantRemoval,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+):
+    """Mark a participant as removed from encampment (soft delete) with reason"""
+    participant = await db.participants.find_one({"id": participant_id})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.participants.update_one(
+        {"id": participant_id},
+        {"$set": {
+            "is_removed": True,
+            "removed_at": now,
+            "removed_by": user.get("name", user.get("email")),
+            "removal_reason": removal_data.removal_reason,
+            "updated_at": now
+        }}
+    )
+    
+    updated = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    return {"message": "Participant removed from encampment", "participant": updated}
+
+
+@api_router.post("/participants/{participant_id}/reinstate")
+async def reinstate_participant(
+    participant_id: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+):
+    """Reinstate a previously removed participant"""
+    participant = await db.participants.find_one({"id": participant_id})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.participants.update_one(
+        {"id": participant_id},
+        {"$set": {
+            "is_removed": False,
+            "removed_at": None,
+            "removed_by": None,
+            "removal_reason": None,
+            "updated_at": now
+        }}
+    )
+    
+    updated = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    return {"message": "Participant reinstated", "participant": updated}
+
+
 @api_router.post("/participants/import")
 async def import_participants(
     file: UploadFile = File(...),
