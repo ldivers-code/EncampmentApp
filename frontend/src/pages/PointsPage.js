@@ -190,9 +190,9 @@ const PointsPage = () => {
     
     try {
       const targetName = scoreForm.target_type === 'flight' 
-        ? flights.find(f => f.value === scoreForm.target_id)?.label
+        ? allFlights.find(f => f.value === scoreForm.target_id)?.label
         : scoreForm.target_type === 'squadron'
-        ? squadrons.find(s => s.value === scoreForm.target_id)?.label
+        ? allSquadrons.find(s => s.value === scoreForm.target_id)?.label
         : participants.find(p => p.id === scoreForm.target_id)?.first_name + ' ' + participants.find(p => p.id === scoreForm.target_id)?.last_name;
       
       await recordScore({
