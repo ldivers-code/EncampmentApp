@@ -306,9 +306,18 @@ const PointsPage = () => {
               Point Tracking
             </h1>
             <p className="text-slate-500 text-sm">Track scores, awards, and standings</p>
+            {canEnterScores() && (
+              <p className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
+                hasFullAccess() 
+                  ? 'bg-emerald-100 text-emerald-700' 
+                  : 'bg-blue-100 text-blue-700'
+              }`}>
+                {getPermissionLabel()}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {canEnterScores() && (
             <>
               <Dialog open={isScoreModalOpen} onOpenChange={setIsScoreModalOpen}>
