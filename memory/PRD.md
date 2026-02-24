@@ -46,8 +46,29 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Individual Awards Tracking System**
 - [x] **My Flight Page with Flight Roster and Documents**
 - [x] **Active Users / Who's Online Feature**
+- [x] **Password Reset (Self-Service & Admin)**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - Password Reset Feature
+- **Self-Service Password Reset** (`/forgot-password`):
+  - User enters email and CAPID for identity verification
+  - Reset link sent via email (when SendGrid configured)
+  - Token valid for 24 hours
+  - Security: Same response message whether user exists or not (no info leakage)
+- **Admin Password Reset** (Admin Panel > All Users):
+  - Key icon button for each user
+  - Modal with password + confirm password inputs
+  - Minimum 6 character validation
+- **Reset Password Page** (`/reset-password?token=xxx`):
+  - Token verification on page load
+  - Shows error for invalid/expired tokens
+  - Password + confirm password form
+  - Success message with redirect to login
+- **Security Features**:
+  - CAPID verification prevents unauthorized reset requests
+  - Tokens invalidated after use
+  - 24-hour token expiry
 
 ### Feb 24, 2026 - Active Users / Who's Online
 - **Real-time Presence System** with heartbeat tracking:
