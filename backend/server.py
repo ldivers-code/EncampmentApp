@@ -1189,9 +1189,12 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
                 if age:
                     analytics['by_role']['students']['ages'].append(age)
         
-        # Age tracking for averages
+        # Age tracking for averages - CADETS ONLY (exclude senior members)
         if age:
-            analytics['age_stats']['total']['ages'].append(age)
+            # Only include cadets (not senior members) in total age stats
+            is_cadet = member_type != 'SENIOR'
+            if is_cadet:
+                analytics['age_stats']['total']['ages'].append(age)
             
             if squadron and squadron != 'Unassigned':
                 if squadron not in analytics['age_stats']['by_squadron']:
