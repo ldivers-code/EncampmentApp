@@ -200,7 +200,7 @@ const AnalyticsPage = () => {
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Seniors</p>
                   <p className="text-3xl font-bold text-[#00205B]">{analytics.by_role.seniors.count}</p>
-                  <p className="text-xs text-slate-400 mt-1">Avg age: {analytics.by_role.seniors.avg_age || 'N/A'}</p>
+                  <p className="text-xs text-slate-400 mt-1">Senior Members</p>
                 </div>
                 <UserCheck className="w-8 h-8 text-[#00205B]/20" />
               </div>
