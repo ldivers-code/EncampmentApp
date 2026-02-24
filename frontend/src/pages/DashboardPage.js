@@ -263,26 +263,70 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      {/* Schedule Info */}
-      <div className="bg-white border border-slate-200 rounded-sm">
-        <div className="border-b border-slate-100 p-4">
-          <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Schedule Overview
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-8 h-8 text-[#00205B]" />
-              <div>
-                <p className="text-2xl font-bold text-[#00205B] font-mono">{stats?.schedule?.total_events || 0}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Total Events</p>
-              </div>
+      {/* Active Users & Schedule Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Active Users Widget */}
+        <div className="bg-white border border-slate-200 rounded-sm" data-testid="active-users-widget">
+          <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+            <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              Who's Online
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-sm font-bold text-emerald-600">{activeUsers.count}</span>
             </div>
-            <div className="w-px h-12 bg-slate-200"></div>
-            <div>
-              <p className="text-2xl font-bold text-emerald-600 font-mono">{stats?.schedule?.upcoming_events || 0}</p>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Upcoming Events</p>
+          </div>
+          <div className="p-4 max-h-[280px] overflow-y-auto">
+            {activeUsers.users.length === 0 ? (
+              <div className="text-center text-slate-400 py-4">
+                <Radio className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No other users online</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeUsers.users.map((u) => (
+                  <div 
+                    key={u.id} 
+                    className="flex items-center gap-3 p-2 rounded-sm hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full bg-[#00205B] text-white flex items-center justify-center text-sm font-bold">
+                        {u.name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{u.name}</p>
+                      <p className="text-xs text-slate-500 capitalize">{ROLE_LABELS[u.role] || u.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Schedule Info */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-sm">
+          <div className="border-b border-slate-100 p-4">
+            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              Schedule Overview
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-8 h-8 text-[#00205B]" />
+                <div>
+                  <p className="text-2xl font-bold text-[#00205B] font-mono">{stats?.schedule?.total_events || 0}</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Total Events</p>
+                </div>
+              </div>
+              <div className="w-px h-12 bg-slate-200"></div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-600 font-mono">{stats?.schedule?.upcoming_events || 0}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Upcoming Events</p>
+              </div>
             </div>
           </div>
         </div>
