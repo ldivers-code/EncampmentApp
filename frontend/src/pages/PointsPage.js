@@ -268,7 +268,21 @@ const PointsPage = () => {
 
   const canEnterScores = () => {
     const allowedRoles = ['commander', 'staff', 'plans_programs', 'exec_cadre'];
-    return allowedRoles.includes(user?.role);
+    if (!allowedRoles.includes(user?.role)) return false;
+    // Full access roles can always enter scores
+    if (hasFullAccess()) return true;
+    // Other roles need a flight assignment to enter scores
+    return flights.length > 0;
+  };
+
+  const getPermissionLabel = () => {
+    if (hasFullAccess()) {
+      return 'Full Access - All Flights';
+    }
+    if (flights.length > 0) {
+      return `Assigned: ${flights.map(f => f.label).join(', ')}`;
+    }
+    return 'No flight assigned';
   };
 
   if (loading) {
