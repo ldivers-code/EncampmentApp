@@ -301,6 +301,9 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `org_chart_roles` - Org chart positions
 - `documents` - Handbooks and official docs
 - `push_subscriptions` - Push notification subscriptions
+- `score_categories` - Point tracking score categories
+- `score_entries` - Individual score records
+- `merit_demerit_entries` - Merit and demerit records
 
 ### Unit Structure
 ```
