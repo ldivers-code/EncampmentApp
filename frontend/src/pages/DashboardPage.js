@@ -207,26 +207,45 @@ const DashboardPage = () => {
           </div>
           <div className="p-4">
             {genderData.some(d => d.value > 0) ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={genderData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {genderData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex items-center justify-center gap-8">
+                <ResponsiveContainer width={200} height={200}>
+                  <PieChart>
+                    <Pie
+                      data={genderData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={80}
+                      dataKey="value"
+                      paddingAngle={2}
+                    >
+                      {genderData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Legend beside the chart */}
+                <div className="space-y-3">
+                  {genderData.map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-3">
+                      <div 
+                        className="w-4 h-4 rounded-sm" 
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <div>
+                        <p className="font-medium text-slate-700">{entry.name}</p>
+                        <p className="text-sm text-slate-500">
+                          {entry.value} ({((entry.value / genderData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0) || 0}%)
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
-              <div className="h-[250px] flex items-center justify-center text-slate-400">
+              <div className="h-[200px] flex items-center justify-center text-slate-400">
                 No gender data available
               </div>
             )}
