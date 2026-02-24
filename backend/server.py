@@ -366,6 +366,66 @@ class FoodExpenseSettingsUpdate(BaseModel):
     total_days: Optional[int] = None
     notes: Optional[str] = None
 
+
+# ================= POINT TRACKING MODELS =================
+
+class ScoreCategoryBase(BaseModel):
+    name: str  # e.g., "Barracks Inspection", "Drill Competition"
+    category_type: str  # "flight", "squadron", "individual_cadet", "individual_cadre"
+    max_points: float = 100.0
+    description: Optional[str] = None
+    is_active: bool = True
+
+class ScoreCategoryCreate(ScoreCategoryBase):
+    pass
+
+class ScoreCategoryResponse(ScoreCategoryBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    created_at: str
+
+class ScoreEntryBase(BaseModel):
+    category_id: str
+    target_type: str  # "flight", "squadron", "individual"
+    target_id: str  # flight name, squadron name, or participant id
+    target_name: Optional[str] = None  # Display name
+    points: float
+    date: str  # YYYY-MM-DD
+    notes: Optional[str] = None
+
+class ScoreEntryCreate(ScoreEntryBase):
+    pass
+
+class ScoreEntryResponse(ScoreEntryBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    category_name: Optional[str] = None
+    entered_by: Optional[str] = None
+    created_at: str
+
+class MeritDemeritEntry(BaseModel):
+    participant_id: str
+    participant_name: Optional[str] = None
+    entry_type: str  # "merit" or "demerit"
+    points: float
+    reason: str
+    date: str  # YYYY-MM-DD
+
+class MeritDemeritResponse(MeritDemeritEntry):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    entered_by: Optional[str] = None
+    created_at: str
+
+class DailyAward(BaseModel):
+    award_type: str  # "flight_of_day", "squadron_of_day", "cadet_of_day", "cadre_of_day"
+    date: str  # YYYY-MM-DD
+    winner_id: str
+    winner_name: str
+    total_points: float
+    notes: Optional[str] = None
+
+
 class BudgetItemCreate(BudgetItemBase):
     pass
 
