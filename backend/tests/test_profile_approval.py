@@ -12,7 +12,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://attendance-pulse-12.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://encampment-command.preview.emergentagent.com')
 
 # Test credentials
 COMMANDER_EMAIL = "ldivers@cap.gov"

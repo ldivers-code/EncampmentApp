@@ -1,177 +1,200 @@
 <analysis>**original_problem_statement**: The user wants to build an interactive roster and management application for a Civil Air Patrol (CAP) encampment.
 
 **PRODUCT REQUIREMENTS**:
--   An interactive roster with Excel import functionality.
--   Role-based access control (Commander, Staff, Cadet, and now Finance) to restrict editing and viewing capabilities.
--   Pages for Handbooks, Schedule, Official Documents, and a Financial Tracker.
--   The schedule must be populated by importing from an Excel template, with dates corrected to **July 17th-24th**.
--   The schedule should support real-time updates, flight-specific views, and a mobile-friendly interface with swipe gestures.
--   A publish feature for the schedule, so admins can make edits that are not visible until explicitly published.
--   Push notifications for schedule updates.
--   An encampment organizational chart with clickable nodes and role details.
--   Adherence to specific CAP branding using provided logos and patches.
--   An enhanced financial tracker with summary metrics, receipt scanning/upload, and access restricted to Commander and a new Finance role.
+*   An interactive roster with advanced Excel import functionality for CAP Event Admin Reports.
+*   Role-based access control (Commander, Finance, Plans and Programs, Executive Cadre, Staff, Cadre).
+*   A live Financial Tracker that auto-syncs with the roster.
+*   An Analytics Dashboard to display detailed metrics about attendees.
+*   Pages for Handbooks, Schedule, and Official Documents.
+*   A dynamic schedule populated via Excel import, with real-time updates and flight-specific views.
+*   Push notifications for schedule updates.
+*   An encampment organizational chart.
+*   A user profile system where members can manage their own information, pending admin approval.
+*   Granular, per-user permissions to control access to specific application features.
+*   A point tracking system for flights, squadrons, and individuals to manage awards.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application using React (frontend) and FastAPI/MongoDB (backend).
--   **Authentication**: JWT-based auth with Commander, Staff, and Cadet roles. The first registered user is the Commander.
--   **Roster**: Page to display, add, and import participants from Excel.
--   **Schedule**: A comprehensive, multi-faceted schedule page. It features a day-by-day grid for desktop and a compact, swipe-able list for mobile. It supports real-time updates, filtering by a user's assigned flight/squadron, and a publish/unpublish system. Dates are correctly set for July 17-24.
--   **Org Chart**: A hierarchical chart with an editable side panel for role details.
--   **Admin Page**: A dashboard for user management, including assigning users to roles, squadrons, and flights. It also includes a panel for managing push notifications.
--   **Dashboard**: A landing page displaying encampment branding (banner and patches).
--   **Push Notifications**: A system using a service worker and  to notify users of schedule updates. Users can toggle notifications.
--   **Branding**: The UI incorporates the user-provided Tennessee Wing patch, encampment patch, and header banner.
+A comprehensive full-stack application for managing a CAP encampment.
+*   **Backend**: A monolithic FastAPI server () handling all business logic.
+*   **Frontend**: A React application with role-based views, using Tailwind CSS and Shadcn UI components.
+*   **Authentication & Permissions**: A JWT-based system with roles (Commander, Finance, etc.) and a granular, per-user permission system managed by Commanders. New users register as Staff or Cadre and await approval.
+*   **Roster Management**: A page displaying participants, with a smart import feature, clickable rows for detailed modals, and a feature to remove participants from the encampment.
+*   **Financial Tracker**: A dashboard for tracking budget items, syncing income from the roster, and managing expenses.
+*   **Analytics Dashboard**: A page displaying detailed metrics on attendees (demographics, age, rank, location).
+*   **User Profiles**: A system for users to register and await approval. Admins can manage users and approve pending accounts.
+*   **Email Notifications**: SendGrid integration to notify users upon account approval.
 
 **Last working item**:
--   **Last item agent was working**: The agent began implementing the user's request for an enhanced financial tracker. The user wants better metrics, receipt upload/scanning capabilities, and a new Finance role with access to this page alongside the Commander. The agent had just started the backend implementation by adding the Finance role to the user model and role enum.
--   **Status**: IN PROGRESS
--   **Agent Testing Done**: N
--   **Which testing method agent to use?**: both
--   **User Testing Done**: N
+*   **Last item agent was working**: Implementing a new point tracking system for encampment awards. The user wants to track points for flights, squadrons, and individuals (e.g., Cadet of the Day) based on objective metrics.
+*   **Status**: IN PROGRESS
+*   **Agent Testing Done**: N
+*   **Which testing method agent to use?**: both
+*   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1 (P0)**: Implement the enhanced Financial Tracker.
+*   **Issue 1 (P0)**: Complete the Point Tracking System.
+*   **Issue 2 (P1)**: Complete the Schedule Filtering feature for all users.
+*   **Issue 3 (P2)**: Fix latent CSS issue with header action buttons being cut off.
 
 **Issues Detail**:
--   **Issue 1**:
-    -   **Description**: The current financial tracker is basic. It needs to be overhauled to include:
-        1.  A new Finance role that, along with Commander, has exclusive access.
-        2.  An easy-to-see balance/income metrics dashboard.
-        3.  The ability to upload/scan receipts and associate them with budget items.
-    -   **Attempted fixes**: The agent added a Finance role to the  enum in .
-    -   **Next debug checklist**:
-        1.  Finish backend changes:
-            -   Create a new API endpoint for uploading receipt files (e.g., ).
-            -   Modify the  model to include a  field.
-            -   Secure all financial endpoints () to only allow access for Commander and Finance roles.
-            -   Update the Admin page to allow Commanders to assign the new Finance role to users.
-        2.  Implement frontend changes on :
-            -   Design and build the summary metrics dashboard (Income, Expenses, Balance).
-            -   Update the Add Item form to include a file input for receipt uploads.
-            -   Implement the logic to call the upload endpoint and store the returned receipt URL.
-            -   Display uploaded receipts (e.g., as a clickable link or thumbnail).
-        3.  Refactor the page's access control to check for either Commander or Finance roles.
-    -   **Why fix this issue and what will be achieved with the fix?**: This will deliver a key user requirement for a more robust and secure way to manage the encampment's budget.
-    -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on other issue**: None.
+*   **Issue 1: Complete Point Tracking System**
+    *   **Description**: The user requested a comprehensive system to award and track points for flights, squadrons, and individuals to determine awards like Flight of the Day.
+    *   **Attempted fixes**: The agent has created the backend models (, , ) and API endpoints () in . It has also created the frontend API service functions in  and the main page file . The UI itself is a bare skeleton.
+    *   **Next debug checklist**:
+        1.  **Frontend ()**:
+            *   Build the UI for managing point categories (CRUD operations).
+            *   Create the interface for authorized users to award points to individuals or groups.
+            *   Develop the leaderboard dashboard to display current rankings for flights, squadrons, and individuals.
+            *   Implement the UI for managing Honor Awards (e.g., Cadet/Cadre of the Day).
+        2.  **Routing**: Add a route for  in  and a navigation link in .
+        3.  **Testing**: Thoroughly test the entire feature from point creation to leaderboard display.
+    *   **Why fix this issue and what will be achieved with the fix?**: This will provide a key motivational and management tool for the encampment staff.
+    *   **Status**: IN PROGRESS
+    *   **Is recurring issue?**: N
+    *   **Should Test frontend/backend/both after fix?**: both
+    *   **Blocked on other issue**: None.
+
+*   **Issue 2: Complete Schedule Filtering feature**
+    *   **Description**: The user wants all members to be able to filter the schedule to see events for any specific flight or unit, not just their own.
+    *   **Attempted fixes**: The agent started modifying  to add a filter dropdown for all users but was interrupted by another user request. The file is in a partially modified state.
+    *   **Next debug checklist**:
+        1.  Review the changes made to .
+        2.  Complete the implementation of the filter dropdown, ensuring it's visible to all users.
+        3.  Update the event filtering logic to use the state from the new dropdown.
+        4.  Verify that the All Events view still works correctly.
+    *   **Why fix this issue and what will be achieved with the fix?**: Increases the utility of the schedule page for all participants.
+    *   **Status**: IN PROGRESS
+    *   **Is recurring issue?**: N
+    *   **Should Test frontend/backend/both after fix?**: frontend
+    *   **Blocked on other issue**: None.
+
+*   **Issue 3: Latent CSS issue with header buttons**
+    *   **Description**: A previously noted UI bug where header action buttons could be cut off or clipped on certain pages or screen sizes.
+    *   **Attempted fixes**: None. This issue has been consistently overlooked.
+    *   **Next debug checklist**:
+        1.  Inspect header CSS for , , or layout properties that could cause clipping.
+        2.  Test on various pages (Roster, Budget, Analytics) and at different screen widths.
+    *   **Why fix this issue and what will be achieved with the fix?**: Ensures all UI controls are fully visible and accessible.
+    *   **Status**: NOT STARTED
+    *   **Is recurring issue?**: Y
+    *   **Should Test frontend/backend/both after fix?**: frontend
+    *   **Blocked on other issue**: None.
 
 **In progress Task List**:
--   **Task 1: Enhanced Financial Tracker**
-    -   **Where to resume**: Continue building the backend logic in . The Finance role has been added to the enum; next steps are to protect the API routes and add the file upload endpoint.
-    -   **What will be achieved with this?**: A complete, secure, and functional budget management tool with receipt tracking.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on something**: None.
+*   **Task 1: Implement Point Tracking System UI**
+    *   **Where to resume**: . The agent needs to build the full UI for leaderboards, point awarding, and category management.
+    *   **What will be achieved with this?**: A functional point tracking page that meets all user requirements.
+    *   **Status**: IN PROGRESS
+    *   **Should Test frontend/backend/both after fix?**: both
+    *   **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks**:
-    -   **P1: Implement Handbooks and Documents Pages**: The navigation links exist, but functionality to upload, list, and view documents (e.g., PDFs) is needed.
--   **Future Tasks**:
-    -   **P2: Add Rich Text Support to Org Chart**: Implement a rich text or Markdown editor for the Responsibilities section in the org chart's role details panel.
-    -   **P2: Integrate Receipt Scanning (OCR)**: As a follow-up to the receipt upload feature, use an OCR service to automatically extract data (vendor, total amount) from scanned receipts to pre-fill the budget item form.
+*   **Upcoming Tasks**:
+    *   **P1: Implement Handbooks and Documents Pages**: Create functionality to upload, list, and view documents (like PDFs) on these placeholder pages.
+*   **Future Tasks**:
+    *   **P2: Add Rich Text Support to Org Chart**: Integrate a rich text or Markdown editor for the Responsibilities field in the org chart details.
+    *   **P2: Integrate Receipt Scanning (OCR)**: Enhance the receipt upload feature by using an OCR service to automatically extract data.
 
 **Completed work in this session**
--   **Schedule Import**: Implemented backend endpoint and frontend button to import events from an Excel file, correctly mapping dates to July 17-24.
--   **Schedule Publish System**: Added a  flag to events and Publish/Unpublish buttons for admins, ensuring changes are not live until ready.
--   **Real-Time Schedule Sync**: Implemented a versioning system for the schedule, allowing the frontend to auto-refresh when changes are made.
--   **Flight-Specific Schedules**: Updated models and APIs to filter the schedule based on a user's assigned squadron/flight.
--   **User Unit Assignment**: Enhanced the Admin page to allow Commanders to assign roles, squadrons, and flights to users.
--   **Mobile-Optimized Schedule**: Created a responsive, mobile-first view for the schedule page with a compact layout and swipe gestures for navigation.
--   **Application Branding**: Integrated user-provided images (patches, banner) into the sidebar and dashboard.
--   **Push Notifications**: Built a full push notification system for schedule updates, including backend logic (), a service worker, and frontend UI toggles.
+*   **Analytics Dashboard & Export**: Completed the dashboard with various metrics and added an export feature (CSV/Excel).
+*   **Member Profiles & Approval System**: Implemented user profiles, role selection on registration, and an admin approval workflow.
+*   **Role, Unit & Permissions System**: Restructured user roles and units, and built a granular, per-user permission system with a UI for commanders to manage access.
+*   **Email Notifications**: Integrated SendGrid for sending email notifications on account approval.
+*   **Roster Enhancements**: Added clickable roster rows to view a detailed participant modal and a Remove from Encampment feature.
+*   **Bug Fixes**:
+    *   Fixed overlapping labels on the dashboard's pie chart.
+    *   Corrected age statistics to focus only on cadets.
+    *   Fixed a bug preventing the Exec Cadre unit from being assigned correctly.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1**:
-    -   **Description**: In the initial handoff, it was noted that action buttons (e.g., Add Event) were partially cut off in the header on some pages. While recent screenshots look correct, this was never explicitly investigated or fixed and could be a latent CSS issue.
-    -   **Debug checklist**: Inspect header and button container CSS for , , or  properties that might cause clipping on certain screen sizes or pages.
-    -   **Why to solve this issue and what will be achieved with this?**: Ensures all UI controls are fully visible and accessible across the application.
-    -   **Should Test frontend/backend/both after fix**: frontend
-    -   **Is recurring issue?**: Y
+*   **Issue 1**: A latent CSS issue where header action buttons could be cut off on certain pages or screen sizes was noted in a previous handoff but has not been explicitly investigated or fixed.
+    *   **Debug checklist**: Inspect header CSS for , , or layout properties that could cause clipping.
+    *   **Why to solve this issue and what will be achieved with this?**: Ensures all UI controls are fully accessible.
+    *   **Should Test frontend/backend/both after fix**: frontend
+    *   **Is recurring issue?**: Y
 
 **Known issue recurrence from previous fork**
--   None.
+*   None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend**: React, , Tailwind CSS, Shadcn UI, Axios, Service Workers.
--   **Backend**: FastAPI (Python), MongoDB (), Pydantic, JWT.
--   **Data Processing**: , .
--   **Push Notifications**: Web Push Protocol,  library.
+*   **Frontend**: React, , Tailwind CSS, Shadcn UI, Axios, .
+*   **Backend**: FastAPI (Python), MongoDB (), Pydantic, JWT.
+*   **Data Processing**: , .
+*   **Email**: SendGrid.
 
 **key DB schema**
--   **users**: 
--   **roster_participants**: 
--   **schedule_events**: 
--   **financial_items**: 
--   **org_chart_nodes**: 
--   **push_subscriptions**: 
+*   **users**: 
+*   **roster_participants**: 
+*   **point_categories**: 
+*   **point_entries**: 
+*   **honor_awards**: 
 
 **changes in tech stack**
--   New backend dependencies:  for push notifications.
+*   Added **SendGrid** for email notifications.
 
 **All files of reference**
--   : The monolithic backend file, containing all new logic for schedule versioning, unit assignment, and push notifications.
--   : Contains the complex logic for the responsive desktop/mobile schedule views, real-time sync, and filtering.
--   : Contains the UI for assigning users to squadrons and flights.
--   : Updated with the encampment banner.
--   : Updated with the new branding logos.
--   : The new service worker for handling push notifications.
--   : New component to manage notification subscription.
--   : The target for the next phase of development.
+*   : The single source of all backend logic. Contains all new endpoints and models.
+*   : New, skeleton file for the point tracking system.
+*   : Heavily updated with tabs for user approval and a new table for managing roles, units, and permissions.
+*   : Updated with participant detail modal, removal modal, and associated logic.
+*   : Partially modified for the new filtering feature; needs completion.
+*   : Contains all new API functions.
 
 **Areas that need refactoring**:
--   The  file is now extremely large and complex. It urgently needs to be broken down into a standard FastAPI project structure (e.g., separate directories for , , ).
--   The frontend  could be split by resource to improve organization.
+*   The  file is now critically large and urgently needs to be broken down into a standard FastAPI project structure (e.g., separate directories for , , ).
+*   The  and  components have also grown very complex and would benefit from being broken down into smaller, more manageable sub-components.
 
 **key api endpoints**
--   Auth: , , 
--   Roster: , 
--   Schedule: , , , 
--   Financials: 
--   Org Chart: 
--   Users: , 
--   Push Notifications: , 
+*   **Points (New)**: , , ,  (All CRUD endpoints).
+*   **Users/Permissions**: , .
+*   **Roster**: .
+*   **Analytics**: .
 
 **Critical Info for New Agent**
--   A new Finance role needs to be fully integrated. This includes restricting access to the financials page and allowing Commanders to assign this role on the Admin page.
--   The next task is a major overhaul of the Financial Tracker page. Refer to the  section for the detailed checklist.
--   The backend is a large monolith in . Be careful when making changes to avoid breaking unrelated functionality.
+*   The immediate priority is to complete the **Point Tracking System** UI in .
+*   The second priority is to resume and finish the **Schedule Filtering** feature in , which was left incomplete.
+*   The backend  file is a massive monolith. Exercise extreme caution when modifying it. Refactoring it should be proposed to the user as a necessary future task.
+*   The  file contains a placeholder for . The user needs to provide a real key for email notifications to work.
 
 **documents and test reports created in this job**
--   
--   
--   
+*   
+*   
+*    (updated multiple times)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  ** (IN PROGRESS)**: User requested an enhanced budget tracker with metrics, receipt scanning, and a new Finance role.
-2.  ** (COMPLETED)**: User requested push notifications and provided new branding assets.
-3.  ** (COMPLETED)**: User approved the plan to create a mobile-friendly schedule view.
-4.  ** (COMPLETED)**: User confirmed requirements for real-time sync and flight-specific schedules.
-5.  ** (COMPLETED)**: User clarified implementation details for flight-specific schedules.
-6.  ** (COMPLETED)**: User provided the schedule file, requested a publish feature, and approved the initial plan.
+1.  ** (IN PROGRESS)**: User requested a comprehensive point tracking system.
+2.  ** (IN PROGRESS)**: User confirmed detailed requirements for the point tracking system.
+3.  ** (COMPLETED)**: User requested clickable roster rows, a detail modal, and a remove from encampment feature.
+4.  ** (COMPLETED)**: User requested to further refine age statistics to completely exclude Senior Member data from calculations.
+5.  ** (COMPLETED)**: User requested a fix to the analytics page to show average age for cadets only.
+6.  ** (COMPLETED)**: User provided a screenshot of an overlapping pie chart and asked for a fix.
+7.  ** (IN PROGRESS)**: User requested a universal schedule filter. (Work on this was started but not completed).
+8.  ** (COMPLETED)**: User reported a bug with unit assignments for a specific role.
+9.  ** (COMPLETED)**: User approved adding email notifications and requested significant changes to roles and units.
+10. ** (COMPLETED)**: User requested the member profile and approval system.
 
 **Project Health Check:**
--   **Broken**: The Financial Tracker is mid-overhaul and does not meet current requirements.
--   **Mocked**: The Handbooks and Documents pages are still placeholders with no functionality.
+*   **Broken**: The Point Tracking feature is non-functional. The Schedule page filtering is partially implemented and likely broken.
+*   **Mocked**: The Handbooks and Documents pages remain placeholders with no backend functionality.
 
 **3rd Party Integrations**
--   : Used for sending web push notifications from the backend.
+*   : For web push notifications.
+*   : For email notifications (requires user API key).
 
 **Testing status**
--   **Testing agent used after significant changes**: YES
--   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None.
--   **Known regressions**: None.
+*   **Testing agent used after significant changes**: YES. The testing agent was used multiple times to verify large features like the profile system and permissions.
+*   **Troubleshoot agent used after agent stuck in loop**: NO.
+*   **Test files created**:  (created and updated by the testing agent).
+*   **Known regressions**: None.
 
 **Credentials to test flow:**
--   Register the first user to automatically become Commander. This role is needed to test admin features, such as assigning roles (including the new Finance role) and managing the schedule.
+*   Register the first user on the application to be automatically assigned the Commander role. Subsequent users will require approval from this Commander account.
 
 **What agent forgot to execute**
--   The agent has not explicitly addressed a previously noted UI bug where header buttons were cut off. While not visible in recent screenshots, it may still exist under certain conditions and should be verified.</analysis>
+*   The agent started but did not complete the task to **allow all members to be able to filter to see any specific schedule**. This was interrupted and needs to be resumed.
+*   The agent has consistently overlooked the previously noted UI bug where **header buttons were cut off.** This is a minor but persistent issue that has not been directly investigated or resolved.</analysis>

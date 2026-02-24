@@ -882,7 +882,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://attendance-pulse-12.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://encampment-command.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),
