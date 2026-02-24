@@ -315,6 +315,102 @@ const PointsPage = () => {
     }
   };
 
+  const handleAssignAward = async (e) => {
+    e.preventDefault();
+    if (!awardForm.award_type || !awardForm.recipient_id || !awardForm.date) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+    
+    try {
+      await createHonorAward(
+        awardForm.award_type,
+        awardForm.recipient_id,
+        awardForm.date,
+        awardForm.notes
+      );
+      toast.success('Award assigned successfully');
+      setIsAwardModalOpen(false);
+      setAwardForm({
+        award_type: '',
+        recipient_id: '',
+        date: new Date().toISOString().split('T')[0],
+        notes: ''
+      });
+      loadAllAwards();
+      loadDateAwards();
+      loadRecipientsSummary();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to assign award');
+    }
+  };
+
+  const handleAutoAssignAwards = async () => {
+    try {
+      const result = await autoAssignDailyAwards(selectedDate);
+      if (result.awards.length > 0) {
+        toast.success(`Assigned ${result.awards.length} awards for ${selectedDate}`);
+        loadDateAwards();
+        loadAllAwards();
+        loadRecipientsSummary();
+      } else {
+        toast.info('No participants with points found for auto-assign');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to auto-assign awards');
+    }
+  };
+
+  const handleDeleteAward = async (awardId) => {
+    if (!confirm('Are you sure you want to delete this award?')) return;
+    
+    try {
+      await deleteHonorAward(awardId);
+      toast.success('Award deleted');
+      loadAllAwards();
+      loadDateAwards();
+      loadRecipientsSummary();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete award');
+    }
+  };
+
+  const getAwardIcon = (awardType) => {
+    const icons = {
+      'cadet_of_day': Star,
+      'cadre_of_day': Crown,
+      'flight_honor_graduate': Trophy,
+      'commandants_award': Medal,
+      'honor_cadet': Award,
+      'honor_cadre': Award,
+      'leadership_award': Shield,
+      'pt_excellence': Zap,
+      'academic_excellence': Target,
+      'drill_award': Users,
+      'spirit_award': Sparkles,
+      'most_improved': TrendingUp,
+    };
+    return icons[awardType] || Gift;
+  };
+
+  const getAwardColor = (awardType) => {
+    const colors = {
+      'cadet_of_day': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      'cadre_of_day': 'bg-purple-100 text-purple-700 border-purple-200',
+      'flight_honor_graduate': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      'commandants_award': 'bg-red-100 text-red-700 border-red-200',
+      'honor_cadet': 'bg-blue-100 text-blue-700 border-blue-200',
+      'honor_cadre': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      'leadership_award': 'bg-orange-100 text-orange-700 border-orange-200',
+      'pt_excellence': 'bg-green-100 text-green-700 border-green-200',
+      'academic_excellence': 'bg-teal-100 text-teal-700 border-teal-200',
+      'drill_award': 'bg-slate-100 text-slate-700 border-slate-200',
+      'spirit_award': 'bg-pink-100 text-pink-700 border-pink-200',
+      'most_improved': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    };
+    return colors[awardType] || 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
   const getRankColor = (rank) => {
     switch(rank) {
       case 1: return 'bg-yellow-400 text-yellow-900';
