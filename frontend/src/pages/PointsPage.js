@@ -153,13 +153,22 @@ const PointsPage = () => {
 
   useEffect(() => {
     loadData();
+    loadAwardTypes();
   }, []);
 
   useEffect(() => {
     if (selectedDate) {
       loadDailyWinners();
+      loadDateAwards();
     }
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (activeTab === 'awards') {
+      loadAllAwards();
+      loadRecipientsSummary();
+    }
+  }, [activeTab, awardFilterType, awardStartDate, awardEndDate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -180,6 +189,46 @@ const PointsPage = () => {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAwardTypes = async () => {
+    try {
+      const types = await getAwardTypes();
+      setAwardTypes(types);
+    } catch (error) {
+      console.error('Failed to load award types');
+    }
+  };
+
+  const loadAllAwards = async () => {
+    try {
+      const params = {};
+      if (awardFilterType !== 'all') params.award_type = awardFilterType;
+      if (awardStartDate) params.start_date = awardStartDate;
+      if (awardEndDate) params.end_date = awardEndDate;
+      const awards = await getHonorAwards(params);
+      setAllAwards(awards);
+    } catch (error) {
+      console.error('Failed to load awards');
+    }
+  };
+
+  const loadDateAwards = async () => {
+    try {
+      const awards = await getAwardsByDate(selectedDate);
+      setDateAwards(awards);
+    } catch (error) {
+      console.error('Failed to load date awards');
+    }
+  };
+
+  const loadRecipientsSummary = async () => {
+    try {
+      const summary = await getAwardRecipientsSummary();
+      setRecipientsSummary(summary);
+    } catch (error) {
+      console.error('Failed to load recipients summary');
     }
   };
 
