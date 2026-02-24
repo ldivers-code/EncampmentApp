@@ -787,37 +787,77 @@ const RosterPage = () => {
                         </span>
                       )}
                     </td>
-                    <td className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {p.unit_approved && <span className="text-[10px] px-1 bg-blue-100 text-blue-700 rounded">Unit</span>}
-                        {p.wing_approved && <span className="text-[10px] px-1 bg-emerald-100 text-emerald-700 rounded">Wing</span>}
-                        {!p.unit_approved && !p.wing_approved && <span className="text-slate-300">-</span>}
-                      </div>
-                    </td>
-                    {canEdit() && (
-                      <td className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(p)}
-                            className="h-8 w-8 p-0"
-                            data-testid={`edit-participant-${p.capid}`}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(p.id)}
-                            className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
-                            data-testid={`delete-participant-${p.capid}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                    {!showRemoved && (
+                      <td className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {p.unit_approved && <span className="text-[10px] px-1 bg-blue-100 text-blue-700 rounded">Unit</span>}
+                          {p.wing_approved && <span className="text-[10px] px-1 bg-emerald-100 text-emerald-700 rounded">Wing</span>}
+                          {!p.unit_approved && !p.wing_approved && <span className="text-slate-300">-</span>}
                         </div>
                       </td>
                     )}
+                    {showRemoved && (
+                      <td className="text-sm text-red-600 max-w-[200px] truncate">
+                        {p.removal_reason || '-'}
+                      </td>
+                    )}
+                    <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewParticipant(p);
+                          }}
+                          className="h-8 w-8 p-0 text-slate-500 hover:text-[#00205B]"
+                          data-testid={`view-participant-${p.capid}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {showRemoved ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReinstateParticipant(p);
+                            }}
+                            className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            data-testid={`reinstate-participant-${p.capid}`}
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </Button>
+                        ) : canEdit() && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(p);
+                              }}
+                              className="h-8 w-8 p-0"
+                              data-testid={`edit-participant-${p.capid}`}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(p.id);
+                              }}
+                              className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
+                              data-testid={`delete-participant-${p.capid}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
