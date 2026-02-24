@@ -897,6 +897,286 @@ const RosterPage = () => {
           </div>
         )}
       </div>
+
+      {/* Participant Detail Modal */}
+      <Dialog open={isDetailOpen} onOpenChange={(open) => {
+        setIsDetailOpen(open);
+        if (!open) setSelectedParticipant(null);
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedParticipant && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-[#00205B] text-white flex items-center justify-center text-lg font-bold">
+                    {selectedParticipant.first_name?.charAt(0)}{selectedParticipant.last_name?.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-[#00205B]">
+                      {selectedParticipant.rank} {selectedParticipant.first_name} {selectedParticipant.last_name}
+                    </p>
+                    <p className="text-sm text-slate-500 font-mono">CAPID: {selectedParticipant.capid}</p>
+                  </div>
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* Removal Warning */}
+              {selectedParticipant.is_removed && (
+                <div className="bg-red-50 border border-red-200 rounded-sm p-3 mb-4 flex items-start gap-2">
+                  <UserX className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-800">Removed from Encampment</p>
+                    <p className="text-sm text-red-600">{selectedParticipant.removal_reason}</p>
+                    <p className="text-xs text-red-500 mt-1">
+                      Removed by {selectedParticipant.removed_by} on {new Date(selectedParticipant.removed_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-6">
+                {/* Basic Info */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
+                    Basic Information
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Type:</span>
+                      <span className={`px-2 py-0.5 text-xs uppercase font-bold rounded-sm border ${getTypeBadgeColor(selectedParticipant.participant_type)}`}>
+                        {selectedParticipant.participant_type?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Member Type:</span>
+                      <span className="font-medium">{selectedParticipant.member_type || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Age:</span>
+                      <span className="font-medium">{selectedParticipant.age || selectedParticipant.age_at_event || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Gender:</span>
+                      <span className="font-medium">{selectedParticipant.gender === 'M' ? 'Male' : selectedParticipant.gender === 'F' ? 'Female' : selectedParticipant.gender || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">First Encampment:</span>
+                      <span className="font-medium">{selectedParticipant.first_encampment ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unit Info */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                    <Shield className="w-3 h-3" /> CAP Unit
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Unit:</span>
+                      <span className="font-mono font-medium">{selectedParticipant.unit || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Wing:</span>
+                      <span className="font-medium">{selectedParticipant.wing || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Region:</span>
+                      <span className="font-medium">{selectedParticipant.region || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Unit Approved:</span>
+                      <span className={selectedParticipant.unit_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.unit_approved ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Wing Approved:</span>
+                      <span className={selectedParticipant.wing_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.wing_approved ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Info */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                    <Phone className="w-3 h-3" /> Contact Information
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span>{selectedParticipant.email || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-slate-400" />
+                      <span>{selectedParticipant.phone || selectedParticipant.cell_phone || '-'}</span>
+                    </div>
+                    {selectedParticipant.cadet_parent_email && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <p className="text-xs text-slate-500 mb-1">Parent/Guardian:</p>
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-slate-400" />
+                          <span>{selectedParticipant.cadet_parent_email}</span>
+                        </div>
+                        {selectedParticipant.cadet_parent_phone && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Phone className="w-4 h-4 text-slate-400" />
+                            <span>{selectedParticipant.cadet_parent_phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payment Info */}
+                <div className="space-y-4">
+                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" /> Payment Status
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Paid:</span>
+                      <span className={selectedParticipant.paid || selectedParticipant.paid_in_full ? 'text-emerald-600 font-medium' : 'text-red-500'}>
+                        {selectedParticipant.paid || selectedParticipant.paid_in_full ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    {selectedParticipant.amount_paid > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Amount Paid:</span>
+                        <span className="font-mono font-medium text-emerald-600">${selectedParticipant.amount_paid}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Registration Status:</span>
+                      <span className="font-medium">{selectedParticipant.registration_status || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                {(selectedParticipant.address || selectedParticipant.city) && (
+                  <div className="col-span-2 space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> Address
+                    </h4>
+                    <p className="text-sm">
+                      {selectedParticipant.address && <span>{selectedParticipant.address}<br/></span>}
+                      {selectedParticipant.city && <span>{selectedParticipant.city}, </span>}
+                      {selectedParticipant.state && <span>{selectedParticipant.state} </span>}
+                      {selectedParticipant.zip_code && <span>{selectedParticipant.zip_code}</span>}
+                    </p>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {(selectedParticipant.notes || selectedParticipant.comments) && (
+                  <div className="col-span-2 space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
+                      Notes
+                    </h4>
+                    <p className="text-sm text-slate-600">{selectedParticipant.notes || selectedParticipant.comments}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200">
+                <div>
+                  {selectedParticipant.is_removed ? (
+                    <Button
+                      onClick={() => handleReinstateParticipant(selectedParticipant)}
+                      className="bg-emerald-600 hover:bg-emerald-700 rounded-sm"
+                      data-testid="reinstate-btn"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Reinstate Participant
+                    </Button>
+                  ) : canEdit() && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRemovalModalOpen(true)}
+                      className="border-red-300 text-red-600 hover:bg-red-50 rounded-sm"
+                      data-testid="remove-from-encampment-btn"
+                    >
+                      <UserX className="w-4 h-4 mr-2" />
+                      Remove from Encampment
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {canEdit() && !selectedParticipant.is_removed && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        handleEdit(selectedParticipant);
+                        setIsDetailOpen(false);
+                      }}
+                      className="rounded-sm"
+                    >
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDetailOpen(false)}
+                    className="rounded-sm"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Removal Reason Modal */}
+      <Dialog open={isRemovalModalOpen} onOpenChange={setIsRemovalModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#BF0D3E]">Remove from Encampment</DialogTitle>
+          </DialogHeader>
+          {selectedParticipant && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                You are about to remove <strong>{selectedParticipant.rank} {selectedParticipant.first_name} {selectedParticipant.last_name}</strong> from the encampment roster.
+              </p>
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Reason for Removal *</Label>
+                <Textarea
+                  value={removalReason}
+                  onChange={(e) => setRemovalReason(e.target.value)}
+                  placeholder="e.g., Left early due to family emergency, Medical issue, etc."
+                  className="mt-1 rounded-sm"
+                  rows={3}
+                  data-testid="removal-reason-input"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsRemovalModalOpen(false);
+                    setRemovalReason('');
+                  }}
+                  className="rounded-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRemoveParticipant}
+                  disabled={!removalReason.trim()}
+                  className="bg-[#BF0D3E] hover:bg-[#9a0a32] rounded-sm"
+                  data-testid="confirm-removal-btn"
+                >
+                  <UserX className="w-4 h-4 mr-2" />
+                  Remove Participant
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
