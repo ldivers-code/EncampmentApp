@@ -879,105 +879,362 @@ const PointsPage = () => {
         </div>
       )}
 
-      {/* Daily Awards Tab */}
-      {activeTab === 'daily' && (
+      {/* Awards Tab */}
+      {activeTab === 'awards' && (
         <div className="space-y-6">
-          {/* Date Selector */}
-          <div className="flex items-center gap-4">
-            <Label className="font-bold">Select Date:</Label>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-48 rounded-sm"
-            />
+          {/* Awards Header with Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Selector */}
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-slate-400" />
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-44 rounded-sm"
+                />
+              </div>
+              
+              {/* Filter by Award Type */}
+              <Select
+                value={awardFilterType}
+                onValueChange={(v) => setAwardFilterType(v)}
+              >
+                <SelectTrigger className="w-48 rounded-sm">
+                  <Filter className="w-4 h-4 mr-2 text-slate-400" />
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Award Types</SelectItem>
+                  {awardTypes.map(type => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex gap-2">
+              {canEnterScores() && (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleAutoAssignAwards}
+                    className="rounded-sm"
+                    data-testid="auto-assign-awards-btn"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Auto-Assign Daily
+                  </Button>
+                  
+                  <Dialog open={isAwardModalOpen} onOpenChange={setIsAwardModalOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="rounded-sm bg-[#00205B] hover:bg-[#001540]" data-testid="assign-award-btn">
+                        <Award className="w-4 h-4 mr-2" />
+                        Assign Award
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Assign Award</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleAssignAward} className="space-y-4">
+                        <div>
+                          <Label>Award Type *</Label>
+                          <Select
+                            value={awardForm.award_type}
+                            onValueChange={(v) => setAwardForm({...awardForm, award_type: v})}
+                          >
+                            <SelectTrigger className="mt-1 rounded-sm">
+                              <SelectValue placeholder="Select award type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {awardTypes.map(type => (
+                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Recipient *</Label>
+                          <Select
+                            value={awardForm.recipient_id}
+                            onValueChange={(v) => setAwardForm({...awardForm, recipient_id: v})}
+                          >
+                            <SelectTrigger className="mt-1 rounded-sm">
+                              <SelectValue placeholder="Select recipient" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {participants.map(p => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.rank} {p.first_name} {p.last_name} {p.flight ? `(${p.flight})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Date *</Label>
+                          <Input
+                            type="date"
+                            value={awardForm.date}
+                            onChange={(e) => setAwardForm({...awardForm, date: e.target.value})}
+                            className="mt-1 rounded-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label>Notes</Label>
+                          <Textarea
+                            value={awardForm.notes}
+                            onChange={(e) => setAwardForm({...awardForm, notes: e.target.value})}
+                            className="mt-1 rounded-sm"
+                            rows={2}
+                            placeholder="Optional notes about this award..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button type="button" variant="outline" onClick={() => setIsAwardModalOpen(false)}>Cancel</Button>
+                          <Button type="submit" className="bg-[#00205B]">Assign Award</Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Daily Winners */}
-          {dailyWinners && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Flight of the Day */}
-              <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Trophy className="w-5 h-5 text-yellow-600" />
-                  <h3 className="font-bold text-yellow-800 uppercase text-sm">Flight of the Day</h3>
-                </div>
-                {dailyWinners.flight_of_day ? (
-                  <div className="text-center">
-                    <p className={`text-2xl font-black uppercase ${getFlightColor(dailyWinners.flight_of_day.flight)}`}>
-                      {dailyWinners.flight_of_day.flight}
-                    </p>
-                    <p className="text-lg font-bold text-yellow-700 mt-1">
-                      {dailyWinners.flight_of_day.total_points.toFixed(0)} pts
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-center text-yellow-600 text-sm">No scores for this date</p>
-                )}
+          {/* Daily Winners Section */}
+          <div className="bg-white border border-slate-200 rounded-sm">
+            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-500" />
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
+                  Daily Winners - {selectedDate}
+                </h2>
               </div>
-
-              {/* Squadron of the Day */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-bold text-blue-800 uppercase text-sm">Squadron of the Day</h3>
-                </div>
-                {dailyWinners.squadron_of_day ? (
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-blue-700">
-                      {dailyWinners.squadron_of_day.squadron}
-                    </p>
-                    <p className="text-lg font-bold text-blue-600 mt-1">
-                      {dailyWinners.squadron_of_day.total_points.toFixed(0)} pts
-                    </p>
+            </div>
+            <div className="p-4">
+              {dailyWinners && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Flight of the Day */}
+                  <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Trophy className="w-5 h-5 text-yellow-600" />
+                      <h3 className="font-bold text-yellow-800 uppercase text-xs">Flight of Day</h3>
+                    </div>
+                    {dailyWinners.flight_of_day ? (
+                      <div className="text-center">
+                        <p className={`text-xl font-black uppercase ${getFlightColor(dailyWinners.flight_of_day.flight)}`}>
+                          {dailyWinners.flight_of_day.flight}
+                        </p>
+                        <p className="text-sm font-bold text-yellow-700 mt-1">
+                          {dailyWinners.flight_of_day.total_points.toFixed(0)} pts
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-center text-yellow-600 text-xs">No scores</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-center text-blue-600 text-sm">No scores for this date</p>
-                )}
+
+                  {/* Squadron of the Day */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-bold text-blue-800 uppercase text-xs">Squadron of Day</h3>
+                    </div>
+                    {dailyWinners.squadron_of_day ? (
+                      <div className="text-center">
+                        <p className="text-xl font-black text-blue-700">
+                          {dailyWinners.squadron_of_day.squadron}
+                        </p>
+                        <p className="text-sm font-bold text-blue-600 mt-1">
+                          {dailyWinners.squadron_of_day.total_points.toFixed(0)} pts
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-center text-blue-600 text-xs">No scores</p>
+                    )}
+                  </div>
+
+                  {/* Cadet of the Day */}
+                  <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Star className="w-5 h-5 text-emerald-600" />
+                      <h3 className="font-bold text-emerald-800 uppercase text-xs">Cadet of Day</h3>
+                    </div>
+                    {dailyWinners.cadet_of_day ? (
+                      <div className="text-center">
+                        <p className="text-sm font-black text-emerald-700 truncate">
+                          {dailyWinners.cadet_of_day.name}
+                        </p>
+                        <p className="text-xs text-emerald-600">{dailyWinners.cadet_of_day.flight}</p>
+                        <p className="text-sm font-bold text-emerald-600 mt-1">
+                          {dailyWinners.cadet_of_day.total_points.toFixed(0)} pts
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-center text-emerald-600 text-xs">No scores</p>
+                    )}
+                  </div>
+
+                  {/* Cadre of the Day */}
+                  <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 rounded-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Crown className="w-5 h-5 text-purple-600" />
+                      <h3 className="font-bold text-purple-800 uppercase text-xs">Cadre of Day</h3>
+                    </div>
+                    {dailyWinners.cadre_of_day ? (
+                      <div className="text-center">
+                        <p className="text-sm font-black text-purple-700 truncate">
+                          {dailyWinners.cadre_of_day.name}
+                        </p>
+                        <p className="text-sm font-bold text-purple-600 mt-1">
+                          {dailyWinners.cadre_of_day.total_points.toFixed(0)} pts
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-center text-purple-600 text-xs">No scores</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Assigned Awards for Selected Date */}
+          <div className="bg-white border border-slate-200 rounded-sm">
+            <div className="border-b border-slate-100 p-4 flex items-center gap-2">
+              <Award className="w-5 h-5 text-[#00205B]" />
+              <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
+                Assigned Awards - {selectedDate}
+              </h2>
+              <span className="ml-auto text-xs text-slate-400">{dateAwards.length} awards</span>
+            </div>
+            <div className="p-4">
+              {dateAwards.length === 0 ? (
+                <p className="text-center text-slate-400 py-6">No awards assigned for this date</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {dateAwards.map((award) => {
+                    const AwardIcon = getAwardIcon(award.award_type);
+                    return (
+                      <div 
+                        key={award.id} 
+                        className={`p-4 rounded-sm border ${getAwardColor(award.award_type)} relative group`}
+                      >
+                        {canEnterScores() && user?.role === 'commander' && (
+                          <button
+                            onClick={() => handleDeleteAward(award.id)}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/50 transition-opacity"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        )}
+                        <div className="flex items-start gap-3">
+                          <AwardIcon className="w-8 h-8 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm">{award.award_label}</p>
+                            <p className="font-medium truncate">{award.recipient_name}</p>
+                            {award.recipient_flight && (
+                              <p className="text-xs opacity-75">{award.recipient_flight} Flight</p>
+                            )}
+                            {award.notes && (
+                              <p className="text-xs mt-1 opacity-75 italic">{award.notes}</p>
+                            )}
+                            {award.is_auto_generated && (
+                              <span className="inline-flex items-center gap-1 text-[10px] mt-1 opacity-60">
+                                <Sparkles className="w-3 h-3" /> Auto-assigned
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* All Awards History */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Awards History List */}
+            <div className="bg-white border border-slate-200 rounded-sm">
+              <div className="border-b border-slate-100 p-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-[#00205B]" />
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">Awards History</h2>
+                <span className="ml-auto text-xs text-slate-400">{allAwards.length} total</span>
               </div>
-
-              {/* Cadet of the Day */}
-              <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Star className="w-5 h-5 text-emerald-600" />
-                  <h3 className="font-bold text-emerald-800 uppercase text-sm">Cadet of the Day</h3>
-                </div>
-                {dailyWinners.cadet_of_day ? (
-                  <div className="text-center">
-                    <p className="text-lg font-black text-emerald-700">
-                      {dailyWinners.cadet_of_day.name}
-                    </p>
-                    <p className="text-sm text-emerald-600">{dailyWinners.cadet_of_day.flight}</p>
-                    <p className="text-lg font-bold text-emerald-600 mt-1">
-                      {dailyWinners.cadet_of_day.total_points.toFixed(0)} pts
-                    </p>
-                  </div>
+              <div className="p-4 max-h-[400px] overflow-y-auto">
+                {allAwards.length === 0 ? (
+                  <p className="text-center text-slate-400 py-6">No awards found</p>
                 ) : (
-                  <p className="text-center text-emerald-600 text-sm">No scores for this date</p>
-                )}
-              </div>
-
-              {/* Cadre of the Day */}
-              <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 rounded-sm p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Crown className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-bold text-purple-800 uppercase text-sm">Cadre of the Day</h3>
-                </div>
-                {dailyWinners.cadre_of_day ? (
-                  <div className="text-center">
-                    <p className="text-lg font-black text-purple-700">
-                      {dailyWinners.cadre_of_day.name}
-                    </p>
-                    <p className="text-lg font-bold text-purple-600 mt-1">
-                      {dailyWinners.cadre_of_day.total_points.toFixed(0)} pts
-                    </p>
+                  <div className="space-y-2">
+                    {allAwards.map((award) => {
+                      const AwardIcon = getAwardIcon(award.award_type);
+                      return (
+                        <div 
+                          key={award.id} 
+                          className="flex items-center gap-3 p-3 bg-slate-50 rounded-sm hover:bg-slate-100 transition-colors"
+                        >
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getAwardColor(award.award_type)}`}>
+                            <AwardIcon className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{award.recipient_name}</p>
+                            <p className="text-xs text-slate-500">{award.award_label}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-[#00205B]">{award.date}</p>
+                            {award.recipient_flight && (
+                              <p className="text-[10px] text-slate-400">{award.recipient_flight}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <p className="text-center text-purple-600 text-sm">No scores for this date</p>
                 )}
               </div>
             </div>
-          )}
+
+            {/* Top Award Recipients */}
+            <div className="bg-white border border-slate-200 rounded-sm">
+              <div className="border-b border-slate-100 p-4 flex items-center gap-2">
+                <Medal className="w-5 h-5 text-yellow-500" />
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">Top Award Recipients</h2>
+              </div>
+              <div className="p-4 max-h-[400px] overflow-y-auto">
+                {recipientsSummary.length === 0 ? (
+                  <p className="text-center text-slate-400 py-6">No recipients yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recipientsSummary.slice(0, 10).map((recipient, idx) => (
+                      <div 
+                        key={recipient._id} 
+                        className="flex items-center gap-3 p-3 bg-slate-50 rounded-sm"
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getRankColor(idx + 1)}`}>
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{recipient.recipient_name}</p>
+                          <p className="text-xs text-slate-400">
+                            {recipient.recipient_flight ? `${recipient.recipient_flight} Flight` : 'Staff'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-[#00205B]">{recipient.total_awards}</p>
+                          <p className="text-[10px] text-slate-400">awards</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
