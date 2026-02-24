@@ -281,9 +281,17 @@ class ParticipantBase(BaseModel):
     religious_preference: Optional[str] = None
     comments: Optional[str] = None
     notes: Optional[str] = None
+    # Removal tracking
+    is_removed: Optional[bool] = False
+    removed_at: Optional[str] = None
+    removed_by: Optional[str] = None
+    removal_reason: Optional[str] = None
 
 class ParticipantCreate(ParticipantBase):
     pass
+
+class ParticipantRemoval(BaseModel):
+    removal_reason: str
 
 class ParticipantResponse(ParticipantBase):
     model_config = ConfigDict(extra="ignore")
