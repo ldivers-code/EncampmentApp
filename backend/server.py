@@ -1191,20 +1191,22 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
         
         # Age tracking for averages - CADETS ONLY (exclude senior members)
         if age:
-            # Only include cadets (not senior members) in total age stats
+            # Only include cadets (not senior members) in ALL age stats
             is_cadet = member_type != 'SENIOR'
             if is_cadet:
                 analytics['age_stats']['total']['ages'].append(age)
-            
-            if squadron and squadron != 'Unassigned':
-                if squadron not in analytics['age_stats']['by_squadron']:
-                    analytics['age_stats']['by_squadron'][squadron] = []
-                analytics['age_stats']['by_squadron'][squadron].append(age)
-            
-            if flight and flight != 'Unassigned':
-                if flight not in analytics['age_stats']['by_flight']:
-                    analytics['age_stats']['by_flight'][flight] = []
-                analytics['age_stats']['by_flight'][flight].append(age)
+                
+                # Squadron age averages - cadets only
+                if squadron and squadron != 'Unassigned':
+                    if squadron not in analytics['age_stats']['by_squadron']:
+                        analytics['age_stats']['by_squadron'][squadron] = []
+                    analytics['age_stats']['by_squadron'][squadron].append(age)
+                
+                # Flight age averages - cadets only
+                if flight and flight != 'Unassigned':
+                    if flight not in analytics['age_stats']['by_flight']:
+                        analytics['age_stats']['by_flight'][flight] = []
+                    analytics['age_stats']['by_flight'][flight].append(age)
         
         # Squadron/Flight distribution
         if squadron:
