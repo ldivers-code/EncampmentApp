@@ -109,6 +109,10 @@ const RosterPage = () => {
 
   const filteredParticipants = useMemo(() => {
     return participants.filter(p => {
+      // Filter out removed participants unless showRemoved is true
+      if (!showRemoved && p.is_removed) return false;
+      if (showRemoved && !p.is_removed) return false;
+      
       const matchesSearch = 
         `${p.first_name} ${p.last_name} ${p.capid} ${p.unit}`.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === 'all' || p.participant_type === typeFilter;
@@ -117,7 +121,7 @@ const RosterPage = () => {
         (paidFilter === 'unpaid' && !p.paid && !p.paid_in_full);
       return matchesSearch && matchesType && matchesPaid;
     });
-  }, [participants, searchTerm, typeFilter, paidFilter]);
+  }, [participants, searchTerm, typeFilter, paidFilter, showRemoved]);
 
   const paginatedParticipants = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -125,6 +129,49 @@ const RosterPage = () => {
   }, [filteredParticipants, currentPage]);
 
   const totalPages = Math.ceil(filteredParticipants.length / itemsPerPage);
+
+  // Count removed participants
+  const removedCount = useMemo(() => {
+    return participants.filter(p => p.is_removed).length;
+  }, [participants]);
+
+  const handleViewParticipant = (participant) => {
+    setSelectedParticipant(participant);
+    setIsDetailOpen(true);
+  };
+
+  const handleRemoveParticipant = async () => {
+    if (!selectedParticipant || !removalReason.trim()) {
+      toast.error('Please provide a reason for removal');
+      return;
+    }
+    
+    try {
+      await removeParticipantFromEncampment(selectedParticipant.id, removalReason);
+      toast.success(`${selectedParticipant.first_name} ${selectedParticipant.last_name} removed from encampment`);
+      setIsRemovalModalOpen(false);
+      setRemovalReason('');
+      setIsDetailOpen(false);
+      setSelectedParticipant(null);
+      loadParticipants();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to remove participant');
+    }
+  };
+
+  const handleReinstateParticipant = async (participant) => {
+    try {
+      await reinstateParticipant(participant.id);
+      toast.success(`${participant.first_name} ${participant.last_name} reinstated`);
+      loadParticipants();
+      if (selectedParticipant?.id === participant.id) {
+        setIsDetailOpen(false);
+        setSelectedParticipant(null);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reinstate participant');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
