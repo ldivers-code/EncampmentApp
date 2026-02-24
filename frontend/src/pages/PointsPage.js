@@ -80,6 +80,56 @@ const PointsPage = () => {
     { value: 'sq3', label: 'Squadron 3' }
   ];
 
+  // Permission helpers - determines which flights/squadrons user can edit
+  const hasFullAccess = () => {
+    // Commanders and Executive Cadre have full access to all flights
+    return ['commander', 'exec_cadre'].includes(user?.role);
+  };
+
+  const getUserAssignedFlights = () => {
+    // Get flights the user is assigned to (Training Officers, etc.)
+    if (hasFullAccess()) {
+      return allFlights;
+    }
+    // User can only edit their assigned flight
+    if (user?.flight) {
+      return allFlights.filter(f => f.value === user.flight);
+    }
+    return [];
+  };
+
+  const getUserAssignedSquadrons = () => {
+    if (hasFullAccess()) {
+      return allSquadrons;
+    }
+    // Get squadron based on user's flight assignment
+    if (user?.flight) {
+      const flight = allFlights.find(f => f.value === user.flight);
+      if (flight) {
+        return allSquadrons.filter(s => s.value === flight.squadron);
+      }
+    }
+    if (user?.squadron && ['sq1', 'sq2', 'sq3'].includes(user.squadron)) {
+      return allSquadrons.filter(s => s.value === user.squadron);
+    }
+    return [];
+  };
+
+  const canEditFlight = (flightValue) => {
+    if (hasFullAccess()) return true;
+    return user?.flight === flightValue;
+  };
+
+  const canEditSquadron = (squadronValue) => {
+    if (hasFullAccess()) return true;
+    const userFlights = getUserAssignedFlights();
+    return userFlights.some(f => f.squadron === squadronValue);
+  };
+
+  // Get accessible flights and squadrons for the current user
+  const flights = getUserAssignedFlights();
+  const squadrons = getUserAssignedSquadrons();
+
   useEffect(() => {
     loadData();
   }, []);
