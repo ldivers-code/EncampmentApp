@@ -4,7 +4,8 @@ import {
   getScoreCategories, seedDefaultCategories, recordScore, getScores, deleteScore,
   recordMeritDemerit, getMeritDemerits, getFlightLeaderboard, getSquadronLeaderboard,
   getIndividualLeaderboard, getDailyWinners, getCumulativeStandings, getPointsSummary,
-  getParticipants
+  getParticipants, getAwardTypes, getHonorAwards, getAwardsByDate, createHonorAward,
+  deleteHonorAward, autoAssignDailyAwards, getAwardRecipientsSummary
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -28,7 +29,11 @@ import {
   Target,
   Zap,
   Crown,
-  Shield
+  Shield,
+  Trash2,
+  Sparkles,
+  Filter,
+  Gift
 } from 'lucide-react';
 
 const PointsPage = () => {
@@ -42,6 +47,22 @@ const PointsPage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [recentScores, setRecentScores] = useState([]);
   const [recentMerits, setRecentMerits] = useState([]);
+  
+  // Awards state
+  const [awardTypes, setAwardTypes] = useState([]);
+  const [allAwards, setAllAwards] = useState([]);
+  const [dateAwards, setDateAwards] = useState([]);
+  const [awardFilterType, setAwardFilterType] = useState('all');
+  const [awardStartDate, setAwardStartDate] = useState('');
+  const [awardEndDate, setAwardEndDate] = useState('');
+  const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
+  const [awardForm, setAwardForm] = useState({
+    award_type: '',
+    recipient_id: '',
+    date: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
+  const [recipientsSummary, setRecipientsSummary] = useState([]);
   
   // Score entry form
   const [scoreForm, setScoreForm] = useState({
