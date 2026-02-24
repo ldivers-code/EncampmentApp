@@ -3815,12 +3815,6 @@ async def get_flight_roster(
         {"_id": 0}
     ).to_list(500)
     
-    # Get users assigned to this flight
-    users = await db.users.find(
-        {"flight": {"$regex": f"^{flight_lower}$", "$options": "i"}},
-        {"_id": 0, "password_hash": 0}
-    ).to_list(100)
-    
     # Format roster entries
     roster = []
     for p in participants:
