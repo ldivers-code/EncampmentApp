@@ -392,11 +392,10 @@ class TestMyFlightAPIs:
         data = response.json()
         assert isinstance(data, list)
         
-        # Check expected categories are present
+        # Check expected categories are present (API returns list of strings)
         expected_categories = ["tlp", "pocket_class", "handbook", "sop", "form", "checklist", "reference", "other"]
-        for cat in data:
-            assert "value" in cat
-            assert "label" in cat
+        for cat in expected_categories:
+            assert cat in data, f"Category {cat} not found in response"
     
     # =============================================================
     # List all flights endpoint test
