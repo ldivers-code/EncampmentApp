@@ -459,6 +459,49 @@ export const getPointsSummary = async () => {
   return response.data;
 };
 
+// Honor Awards
+export const getAwardTypes = async () => {
+  const response = await axios.get(`${API}/points/awards/types`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getHonorAwards = async (params = {}) => {
+  const queryParams = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/points/awards${queryParams ? `?${queryParams}` : ''}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getAwardsByDate = async (date) => {
+  const response = await axios.get(`${API}/points/awards/by-date/${date}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createHonorAward = async (awardType, recipientId, date, notes = null) => {
+  const params = new URLSearchParams({
+    award_type: awardType,
+    recipient_id: recipientId,
+    date: date
+  });
+  if (notes) params.append('notes', notes);
+  const response = await axios.post(`${API}/points/awards?${params}`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deleteHonorAward = async (awardId) => {
+  const response = await axios.delete(`${API}/points/awards/${awardId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const autoAssignDailyAwards = async (date) => {
+  const response = await axios.post(`${API}/points/awards/auto-assign/${date}`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getAwardRecipientsSummary = async () => {
+  const response = await axios.get(`${API}/points/awards/recipients-summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Org Chart
 export const getOrgChartRoles = async () => {
   const response = await axios.get(`${API}/org-chart/roles`, { headers: getAuthHeaders() });
