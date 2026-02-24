@@ -43,8 +43,27 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **SendGrid email notifications for account approval**
 - [x] **Point Tracking System with flight-based permissions**
 - [x] **Schedule filter dropdown for all users**
+- [x] **Individual Awards Tracking System**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - Individual Awards Tracking
+- **Awards Tab** on Point Tracking page with comprehensive features:
+  - **Daily Winners Display**: Flight of Day, Squadron of Day, Cadet of Day, Cadre of Day based on scores
+  - **Assigned Awards Section**: Visual cards showing all awards for selected date with color-coded icons
+  - **Awards History**: Filterable list of all awards with date, recipient, and type
+  - **Top Award Recipients**: Leaderboard showing who has earned the most awards
+- **Award Types** (13 total):
+  - Auto-eligible (based on highest daily score): Cadet of the Day, Cadre of the Day
+  - Manual assignment: Flight Honor Graduate, Commandant's Award, Honor Cadet, Honor Cadre, Leadership Award, PT Excellence, Academic Excellence, Drill Award, Spirit Award, Most Improved, Other
+- **Award Features**:
+  - Manual assignment via "Assign Award" modal (Award Type, Recipient, Date, Notes)
+  - Auto-assign daily awards with "Auto-Assign Daily" button
+  - Filter by award type and date range
+  - Delete awards (Commander only)
+  - Color-coded icons for each award type
+  - Auto-generated indicator for automatic awards
+  - Recipient name, flight, squadron, and notes displayed
 
 ### Feb 24, 2026 - Point Tracking System
 - **Point Tracking Page** (`/points`): Full implementation with:
