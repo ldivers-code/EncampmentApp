@@ -14,6 +14,7 @@ import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ProfilePage from "./pages/ProfilePage";
+import PointsPage from "./pages/PointsPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -135,6 +136,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/points"
+        element={
+          <ProtectedRoute>
+            <PointsPage />
           </ProtectedRoute>
         }
       />
