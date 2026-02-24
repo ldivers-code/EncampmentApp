@@ -244,25 +244,28 @@ const AnalyticsPage = () => {
           <div className="bg-white border border-slate-200 rounded-sm p-4">
             <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4 flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              Age Statistics
+              Cadet Age Statistics
             </h3>
+            <p className="text-xs text-slate-400 mb-3">Excludes Senior Members</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Average Age</p>
-                <p className="text-2xl font-bold text-[#00205B]">{analytics.age_stats.total.avg}</p>
+                <p className="text-2xl font-bold text-[#00205B]">{analytics.age_stats.total.avg || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Youngest</p>
-                <p className="text-2xl font-bold text-emerald-600">{analytics.age_stats.total.min}</p>
+                <p className="text-2xl font-bold text-emerald-600">{analytics.age_stats.total.min || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Oldest</p>
-                <p className="text-2xl font-bold text-amber-600">{analytics.age_stats.total.max}</p>
+                <p className="text-2xl font-bold text-amber-600">{analytics.age_stats.total.max || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Age Range</p>
                 <p className="text-2xl font-bold text-slate-700">
-                  {analytics.age_stats.total.max - analytics.age_stats.total.min} yrs
+                  {analytics.age_stats.total.max && analytics.age_stats.total.min 
+                    ? `${analytics.age_stats.total.max - analytics.age_stats.total.min} yrs`
+                    : 'N/A'}
                 </p>
               </div>
             </div>
