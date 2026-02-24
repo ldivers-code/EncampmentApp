@@ -280,6 +280,16 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - `/api/budget`, `/api/budget/summary`, `/api/budget/food-settings` - Financial tracking
 - `/api/budget/{id}/receipt` - Receipt upload/delete
 - `/api/org-chart/roles`, `/api/org-chart/seed-defaults` - Org chart
+- **Point Tracking Endpoints**:
+  - `/api/points/categories` - CRUD for score categories
+  - `/api/points/categories/seed-defaults` - Seed default categories
+  - `/api/points/scores` - Record and retrieve scores
+  - `/api/points/merits` - Record and retrieve merits/demerits
+  - `/api/points/leaderboard/flights` - Flight rankings
+  - `/api/points/leaderboard/squadrons` - Squadron rankings
+  - `/api/points/leaderboard/individuals` - Individual rankings
+  - `/api/points/daily-winners` - Daily winners by category
+  - `/api/points/cumulative-standings` - Overall standings
 
 ### Database Collections
 - `users` - User accounts with role, squadron, flight
