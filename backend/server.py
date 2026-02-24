@@ -3546,29 +3546,180 @@ async def delete_budget_item(
 
 # ================= DOCUMENT ROUTES =================
 
+# Document categories
+DOCUMENT_CATEGORIES = [
+    "tlp",           # Training Lesson Plans
+    "pocket_class",  # Pocket Classes
+    "handbook",      # Handbooks
+    "sop",           # Standard Operating Procedures
+    "form",          # Forms
+    "checklist",     # Checklists
+    "reference",     # Reference Materials
+    "other"          # Other
+]
+
+def can_access_document(user: dict, doc: dict) -> bool:
+    """Check if user can access a document based on scope"""
+    # Commanders and Exec Cadre can access everything
+    if user["role"] in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+        return True
+    
+    # Global documents are accessible to everyone
+    if doc.get("scope") == "global" or (not doc.get("flight") and not doc.get("squadron")):
+        return True
+    
+    # Squadron-scoped documents
+    if doc.get("scope") == "squadron" and doc.get("squadron"):
+        # Check if user's flight is in this squadron
+        user_flight = user.get("flight", "").lower()
+        doc_squadron = doc.get("squadron")
+        flight_to_squadron = {
+            "alpha": "sq1", "bravo": "sq1",
+            "charlie": "sq2", "delta": "sq2",
+            "echo": "sq3", "foxtrot": "sq3"
+        }
+        if flight_to_squadron.get(user_flight) == doc_squadron:
+            return True
+        # Staff assigned to squadron level
+        if user.get("squadron") == doc_squadron:
+            return True
+    
+    # Flight-scoped documents
+    if doc.get("scope") == "flight" and doc.get("flight"):
+        if user.get("flight", "").lower() == doc.get("flight").lower():
+            return True
+    
+    return False
+
+@api_router.get("/documents/categories")
+async def get_document_categories(user: dict = Depends(get_current_user)):
+    """Get available document categories"""
+    return DOCUMENT_CATEGORIES
+
 @api_router.get("/documents", response_model=List[DocumentResponse])
-async def get_documents(user: dict = Depends(get_current_user)):
-    docs = await db.documents.find({}, {"_id": 0}).to_list(1000)
-    return [DocumentResponse(**d) for d in docs]
+async def get_documents(
+    doc_type: Optional[str] = None,
+    category: Optional[str] = None,
+    flight: Optional[str] = None,
+    squadron: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Get documents filtered by type, category, and flight/squadron access"""
+    query = {}
+    if doc_type:
+        query["doc_type"] = doc_type
+    if category:
+        query["category"] = category
+    
+    docs = await db.documents.find(query, {"_id": 0}).to_list(1000)
+    
+    # Filter by access permissions
+    accessible_docs = [d for d in docs if can_access_document(user, d)]
+    
+    # Additional filtering by specific flight/squadron if requested
+    if flight:
+        accessible_docs = [d for d in accessible_docs if d.get("flight") == flight or d.get("scope") == "global"]
+    if squadron:
+        accessible_docs = [d for d in accessible_docs if d.get("squadron") == squadron or d.get("scope") == "global"]
+    
+    return [DocumentResponse(**d) for d in accessible_docs]
+
+@api_router.get("/documents/by-flight/{flight}")
+async def get_flight_documents(
+    flight: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get all documents accessible to a specific flight"""
+    # Get flight-specific and global documents
+    flight_lower = flight.lower()
+    flight_to_squadron = {
+        "alpha": "sq1", "bravo": "sq1",
+        "charlie": "sq2", "delta": "sq2",
+        "echo": "sq3", "foxtrot": "sq3"
+    }
+    squadron = flight_to_squadron.get(flight_lower)
+    
+    query = {
+        "$or": [
+            {"scope": "global"},
+            {"flight": flight_lower},
+            {"squadron": squadron, "scope": "squadron"}
+        ]
+    }
+    
+    docs = await db.documents.find(query, {"_id": 0}).to_list(1000)
+    
+    # Group by category
+    categorized = {}
+    for doc in docs:
+        cat = doc.get("category") or doc.get("doc_type") or "other"
+        if cat not in categorized:
+            categorized[cat] = []
+        categorized[cat].append(DocumentResponse(**doc))
+    
+    return {
+        "flight": flight,
+        "squadron": squadron,
+        "documents": categorized,
+        "total": len(docs)
+    }
+
+@api_router.get("/documents/by-squadron/{squadron}")
+async def get_squadron_documents(
+    squadron: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get all documents accessible to a specific squadron"""
+    query = {
+        "$or": [
+            {"scope": "global"},
+            {"squadron": squadron},
+            {"squadron": squadron, "scope": "squadron"}
+        ]
+    }
+    
+    docs = await db.documents.find(query, {"_id": 0}).to_list(1000)
+    
+    # Group by category
+    categorized = {}
+    for doc in docs:
+        cat = doc.get("category") or doc.get("doc_type") or "other"
+        if cat not in categorized:
+            categorized[cat] = []
+        categorized[cat].append(DocumentResponse(**doc))
+    
+    return {
+        "squadron": squadron,
+        "documents": categorized,
+        "total": len(docs)
+    }
 
 @api_router.get("/documents/{doc_id}", response_model=DocumentResponse)
 async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    if not can_access_document(user, doc):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+    
     return DocumentResponse(**doc)
 
 @api_router.post("/documents", response_model=DocumentResponse)
 async def create_document(
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
 ):
+    """Create a new document (Commander only)"""
     doc_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
     doc = {
         "id": doc_id,
         **data.model_dump(),
+        "uploaded_by": user["name"],
+        "version": 1,
+        "version_history": [],
         "created_at": now,
         "updated_at": now
     }
@@ -3580,14 +3731,36 @@ async def create_document(
 async def update_document(
     doc_id: str,
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
 ):
-    now = datetime.now(timezone.utc).isoformat()
-    update_data = {**data.model_dump(), "updated_at": now}
-    
-    result = await db.documents.update_one({"id": doc_id}, {"$set": update_data})
-    if result.matched_count == 0:
+    """Update a document with version tracking"""
+    existing = await db.documents.find_one({"id": doc_id})
+    if not existing:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    current_version = existing.get("version", 1)
+    
+    # Store current version in history
+    version_history = existing.get("version_history", [])
+    version_history.append({
+        "version": current_version,
+        "title": existing.get("title"),
+        "content": existing.get("content"),
+        "file_url": existing.get("file_url"),
+        "updated_by": existing.get("uploaded_by"),
+        "updated_at": existing.get("updated_at")
+    })
+    
+    update_data = {
+        **data.model_dump(),
+        "uploaded_by": user["name"],
+        "version": current_version + 1,
+        "version_history": version_history,
+        "updated_at": now
+    }
+    
+    await db.documents.update_one({"id": doc_id}, {"$set": update_data})
     
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     return DocumentResponse(**doc)
@@ -3595,12 +3768,188 @@ async def update_document(
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
 ):
     result = await db.documents.delete_one({"id": doc_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted successfully"}
+
+
+# ================= FLIGHT ROSTER ROUTES =================
+
+@api_router.get("/flights")
+async def get_flights(user: dict = Depends(get_current_user)):
+    """Get list of all flights with their squadrons"""
+    flights = [
+        {"value": "alpha", "label": "Alpha Flight", "squadron": "sq1"},
+        {"value": "bravo", "label": "Bravo Flight", "squadron": "sq1"},
+        {"value": "charlie", "label": "Charlie Flight", "squadron": "sq2"},
+        {"value": "delta", "label": "Delta Flight", "squadron": "sq2"},
+        {"value": "echo", "label": "Echo Flight", "squadron": "sq3"},
+        {"value": "foxtrot", "label": "Foxtrot Flight", "squadron": "sq3"}
+    ]
+    return flights
+
+@api_router.get("/squadrons")
+async def get_squadrons(user: dict = Depends(get_current_user)):
+    """Get list of all squadrons"""
+    squadrons = [
+        {"value": "sq1", "label": "Squadron 1", "flights": ["alpha", "bravo"]},
+        {"value": "sq2", "label": "Squadron 2", "flights": ["charlie", "delta"]},
+        {"value": "sq3", "label": "Squadron 3", "flights": ["echo", "foxtrot"]}
+    ]
+    return squadrons
+
+@api_router.get("/flights/{flight}/roster")
+async def get_flight_roster(
+    flight: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get roster for a specific flight"""
+    flight_lower = flight.lower()
+    
+    # Get participants in this flight (case-insensitive)
+    participants = await db.participants.find(
+        {"flight": {"$regex": f"^{flight_lower}$", "$options": "i"}, "is_removed": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Get users assigned to this flight
+    users = await db.users.find(
+        {"flight": {"$regex": f"^{flight_lower}$", "$options": "i"}},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(100)
+    
+    # Format roster entries
+    roster = []
+    for p in participants:
+        roster.append({
+            "id": p.get("id"),
+            "name": f"{p.get('rank', '')} {p.get('first_name', '')} {p.get('last_name', '')}".strip(),
+            "rank": p.get("rank"),
+            "first_name": p.get("first_name"),
+            "last_name": p.get("last_name"),
+            "position": None if p.get("participant_type") == "basic_student" else p.get("position", ""),
+            "participant_type": p.get("participant_type"),
+            "capid": p.get("capid"),
+            "unit": p.get("unit"),
+            "is_student": p.get("participant_type") == "basic_student"
+        })
+    
+    # Sort by participant type (cadre first), then by rank
+    rank_order = ["Col", "Lt Col", "Maj", "Capt", "1st Lt", "2nd Lt", "CMSgt", "SMSgt", "MSgt", "TSgt", "SSgt", "SrA", "A1C", "Amn", "AB",
+                  "C/Col", "C/Lt Col", "C/Maj", "C/Capt", "C/1st Lt", "C/2nd Lt", "C/CMSgt", "C/SMSgt", "C/MSgt", "C/TSgt", "C/SSgt", "C/SrA", "C/A1C", "C/Amn", "C/AB"]
+    
+    def sort_key(r):
+        type_order = 0 if not r.get("is_student") else 1
+        rank = r.get("rank", "")
+        rank_idx = rank_order.index(rank) if rank in rank_order else 999
+        return (type_order, rank_idx, r.get("last_name", ""))
+    
+    roster.sort(key=sort_key)
+    
+    return {
+        "flight": flight_lower,
+        "roster": roster,
+        "count": len(roster),
+        "cadre_count": len([r for r in roster if not r.get("is_student")]),
+        "cadet_count": len([r for r in roster if r.get("is_student")])
+    }
+
+@api_router.get("/squadrons/{squadron}/roster")
+async def get_squadron_roster(
+    squadron: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get roster for a specific squadron (all flights in squadron)"""
+    squadron_flights = {
+        "sq1": ["alpha", "bravo"],
+        "sq2": ["charlie", "delta"],
+        "sq3": ["echo", "foxtrot"]
+    }
+    
+    flights = squadron_flights.get(squadron.lower(), [])
+    if not flights:
+        raise HTTPException(status_code=404, detail="Squadron not found")
+    
+    # Build regex pattern for flights
+    flight_pattern = "|".join([f"^{f}$" for f in flights])
+    
+    participants = await db.participants.find(
+        {"flight": {"$regex": flight_pattern, "$options": "i"}, "is_removed": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Group by flight
+    roster_by_flight = {}
+    for f in flights:
+        roster_by_flight[f] = []
+    
+    for p in participants:
+        flight = p.get("flight", "").lower()
+        if flight in roster_by_flight:
+            roster_by_flight[flight].append({
+                "id": p.get("id"),
+                "name": f"{p.get('rank', '')} {p.get('first_name', '')} {p.get('last_name', '')}".strip(),
+                "rank": p.get("rank"),
+                "first_name": p.get("first_name"),
+                "last_name": p.get("last_name"),
+                "position": None if p.get("participant_type") == "basic_student" else p.get("position", ""),
+                "participant_type": p.get("participant_type"),
+                "is_student": p.get("participant_type") == "basic_student"
+            })
+    
+    return {
+        "squadron": squadron,
+        "flights": roster_by_flight,
+        "total_count": len(participants)
+    }
+
+@api_router.get("/my-flight")
+async def get_my_flight_info(user: dict = Depends(get_current_user)):
+    """Get current user's flight information and accessible flights"""
+    user_flight = user.get("flight", "").lower()
+    user_role = user.get("role")
+    user_squadron = user.get("squadron")
+    
+    flight_to_squadron = {
+        "alpha": "sq1", "bravo": "sq1",
+        "charlie": "sq2", "delta": "sq2",
+        "echo": "sq3", "foxtrot": "sq3"
+    }
+    
+    all_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    all_squadrons = ["sq1", "sq2", "sq3"]
+    
+    # Determine accessible flights
+    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+        accessible_flights = all_flights
+        accessible_squadrons = all_squadrons
+    elif user_squadron:
+        # Squadron-level staff
+        squadron_flights = {
+            "sq1": ["alpha", "bravo"],
+            "sq2": ["charlie", "delta"],
+            "sq3": ["echo", "foxtrot"]
+        }
+        accessible_flights = squadron_flights.get(user_squadron, [])
+        accessible_squadrons = [user_squadron]
+    elif user_flight:
+        accessible_flights = [user_flight]
+        accessible_squadrons = [flight_to_squadron.get(user_flight)] if user_flight in flight_to_squadron else []
+    else:
+        accessible_flights = []
+        accessible_squadrons = []
+    
+    return {
+        "user_flight": user_flight,
+        "user_squadron": user_squadron or flight_to_squadron.get(user_flight),
+        "user_role": user_role,
+        "accessible_flights": accessible_flights,
+        "accessible_squadrons": accessible_squadrons,
+        "has_full_access": user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]
+    }
 
 
 # ================= ORG CHART ROUTES =================
