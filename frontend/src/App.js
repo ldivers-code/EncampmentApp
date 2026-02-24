@@ -77,6 +77,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/my-flight"
+        element={
+          <ProtectedRoute>
+            <MyFlightPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/roster"
         element={
           <ProtectedRoute>
