@@ -321,6 +321,8 @@ Staff/Cadre
 - [x] Member Profiles (editable basic, CAP, address, emergency contact info)
 - [x] Profile photo upload
 - [x] User approval workflow with roster linking
+- [x] **Point Tracking System** (flight standings, squadron standings, individual rankings)
+- [x] **Schedule Filter for All Users** (all members can filter by flight/squadron)
 
 ### P1 (High Priority)
 - [ ] Implement Handbooks page (upload/view PDF documents)
