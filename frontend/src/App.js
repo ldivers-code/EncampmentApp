@@ -15,6 +15,7 @@ import AdminPage from "./pages/AdminPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ProfilePage from "./pages/ProfilePage";
 import PointsPage from "./pages/PointsPage";
+import MyFlightPage from "./pages/MyFlightPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
