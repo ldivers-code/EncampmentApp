@@ -542,3 +542,44 @@ export const seedDefaultOrgChart = async () => {
   return response.data;
 };
 
+// Flight/Squadron API
+export const getFlights = async () => {
+  const response = await axios.get(`${API}/flights`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getSquadrons = async () => {
+  const response = await axios.get(`${API}/squadrons`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFlightRoster = async (flight) => {
+  const response = await axios.get(`${API}/flights/${flight}/roster`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getSquadronRoster = async (squadron) => {
+  const response = await axios.get(`${API}/squadrons/${squadron}/roster`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getMyFlightInfo = async () => {
+  const response = await axios.get(`${API}/my-flight`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFlightDocuments = async (flight) => {
+  const response = await axios.get(`${API}/documents/by-flight/${flight}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getSquadronDocuments = async (squadron) => {
+  const response = await axios.get(`${API}/documents/by-squadron/${squadron}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getDocumentCategories = async () => {
+  const response = await axios.get(`${API}/documents/categories`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
