@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -21,7 +23,8 @@ import {
   Lock,
   Unlock,
   X,
-  RotateCcw
+  RotateCcw,
+  Key
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
@@ -35,6 +38,12 @@ const AdminPage = () => {
   const [loadingMatches, setLoadingMatches] = useState({});
   const [editingPermissions, setEditingPermissions] = useState(null);
   const [permissionsForm, setPermissionsForm] = useState({});
+  
+  // Password reset state
+  const [resetPasswordModal, setResetPasswordModal] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
