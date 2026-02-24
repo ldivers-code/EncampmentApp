@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import { 
   Plus, 
@@ -23,7 +24,16 @@ import {
   DollarSign,
   UserCheck,
   FileSpreadsheet,
-  RefreshCw
+  RefreshCw,
+  X,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
+  Shield,
+  UserX,
+  RotateCcw,
+  Eye
 } from 'lucide-react';
 
 const RosterPage = () => {
@@ -36,8 +46,15 @@ const RosterPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [paidFilter, setPaidFilter] = useState('all');
+  const [showRemoved, setShowRemoved] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Participant detail view
+  const [selectedParticipant, setSelectedParticipant] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  // Removal modal
+  const [isRemovalModalOpen, setIsRemovalModalOpen] = useState(false);
+  const [removalReason, setRemovalReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
