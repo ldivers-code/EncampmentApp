@@ -382,6 +382,83 @@ export const resetUserPermissions = async (userId) => {
   return response.data;
 };
 
+// Point Tracking
+export const getScoreCategories = async () => {
+  const response = await axios.get(`${API}/points/categories`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createScoreCategory = async (data) => {
+  const response = await axios.post(`${API}/points/categories`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const seedDefaultCategories = async () => {
+  const response = await axios.post(`${API}/points/categories/seed-defaults`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const recordScore = async (data) => {
+  const response = await axios.post(`${API}/points/scores`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getScores = async (params = {}) => {
+  const queryParams = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/points/scores${queryParams ? `?${queryParams}` : ''}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deleteScore = async (scoreId) => {
+  const response = await axios.delete(`${API}/points/scores/${scoreId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const recordMeritDemerit = async (data) => {
+  const response = await axios.post(`${API}/points/merits`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getMeritDemerits = async (params = {}) => {
+  const queryParams = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/points/merits${queryParams ? `?${queryParams}` : ''}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFlightLeaderboard = async (date = null) => {
+  const response = await axios.get(`${API}/points/leaderboard/flights${date ? `?date=${date}` : ''}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getSquadronLeaderboard = async (date = null) => {
+  const response = await axios.get(`${API}/points/leaderboard/squadrons${date ? `?date=${date}` : ''}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getIndividualLeaderboard = async (participantType = null, date = null, limit = 20) => {
+  const params = new URLSearchParams();
+  if (participantType) params.append('participant_type', participantType);
+  if (date) params.append('date', date);
+  params.append('limit', limit);
+  const response = await axios.get(`${API}/points/leaderboard/individuals?${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getDailyWinners = async (date) => {
+  const response = await axios.get(`${API}/points/daily-winners?date=${date}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getCumulativeStandings = async () => {
+  const response = await axios.get(`${API}/points/cumulative-standings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getPointsSummary = async () => {
+  const response = await axios.get(`${API}/points/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Org Chart
 export const getOrgChartRoles = async () => {
   const response = await axios.get(`${API}/org-chart/roles`, { headers: getAuthHeaders() });
