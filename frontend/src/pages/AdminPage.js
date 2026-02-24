@@ -587,7 +587,17 @@ const AdminPage = () => {
                         {editingPermissions === user.id ? 'Editing...' : 'Permissions'}
                       </Button>
                     </td>
-                    <td className="text-right">
+                    <td className="text-right flex items-center gap-1 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResetPasswordModal(user)}
+                        className="h-8 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-sm"
+                        title="Reset Password"
+                        data-testid={`reset-password-${user.id}`}
+                      >
+                        <Key className="w-4 h-4" />
+                      </Button>
                       {user.id !== currentUser?.id && (
                         <Button
                           variant="ghost"
