@@ -41,8 +41,32 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Granular permissions system (12 access types per user)**
 - [x] **Admin inline permissions editor**
 - [x] **SendGrid email notifications for account approval**
+- [x] **Point Tracking System with flight-based permissions**
+- [x] **Schedule filter dropdown for all users**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - Point Tracking System
+- **Point Tracking Page** (`/points`): Full implementation with:
+  - **Flight Standings**: Ranked display of all 6 flights by total points
+  - **Squadron Standings**: Aggregated scores for Squadrons 1-3
+  - **Top Cadets**: Individual cadet rankings with merits/demerits
+  - **Top Cadre**: Individual cadre rankings
+- **Score Recording**: Record scores for flights, squadrons, or individuals
+  - Categories: Barracks Inspection, Uniform Inspection, Drill Competition, PT Score, Academic Test, Punctuality (flight-level)
+  - Individual categories: Individual PT, Individual Academic, Leadership Evaluation (cadets), Cadre Performance, Cadre Leadership
+- **Merit/Demerit System**: Award or deduct points with reasons
+- **Daily Awards**: View Flight/Squadron/Cadet/Cadre of the Day for any date
+- **Flight-Based Permissions**:
+  - **Commanders & Executive Cadre**: Full access to all flights
+  - **Other staff**: Can only edit scores for their assigned flight
+  - Permission badge displays "Full Access - All Flights" or specific assigned flights
+- **Score History**: View recent scores and merits/demerits with timestamps
+
+### Feb 24, 2026 - Schedule Filter Enhancement
+- **Schedule Filter for All Users**: Previously editors-only, now visible to ALL members
+  - Filter by: All Events, Staff Only, Squadron 1/2/3, Alpha/Bravo/Charlie/Delta/Echo/Foxtrot flights
+  - Mobile and desktop versions both support filtering
 
 ### Feb 21, 2026 - Roles, Units & Granular Permissions System
 - **Expanded Role System** (6 roles):
