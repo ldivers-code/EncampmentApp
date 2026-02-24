@@ -160,7 +160,18 @@ const LoginPage = () => {
               </div>
 
               <div>
-                <Label htmlFor="password" className="text-xs uppercase tracking-wide text-slate-600">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-xs uppercase tracking-wide text-slate-600">Password</Label>
+                  {isLogin && (
+                    <Link 
+                      to="/forgot-password" 
+                      className="text-xs text-[#00205B] hover:underline"
+                      data-testid="forgot-password-link"
+                    >
+                      Forgot Password?
+                    </Link>
+                  )}
+                </div>
                 <Input
                   id="password"
                   name="password"
