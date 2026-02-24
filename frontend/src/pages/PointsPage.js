@@ -732,7 +732,7 @@ const PointsPage = () => {
       <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
         {[
           { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-          { id: 'daily', label: 'Daily Awards', icon: Award },
+          { id: 'awards', label: 'Awards', icon: Award },
           { id: 'individuals', label: 'Individual Rankings', icon: Medal },
           { id: 'history', label: 'Score History', icon: TrendingUp }
         ].map(tab => (
@@ -744,6 +744,7 @@ const PointsPage = () => {
                 ? 'border-[#00205B] text-[#00205B]'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
+            data-testid={`tab-${tab.id}`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
