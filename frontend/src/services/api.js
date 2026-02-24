@@ -8,6 +8,22 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+// Presence / Active Users
+export const sendHeartbeat = async () => {
+  const response = await axios.post(`${API}/presence/heartbeat`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getActiveUsers = async () => {
+  const response = await axios.get(`${API}/presence/active-users`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const goOffline = async () => {
+  const response = await axios.post(`${API}/presence/offline`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Dashboard Stats
 export const getDashboardStats = async () => {
   const response = await axios.get(`${API}/stats/dashboard`, { headers: getAuthHeaders() });
