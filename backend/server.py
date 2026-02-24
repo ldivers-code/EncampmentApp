@@ -3903,7 +3903,7 @@ async def get_squadron_roster(
 @api_router.get("/my-flight")
 async def get_my_flight_info(user: dict = Depends(get_current_user)):
     """Get current user's flight information and accessible flights"""
-    user_flight = user.get("flight", "").lower()
+    user_flight = (user.get("flight") or "").lower()
     user_role = user.get("role")
     user_squadron = user.get("squadron")
     
@@ -3937,7 +3937,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
         accessible_squadrons = []
     
     return {
-        "user_flight": user_flight,
+        "user_flight": user_flight or None,
         "user_squadron": user_squadron or flight_to_squadron.get(user_flight),
         "user_role": user_role,
         "accessible_flights": accessible_flights,
