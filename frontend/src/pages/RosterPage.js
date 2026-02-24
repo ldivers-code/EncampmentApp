@@ -707,6 +707,20 @@ const RosterPage = () => {
                 <SelectItem value="unpaid">Unpaid</SelectItem>
               </SelectContent>
             </Select>
+            {/* Show Removed Toggle */}
+            <Button
+              variant={showRemoved ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowRemoved(!showRemoved);
+                setCurrentPage(1);
+              }}
+              className={`rounded-sm text-xs ${showRemoved ? 'bg-red-600 hover:bg-red-700' : ''}`}
+              data-testid="show-removed-toggle"
+            >
+              <UserX className="w-3 h-3 mr-1" />
+              Removed ({removedCount})
+            </Button>
           </div>
         </div>
       </div>
@@ -724,23 +738,36 @@ const RosterPage = () => {
                 <th className="text-left">Wing</th>
                 <th className="text-left">Type</th>
                 <th className="text-center">Paid</th>
-                <th className="text-center">Approved</th>
-                {canEdit() && <th className="text-right">Actions</th>}
+                {!showRemoved && <th className="text-center">Approved</th>}
+                {showRemoved && <th className="text-left">Removal Reason</th>}
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginatedParticipants.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit() ? 9 : 8} className="text-center py-8 text-slate-400">
-                    {searchTerm || typeFilter !== 'all' || paidFilter !== 'all' ? 'No matching participants found' : 'No participants yet. Import a CAP Event Admin Report to get started.'}
+                  <td colSpan={9} className="text-center py-8 text-slate-400">
+                    {showRemoved 
+                      ? 'No removed participants' 
+                      : (searchTerm || typeFilter !== 'all' || paidFilter !== 'all' 
+                        ? 'No matching participants found' 
+                        : 'No participants yet. Import a CAP Event Admin Report to get started.')}
                   </td>
                 </tr>
               ) : (
                 paginatedParticipants.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50" data-testid={`roster-row-${p.capid}`}>
+                  <tr 
+                    key={p.id} 
+                    className={`hover:bg-slate-50 cursor-pointer transition-colors ${p.is_removed ? 'bg-red-50/50' : ''}`}
+                    onClick={() => handleViewParticipant(p)}
+                    data-testid={`roster-row-${p.capid}`}
+                  >
                     <td className="font-mono text-[#00205B] font-medium">{p.capid}</td>
                     <td>{p.rank}</td>
-                    <td className="font-medium">{p.last_name}, {p.first_name}</td>
+                    <td className="font-medium">
+                      {p.last_name}, {p.first_name}
+                      {p.is_removed && <span className="ml-2 text-xs text-red-500">(Removed)</span>}
+                    </td>
                     <td className="font-mono text-sm">{p.unit}</td>
                     <td className="text-sm text-slate-500">{p.wing || '-'}</td>
                     <td>
