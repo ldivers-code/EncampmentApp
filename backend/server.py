@@ -1093,7 +1093,8 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
         'by_squadron': {},
         'by_flight': {},
         'age_stats': {
-            'total': {'ages': [], 'avg': 0, 'min': 0, 'max': 0},
+            'total': {'ages': [], 'avg': 0, 'min': 0, 'max': 0},  # Cadets only (students + cadre)
+            'cadets_only': {'ages': []},  # Track cadet ages separately
             'by_squadron': {},
             'by_flight': {}
         },
