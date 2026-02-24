@@ -23,7 +23,7 @@ import {
 import { Button } from '../components/ui/button';
 
 const Sidebar = ({ children }) => {
-  const { user, logout, canEdit } = useAuth();
+  const { user, logout, canEdit, activeUsers } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
