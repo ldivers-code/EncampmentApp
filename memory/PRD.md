@@ -44,8 +44,30 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Point Tracking System with flight-based permissions**
 - [x] **Schedule filter dropdown for all users**
 - [x] **Individual Awards Tracking System**
+- [x] **My Flight Page with Flight Roster and Documents**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - My Flight Page (Flight Roster & Documents)
+- **My Flight Page** (`/my-flight`) with two main tabs:
+  - **Roster Tab**: View flight members with name, rank, position (cadre only), and type badge
+  - **Documents Tab**: Access TLPs, Pocket Classes, Handbooks, SOPs, and other documents
+- **Flight/Squadron Access Control**:
+  - Commanders & Exec Cadre: Full access to all flights and squadrons
+  - Squadron-level staff: Access to all flights in their squadron
+  - Flight staff: Access to their assigned flight only
+  - Cadets: Can view documents for their flight
+- **Document Management**:
+  - Categories: TLPs, Pocket Classes, Handbooks, SOPs, Forms, Checklists, Reference Materials, Other
+  - Scopes: Global (all flights), Squadron, Flight
+  - Version control with history tracking
+  - Upload restricted to Commanders only
+- **UI Features**:
+  - Flight selector dropdown for users with multi-flight access
+  - Flight/Squadron view toggle
+  - Category filter for documents
+  - Document badges showing scope (Global, ALPHA, SQ1, etc.)
+  - Upload Document modal with title, category, scope, description, and file URL
 
 ### Feb 24, 2026 - Individual Awards Tracking
 - **Awards Tab** on Point Tracking page with comprehensive features:
