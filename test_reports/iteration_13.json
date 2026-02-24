@@ -1,0 +1,119 @@
+{
+  "summary": "Completed comprehensive testing of Active Users / Who's Online feature. Backend: 15/15 tests passed (100%). Frontend: All UI features verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": {
+    "backend": [
+      "POST /api/presence/heartbeat returns 200",
+      "Heartbeat response contains status:'ok' and timestamp",
+      "Heartbeat requires authentication (401 without token)",
+      "GET /api/presence/active-users returns 200",
+      "Active users response has count and users array",
+      "Each active user has id, name, role fields",
+      "Current user appears in active users list after heartbeat",
+      "Active users endpoint requires authentication",
+      "POST /api/presence/offline returns 200",
+      "Offline response contains status:'ok'",
+      "Offline requires authentication",
+      "Heartbeat updates user's active status",
+      "Active users count matches users list length",
+      "Users include last_active timestamp",
+      "Full presence flow test (heartbeat -> active-users -> offline)"
+    ],
+    "frontend": [
+      "Dashboard loads correctly after login",
+      "Sidebar shows 'X online now' indicator in expanded mode",
+      "Sidebar shows green pulse indicator (animate-pulse bg-emerald-500)",
+      "Collapsed sidebar shows online count number",
+      "Dashboard 'Who's Online' widget has data-testid='active-users-widget'",
+      "Widget shows 'WHO'S ONLINE' header",
+      "Widget shows active count with green dot indicator",
+      "Widget displays user list with name and role",
+      "Each user in widget shows green online indicator dot",
+      "User avatar displays initials in circular badge",
+      "Role labels displayed correctly (Commander, etc.)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_active_users.py",
+    "/app/test_reports/pytest/active_users_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_active_users.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "commander": {
+      "email": "commander@test.cap.gov",
+      "password": "test123",
+      "role": "commander"
+    }
+  },
+  "seed_data_used": {
+    "active_users": [
+      {
+        "name": "Test Commander",
+        "role": "commander"
+      },
+      {
+        "name": "Lauren Divers",
+        "role": "commander"
+      }
+    ],
+    "note": "2 users currently online as of testing"
+  },
+  "features_verified": {
+    "sidebar_online_indicator": {
+      "expanded_mode": "PASS - Shows 'X online now' text with green pulse dot",
+      "collapsed_mode": "PASS - Shows just the count number with green pulse dot",
+      "pulse_animation": "PASS - Green dot has animate-pulse class"
+    },
+    "dashboard_whos_online_widget": {
+      "widget_header": "PASS - Shows 'WHO'S ONLINE' with count badge",
+      "user_list": "PASS - Displays all active users",
+      "user_name": "PASS - Each user shows their name",
+      "user_role": "PASS - Each user shows their role (Commander, Staff, etc.)",
+      "green_indicator": "PASS - Each user has green dot indicator next to avatar",
+      "avatar": "PASS - Circular avatar with user initial",
+      "data_testid": "PASS - Widget has data-testid='active-users-widget'"
+    },
+    "backend_endpoints": {
+      "heartbeat": "PASS - POST /api/presence/heartbeat updates last_active timestamp",
+      "active_users": "PASS - GET /api/presence/active-users returns users with recent heartbeat (60s threshold)",
+      "offline": "PASS - POST /api/presence/offline marks user as offline",
+      "authentication": "PASS - All endpoints require Bearer token"
+    },
+    "real_time_behavior": {
+      "heartbeat_interval": "30 seconds (configured in frontend)",
+      "active_threshold": "60 seconds (configured in backend)",
+      "visibility_change": "PASS - Heartbeat sent when tab becomes visible",
+      "beforeunload": "INFO - Offline beacon sent on tab close (via navigator.sendBeacon)"
+    }
+  },
+  "technical_implementation_notes": {
+    "frontend": {
+      "heartbeat_location": "/app/frontend/src/context/AuthContext.js",
+      "sidebar_indicator": "/app/frontend/src/components/Sidebar.js (lines 148-168)",
+      "dashboard_widget": "/app/frontend/src/pages/DashboardPage.js (lines 266-307)"
+    },
+    "backend": {
+      "presence_endpoints": "/app/backend/server.py (lines 788-841)",
+      "active_threshold": "60 seconds (ACTIVE_THRESHOLD_SECONDS)"
+    }
+  },
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Active Users feature fully tested. Key features: 1) Sidebar shows 'X online now' with green pulse indicator in both expanded and collapsed modes. 2) Dashboard has 'Who's Online' widget showing list of active users with name, role, and green online indicator. 3) Backend uses heartbeat system - users send heartbeat every 30 seconds, considered active if heartbeat within last 60 seconds. 4) Three endpoints: POST /api/presence/heartbeat (update timestamp), GET /api/presence/active-users (get list), POST /api/presence/offline (mark offline). 5) Currently 2 users showing as online: Test Commander and Lauren Divers."
+}
