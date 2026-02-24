@@ -17,7 +17,8 @@ import {
   Bell,
   BarChart3,
   UserCircle,
-  Trophy
+  Trophy,
+  Shield
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -29,6 +30,7 @@ const Sidebar = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/my-flight', icon: Shield, label: 'My Flight' },
     { path: '/roster', icon: Users, label: 'Roster' },
     { path: '/org-chart', icon: Network, label: 'Org Chart' },
     { path: '/schedule', icon: Calendar, label: 'Schedule' },
