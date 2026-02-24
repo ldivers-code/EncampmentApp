@@ -2383,6 +2383,195 @@ async def get_points_summary(user: dict = Depends(get_current_user)):
     }
 
 
+# ================= HONOR AWARDS ROUTES =================
+
+AWARD_TYPES = [
+    {"value": "cadet_of_day", "label": "Cadet of the Day", "auto_eligible": True, "participant_type": "cadet"},
+    {"value": "cadre_of_day", "label": "Cadre of the Day", "auto_eligible": True, "participant_type": "cadre"},
+    {"value": "flight_honor_graduate", "label": "Flight Honor Graduate", "auto_eligible": False, "participant_type": "cadet"},
+    {"value": "commandants_award", "label": "Commandant's Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "honor_cadet", "label": "Honor Cadet", "auto_eligible": False, "participant_type": "cadet"},
+    {"value": "honor_cadre", "label": "Honor Cadre", "auto_eligible": False, "participant_type": "cadre"},
+    {"value": "leadership_award", "label": "Leadership Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "pt_excellence", "label": "PT Excellence Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "academic_excellence", "label": "Academic Excellence Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "drill_award", "label": "Drill Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "spirit_award", "label": "Spirit Award", "auto_eligible": False, "participant_type": "any"},
+    {"value": "most_improved", "label": "Most Improved", "auto_eligible": False, "participant_type": "any"},
+    {"value": "other", "label": "Other Award", "auto_eligible": False, "participant_type": "any"},
+]
+
+@api_router.get("/points/awards/types")
+async def get_award_types(user: dict = Depends(get_current_user)):
+    """Get all available award types"""
+    return AWARD_TYPES
+
+@api_router.post("/points/awards")
+async def create_honor_award(
+    award_type: str,
+    recipient_id: str,
+    date: str,
+    notes: Optional[str] = None,
+    is_auto_generated: bool = False,
+    user: dict = Depends(get_current_user)
+):
+    """Create a new honor award record"""
+    if user["role"] not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.EXEC_CADRE]:
+        raise HTTPException(status_code=403, detail="Not authorized to assign awards")
+    
+    # Get recipient info
+    participant = await db.participants.find_one({"id": recipient_id})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+    
+    # Check if this award already exists for this date (for daily awards)
+    award_type_info = next((a for a in AWARD_TYPES if a["value"] == award_type), None)
+    if award_type_info and award_type_info.get("auto_eligible"):
+        existing = await db.honor_awards.find_one({
+            "award_type": award_type,
+            "date": date
+        })
+        if existing and not is_auto_generated:
+            # Update existing award
+            await db.honor_awards.update_one(
+                {"id": existing["id"]},
+                {"$set": {
+                    "recipient_id": recipient_id,
+                    "recipient_name": f"{participant.get('rank', '')} {participant.get('first_name', '')} {participant.get('last_name', '')}".strip(),
+                    "recipient_flight": participant.get("flight"),
+                    "recipient_squadron": participant.get("squadron"),
+                    "notes": notes,
+                    "awarded_by": user["name"],
+                    "is_auto_generated": is_auto_generated,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            return {"message": "Award updated", "id": existing["id"]}
+    
+    award_id = str(uuid.uuid4())
+    award = {
+        "id": award_id,
+        "award_type": award_type,
+        "award_label": award_type_info["label"] if award_type_info else award_type,
+        "recipient_id": recipient_id,
+        "recipient_name": f"{participant.get('rank', '')} {participant.get('first_name', '')} {participant.get('last_name', '')}".strip(),
+        "recipient_flight": participant.get("flight"),
+        "recipient_squadron": participant.get("squadron"),
+        "participant_type": participant.get("participant_type", ""),
+        "date": date,
+        "notes": notes,
+        "awarded_by": user["name"],
+        "is_auto_generated": is_auto_generated,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.honor_awards.insert_one(award)
+    
+    return {**award, "_id": None}
+
+@api_router.get("/points/awards")
+async def get_honor_awards(
+    award_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    recipient_id: Optional[str] = None,
+    limit: int = 100,
+    user: dict = Depends(get_current_user)
+):
+    """Get honor awards with optional filtering"""
+    query = {}
+    
+    if award_type:
+        query["award_type"] = award_type
+    if recipient_id:
+        query["recipient_id"] = recipient_id
+    if start_date:
+        query["date"] = {"$gte": start_date}
+    if end_date:
+        if "date" in query:
+            query["date"]["$lte"] = end_date
+        else:
+            query["date"] = {"$lte": end_date}
+    
+    awards = await db.honor_awards.find(query, {"_id": 0}).sort("date", -1).to_list(limit)
+    return awards
+
+@api_router.get("/points/awards/by-date/{date}")
+async def get_awards_by_date(date: str, user: dict = Depends(get_current_user)):
+    """Get all awards for a specific date"""
+    awards = await db.honor_awards.find({"date": date}, {"_id": 0}).to_list(100)
+    return awards
+
+@api_router.delete("/points/awards/{award_id}")
+async def delete_honor_award(award_id: str, user: dict = Depends(get_current_user)):
+    """Delete an honor award"""
+    if user["role"] not in [UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete awards")
+    
+    result = await db.honor_awards.delete_one({"id": award_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Award not found")
+    
+    return {"message": "Award deleted"}
+
+@api_router.post("/points/awards/auto-assign/{date}")
+async def auto_assign_daily_awards(date: str, user: dict = Depends(get_current_user)):
+    """Automatically assign daily awards based on highest points for a date"""
+    if user["role"] not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]:
+        raise HTTPException(status_code=403, detail="Not authorized to auto-assign awards")
+    
+    assigned = []
+    
+    # Get individual leaderboards for the date
+    cadet_lb = await get_individual_leaderboard(participant_type="cadet", date=date, limit=1, user=user)
+    cadre_lb = await get_individual_leaderboard(participant_type="cadre", date=date, limit=1, user=user)
+    
+    # Auto-assign Cadet of the Day
+    if cadet_lb and cadet_lb[0]["total_points"] > 0:
+        top_cadet = cadet_lb[0]
+        await create_honor_award(
+            award_type="cadet_of_day",
+            recipient_id=top_cadet["participant_id"],
+            date=date,
+            notes=f"Highest cadet score: {top_cadet['total_points']} points",
+            is_auto_generated=True,
+            user=user
+        )
+        assigned.append({"award": "Cadet of the Day", "recipient": top_cadet["name"]})
+    
+    # Auto-assign Cadre of the Day
+    if cadre_lb and cadre_lb[0]["total_points"] > 0:
+        top_cadre = cadre_lb[0]
+        await create_honor_award(
+            award_type="cadre_of_day",
+            recipient_id=top_cadre["participant_id"],
+            date=date,
+            notes=f"Highest cadre score: {top_cadre['total_points']} points",
+            is_auto_generated=True,
+            user=user
+        )
+        assigned.append({"award": "Cadre of the Day", "recipient": top_cadre["name"]})
+    
+    return {"message": f"Auto-assigned {len(assigned)} awards", "awards": assigned}
+
+@api_router.get("/points/awards/recipients-summary")
+async def get_award_recipients_summary(user: dict = Depends(get_current_user)):
+    """Get summary of all award recipients with counts"""
+    pipeline = [
+        {"$group": {
+            "_id": "$recipient_id",
+            "recipient_name": {"$first": "$recipient_name"},
+            "recipient_flight": {"$first": "$recipient_flight"},
+            "total_awards": {"$sum": 1},
+            "awards": {"$push": {"type": "$award_type", "label": "$award_label", "date": "$date"}}
+        }},
+        {"$sort": {"total_awards": -1}}
+    ]
+    
+    results = await db.honor_awards.aggregate(pipeline).to_list(100)
+    return results
+
+
 # ================= SCHEDULE ROUTES =================
 
 async def increment_schedule_version():
