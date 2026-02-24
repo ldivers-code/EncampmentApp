@@ -65,7 +65,7 @@ const PointsPage = () => {
   const [isScoreModalOpen, setIsScoreModalOpen] = useState(false);
   const [isMeritModalOpen, setIsMeritModalOpen] = useState(false);
 
-  const flights = [
+  const allFlights = [
     { value: 'alpha', label: 'Alpha Flight', squadron: 'sq1' },
     { value: 'bravo', label: 'Bravo Flight', squadron: 'sq1' },
     { value: 'charlie', label: 'Charlie Flight', squadron: 'sq2' },
@@ -74,7 +74,7 @@ const PointsPage = () => {
     { value: 'foxtrot', label: 'Foxtrot Flight', squadron: 'sq3' }
   ];
 
-  const squadrons = [
+  const allSquadrons = [
     { value: 'sq1', label: 'Squadron 1' },
     { value: 'sq2', label: 'Squadron 2' },
     { value: 'sq3', label: 'Squadron 3' }
