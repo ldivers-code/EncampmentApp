@@ -785,6 +785,191 @@ async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.
     return {"message": "User deleted successfully"}
 
 
+# ================= PASSWORD RESET ROUTES =================
+
+RESET_TOKEN_EXPIRY_HOURS = 24
+
+async def send_password_reset_email(to_email: str, reset_token: str, user_name: str) -> bool:
+    """Send password reset email via SendGrid"""
+    if not SENDGRID_API_KEY or SENDGRID_API_KEY == "your_sendgrid_api_key_here":
+        logging.warning("SendGrid API key not configured - cannot send reset email")
+        return False
+    
+    reset_link = f"{os.environ.get('APP_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+    
+    subject = "Password Reset Request - CAP Encampment"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #00205B; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 30px; background-color: #f9f9f9; }}
+            .button {{ display: inline-block; padding: 12px 30px; background-color: #00205B; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0; }}
+            .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Password Reset Request</h1>
+            </div>
+            <div class="content">
+                <p>Hello {user_name},</p>
+                <p>We received a request to reset your password for the CAP Encampment Management System.</p>
+                <p>Click the button below to reset your password:</p>
+                <p style="text-align: center;">
+                    <a href="{reset_link}" class="button">Reset Password</a>
+                </p>
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; font-size: 12px;">{reset_link}</p>
+                <p><strong>This link will expire in 24 hours.</strong></p>
+                <p>If you didn't request this password reset, please ignore this email or contact your commander.</p>
+            </div>
+            <div class="footer">
+                <p>Tennessee Wing Civil Air Patrol</p>
+                <p>Volunteers Serving America</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    message = Mail(
+        from_email=SENDGRID_SENDER_EMAIL,
+        to_emails=to_email,
+        subject=subject,
+        html_content=html_content
+    )
+    
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logging.info(f"Password reset email sent to {to_email}, status: {response.status_code}")
+        return response.status_code == 202
+    except Exception as e:
+        logging.error(f"Failed to send password reset email to {to_email}: {str(e)}")
+        return False
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(email: str, capid: str):
+    """Initiate password reset - requires email and CAPID verification"""
+    # Find user by email
+    user = await db.users.find_one({"email": email.lower()})
+    if not user:
+        # Don't reveal if user exists or not
+        return {"message": "If an account with this email exists and the CAPID matches, you will receive a reset link."}
+    
+    # Verify CAPID matches
+    user_capid = str(user.get("capid", "")).strip()
+    provided_capid = str(capid).strip()
+    
+    if user_capid != provided_capid:
+        # Don't reveal if CAPID is wrong
+        return {"message": "If an account with this email exists and the CAPID matches, you will receive a reset link."}
+    
+    # Generate reset token
+    reset_token = str(uuid.uuid4())
+    expiry = datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRY_HOURS)
+    
+    # Store reset token in database
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "reset_token": reset_token,
+            "reset_token_expiry": expiry.isoformat()
+        }}
+    )
+    
+    # Send email
+    email_sent = await send_password_reset_email(user["email"], reset_token, user.get("name", "User"))
+    
+    if email_sent:
+        return {"message": "If an account with this email exists and the CAPID matches, you will receive a reset link."}
+    else:
+        # If SendGrid not configured, return the token for testing (remove in production)
+        logging.warning("SendGrid not configured - returning token directly for testing")
+        return {
+            "message": "Email service not configured. Please contact your commander to reset your password.",
+            "debug_token": reset_token  # Remove this in production
+        }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(token: str, new_password: str):
+    """Reset password using reset token"""
+    # Find user with this reset token
+    user = await db.users.find_one({"reset_token": token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    # Check if token is expired
+    expiry_str = user.get("reset_token_expiry")
+    if expiry_str:
+        expiry = datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
+        if datetime.now(timezone.utc) > expiry:
+            raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Validate password
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Hash new password
+    password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    
+    # Update password and clear reset token
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": password_hash},
+         "$unset": {"reset_token": "", "reset_token_expiry": ""}}
+    )
+    
+    return {"message": "Password has been reset successfully"}
+
+@api_router.post("/auth/verify-reset-token")
+async def verify_reset_token(token: str):
+    """Verify if a reset token is valid"""
+    user = await db.users.find_one({"reset_token": token})
+    if not user:
+        return {"valid": False, "message": "Invalid reset token"}
+    
+    expiry_str = user.get("reset_token_expiry")
+    if expiry_str:
+        expiry = datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
+        if datetime.now(timezone.utc) > expiry:
+            return {"valid": False, "message": "Reset token has expired"}
+    
+    return {"valid": True, "email": user.get("email")}
+
+@api_router.post("/users/{user_id}/reset-password")
+async def admin_reset_password(
+    user_id: str,
+    new_password: str,
+    user: dict = Depends(require_role([UserRole.COMMANDER]))
+):
+    """Admin/Commander reset password for a user"""
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate password
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Hash new password
+    password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    
+    # Update password
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password_hash": password_hash},
+         "$unset": {"reset_token": "", "reset_token_expiry": ""}}
+    )
+    
+    return {"message": f"Password reset successfully for {target_user.get('name')}"}
+
+
 # ================= ACTIVE USERS / PRESENCE ROUTES =================
 
 ACTIVE_THRESHOLD_SECONDS = 60  # Users are considered active if heartbeat within last 60 seconds
