@@ -784,6 +784,73 @@ const AdminPage = () => {
           </div>
         </div>
       )}
+
+      {/* Password Reset Modal */}
+      <Dialog open={!!resetPasswordModal} onOpenChange={(open) => !open && setResetPasswordModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2">
+              <Key className="w-5 h-5" />
+              Reset Password
+            </DialogTitle>
+          </DialogHeader>
+          {resetPasswordModal && (
+            <div className="space-y-4 mt-4">
+              <div className="p-3 bg-slate-50 rounded-sm">
+                <p className="text-sm text-slate-500">Resetting password for:</p>
+                <p className="font-bold text-slate-900">{resetPasswordModal.name}</p>
+                <p className="text-sm text-slate-500">{resetPasswordModal.email}</p>
+              </div>
+              
+              <div>
+                <label className="text-xs uppercase tracking-wide text-slate-600 block mb-1">New Password</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="rounded-sm"
+                  data-testid="admin-reset-password-input"
+                />
+                <p className="text-xs text-slate-400 mt-1">Minimum 6 characters</p>
+              </div>
+              
+              <div>
+                <label className="text-xs uppercase tracking-wide text-slate-600 block mb-1">Confirm Password</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="rounded-sm"
+                  data-testid="admin-reset-confirm-input"
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setResetPasswordModal(null);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleResetPassword}
+                  disabled={resettingPassword || !newPassword || !confirmPassword}
+                  className="bg-[#00205B]"
+                  data-testid="admin-reset-submit-btn"
+                >
+                  {resettingPassword ? 'Resetting...' : 'Reset Password'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
