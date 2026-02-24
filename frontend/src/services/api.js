@@ -40,6 +40,24 @@ export const deleteParticipant = async (id) => {
   return response.data;
 };
 
+export const removeParticipantFromEncampment = async (participantId, removalReason) => {
+  const response = await axios.post(
+    `${API}/participants/${participantId}/remove`,
+    { removal_reason: removalReason },
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const reinstateParticipant = async (participantId) => {
+  const response = await axios.post(
+    `${API}/participants/${participantId}/reinstate`,
+    {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
 export const importParticipants = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
