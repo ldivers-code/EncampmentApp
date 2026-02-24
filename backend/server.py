@@ -785,6 +785,62 @@ async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.
     return {"message": "User deleted successfully"}
 
 
+# ================= ACTIVE USERS / PRESENCE ROUTES =================
+
+ACTIVE_THRESHOLD_SECONDS = 60  # Users are considered active if heartbeat within last 60 seconds
+
+@api_router.post("/presence/heartbeat")
+async def heartbeat(user: dict = Depends(get_current_user)):
+    """Update user's last active timestamp (called every 30 seconds from frontend)"""
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_active": now, "is_online": True}}
+    )
+    
+    return {"status": "ok", "timestamp": now}
+
+@api_router.get("/presence/active-users")
+async def get_active_users(user: dict = Depends(get_current_user)):
+    """Get list of currently active users (heartbeat within threshold)"""
+    threshold = datetime.now(timezone.utc) - timedelta(seconds=ACTIVE_THRESHOLD_SECONDS)
+    threshold_iso = threshold.isoformat()
+    
+    # Find users with recent heartbeat
+    active_users = await db.users.find(
+        {
+            "last_active": {"$gte": threshold_iso},
+            "is_approved": True
+        },
+        {"_id": 0, "password_hash": 0, "permissions": 0}
+    ).to_list(100)
+    
+    # Format response
+    formatted = []
+    for u in active_users:
+        formatted.append({
+            "id": u.get("id"),
+            "name": u.get("name"),
+            "role": u.get("role"),
+            "last_active": u.get("last_active")
+        })
+    
+    return {
+        "count": len(formatted),
+        "users": formatted
+    }
+
+@api_router.post("/presence/offline")
+async def go_offline(user: dict = Depends(get_current_user)):
+    """Mark user as offline (called when user closes app or logs out)"""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"is_online": False}}
+    )
+    return {"status": "ok"}
+
+
 # ================= PROFILE ROUTES =================
 
 @api_router.get("/profile", response_model=UserResponse)
