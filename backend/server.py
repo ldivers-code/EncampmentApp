@@ -2564,7 +2564,7 @@ async def get_individual_leaderboard(
     
     # Filter by type if specified
     if participant_type:
-        target_types = ["student", "cadet"] if participant_type == "cadet" else ["cadre"]
+        target_types = ["student", "cadet", "basic_student", "advanced_student"] if participant_type == "cadet" else ["cadre", "staff", "senior_member"]
         individual_scores = {k: v for k, v in individual_scores.items() 
                           if v.get("participant_type", "").lower() in target_types}
     
