@@ -395,15 +395,16 @@ const MyFlightPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
         {[
           { id: 'roster', label: 'Roster', icon: Users },
+          { id: 'points', label: 'Points', icon: Trophy, count: flightCadets.length },
           { id: 'documents', label: 'Documents', icon: FileText, count: getDocumentCount() }
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
               activeTab === tab.id
                 ? 'border-[#00205B] text-[#00205B]'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
