@@ -707,6 +707,254 @@ const MyFlightPage = () => {
           )}
         </div>
       )}
+
+      {/* Points Tab */}
+      {activeTab === 'points' && (
+        <div className="space-y-6">
+          {/* Flight Standing Card */}
+          {flightStanding && (
+            <div className="bg-gradient-to-r from-[#00205B] to-[#003087] text-white rounded-sm p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+                    <Trophy className="w-8 h-8 text-yellow-300" />
+                  </div>
+                  <div>
+                    <p className="text-blue-200 text-sm uppercase tracking-wide">Flight Standing</p>
+                    <p className="text-3xl font-black">{getFlightLabel(selectedFlight)}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-5xl font-black">#{flightStanding.rank}</p>
+                  <p className="text-blue-200">{flightStanding.total_points.toFixed(0)} points</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cadets Point List */}
+          <div className="bg-white border border-slate-200 rounded-sm">
+            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="w-5 h-5 text-yellow-500" />
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
+                  Flight Cadets
+                </h2>
+                <span className="text-xs text-slate-400 ml-2">{flightCadets.length} cadets</span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={loadFlightPoints}
+                className="rounded-sm"
+              >
+                <RefreshCw className="w-4 h-4 mr-1" />
+                Refresh
+              </Button>
+            </div>
+            
+            {flightCadets.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No cadets assigned to this flight</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {flightCadets
+                  .sort((a, b) => (cadetPoints[b.id] || 0) - (cadetPoints[a.id] || 0))
+                  .map((cadet, idx) => (
+                  <div 
+                    key={cadet.id}
+                    className="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4"
+                  >
+                    {/* Rank Badge */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                      idx === 1 ? 'bg-slate-200 text-slate-700' :
+                      idx === 2 ? 'bg-orange-100 text-orange-700' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                    
+                    {/* Cadet Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{cadet.name}</p>
+                      <p className="text-xs text-slate-400">{cadet.rank}</p>
+                    </div>
+                    
+                    {/* Points */}
+                    <div className="text-right mr-4">
+                      <p className="text-xl font-bold text-[#00205B]">
+                        {(cadetPoints[cadet.id] || 0).toFixed(0)}
+                      </p>
+                      <p className="text-[10px] text-slate-400 uppercase">Points</p>
+                    </div>
+                    
+                    {/* Quick Actions */}
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleQuickMerit(cadet, 'merit')}
+                        className="h-8 w-8 p-0 rounded-sm text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                        title="Give Merit"
+                        data-testid={`merit-${cadet.id}`}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleQuickMerit(cadet, 'demerit')}
+                        className="h-8 w-8 p-0 rounded-sm text-red-500 hover:bg-red-50 hover:text-red-600"
+                        title="Give Demerit"
+                        data-testid={`demerit-${cadet.id}`}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          {recentMerits.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-sm">
+              <div className="border-b border-slate-100 p-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-[#00205B]" />
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
+                  Recent Activity
+                </h2>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                {recentMerits.map((merit) => {
+                  const cadet = flightCadets.find(c => c.id === merit.participant_id);
+                  return (
+                    <div key={merit.id} className="p-3 flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        merit.entry_type === 'merit' 
+                          ? 'bg-emerald-100 text-emerald-600' 
+                          : 'bg-red-100 text-red-600'
+                      }`}>
+                        {merit.entry_type === 'merit' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {cadet?.name || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate">{merit.reason}</p>
+                      </div>
+                      <div className={`text-sm font-bold ${
+                        merit.entry_type === 'merit' ? 'text-emerald-600' : 'text-red-600'
+                      }`}>
+                        {merit.entry_type === 'merit' ? '+' : '-'}{merit.points}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Link to Full Point Tracker */}
+          <div className="text-center">
+            <a 
+              href="/points" 
+              className="inline-flex items-center gap-2 text-sm text-[#00205B] hover:underline"
+            >
+              <Award className="w-4 h-4" />
+              View Full Point Tracker & Leaderboards
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Merit/Demerit Modal */}
+      <Dialog open={isMeritModalOpen} onOpenChange={setIsMeritModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2">
+              {meritForm.entry_type === 'merit' ? (
+                <><Plus className="w-5 h-5 text-emerald-600" /> Give Merit</>
+              ) : (
+                <><Minus className="w-5 h-5 text-red-500" /> Give Demerit</>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCadet && (
+            <form onSubmit={handleSubmitMerit} className="space-y-4 mt-4">
+              <div className="p-3 bg-slate-50 rounded-sm">
+                <p className="text-sm text-slate-500">Cadet:</p>
+                <p className="font-bold text-slate-900">{selectedCadet.name}</p>
+              </div>
+              
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Type</Label>
+                <Select
+                  value={meritForm.entry_type}
+                  onValueChange={(v) => setMeritForm({...meritForm, entry_type: v})}
+                >
+                  <SelectTrigger className="mt-1 rounded-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="merit">Merit (+)</SelectItem>
+                    <SelectItem value="demerit">Demerit (-)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Points</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={meritForm.points}
+                  onChange={(e) => setMeritForm({...meritForm, points: e.target.value})}
+                  className="mt-1 rounded-sm"
+                  placeholder="5"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Reason *</Label>
+                <Textarea
+                  value={meritForm.reason}
+                  onChange={(e) => setMeritForm({...meritForm, reason: e.target.value})}
+                  className="mt-1 rounded-sm"
+                  rows={2}
+                  placeholder="Reason for this merit/demerit..."
+                  required
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsMeritModalOpen(false);
+                    setSelectedCadet(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className={meritForm.entry_type === 'merit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}
+                >
+                  {meritForm.entry_type === 'merit' ? 'Award Merit' : 'Issue Demerit'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
