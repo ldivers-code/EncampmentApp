@@ -47,8 +47,26 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **My Flight Page with Flight Roster and Documents**
 - [x] **Active Users / Who's Online Feature**
 - [x] **Password Reset (Self-Service & Admin)**
+- [x] **My Flight Points Tab (Flight-specific point tracking)**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - My Flight Points Tab
+- **Points Tab** added to My Flight page with:
+  - **Flight Standing Card**: Shows flight's rank and total points (e.g., "#1 - 95 points")
+  - **Flight Cadets List**: Only cadets assigned to the selected flight
+  - **Ranking Display**: Gold/silver/bronze badges for top 3 cadets
+  - **Quick Merit/Demerit**: +/- buttons on each cadet row
+  - **Point Totals**: Current points shown for each cadet
+- **Merit/Demerit Modal**:
+  - Pre-filled cadet name
+  - Type dropdown (Merit/Demerit)
+  - Points input (default: 5)
+  - Reason textarea (required)
+  - Color-coded buttons (green for merit, red for demerit)
+- **Recent Activity**: Shows recent merits/demerits for the flight's cadets
+- **Integration**: Connected to main Point Tracker - all data syncs
+- **Navigation**: "View Full Point Tracker & Leaderboards" link
 
 ### Feb 24, 2026 - Password Reset Feature
 - **Self-Service Password Reset** (`/forgot-password`):
