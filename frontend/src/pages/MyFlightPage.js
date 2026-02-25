@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   getMyFlightInfo, getFlightRoster, getSquadronRoster, 
-  getFlightDocuments, getDocuments, createDocument, deleteDocument
+  getFlightDocuments, getDocuments, createDocument, deleteDocument,
+  getScoreCategories, recordMeritDemerit, getMeritDemerits, getIndividualLeaderboard,
+  getFlightLeaderboard, getCumulativeStandings
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -17,6 +19,7 @@ import {
   BookOpen, 
   ChevronRight,
   Plus,
+  Minus,
   Trash2,
   ExternalLink,
   Shield,
@@ -26,7 +29,10 @@ import {
   GraduationCap,
   Upload,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Trophy,
+  TrendingUp,
+  Award
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
