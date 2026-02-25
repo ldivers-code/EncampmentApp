@@ -68,6 +68,19 @@ const MyFlightPage = () => {
   const [activeTab, setActiveTab] = useState('roster');
   const [selectedCategory, setSelectedCategory] = useState('all');
   
+  // Points state
+  const [flightCadets, setFlightCadets] = useState([]);
+  const [cadetPoints, setCadetPoints] = useState({});
+  const [flightStanding, setFlightStanding] = useState(null);
+  const [recentMerits, setRecentMerits] = useState([]);
+  const [isMeritModalOpen, setIsMeritModalOpen] = useState(false);
+  const [selectedCadet, setSelectedCadet] = useState(null);
+  const [meritForm, setMeritForm] = useState({
+    entry_type: 'merit',
+    points: '',
+    reason: ''
+  });
+  
   // Document upload form
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState({
