@@ -118,8 +118,15 @@ const MyFlightPage = () => {
     if (selectedFlight) {
       loadRoster();
       loadDocuments();
+      loadFlightPoints();
     }
   }, [selectedFlight, viewMode]);
+
+  useEffect(() => {
+    if (activeTab === 'points' && selectedFlight) {
+      loadFlightPoints();
+    }
+  }, [activeTab]);
 
   const loadFlightInfo = async () => {
     try {
@@ -136,6 +143,74 @@ const MyFlightPage = () => {
       toast.error('Failed to load flight information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFlightPoints = async () => {
+    if (!selectedFlight) return;
+    
+    try {
+      // Get roster for cadets
+      const rosterData = await getFlightRoster(selectedFlight);
+      const cadets = rosterData.roster?.filter(m => m.is_student) || [];
+      setFlightCadets(cadets);
+      
+      // Get individual leaderboard to get point totals
+      const leaderboard = await getIndividualLeaderboard('cadet');
+      const pointsMap = {};
+      leaderboard.forEach(entry => {
+        pointsMap[entry.participant_id] = entry.total_points;
+      });
+      setCadetPoints(pointsMap);
+      
+      // Get flight standing from cumulative standings
+      const standings = await getCumulativeStandings();
+      const flightData = standings.flights?.find(f => f.flight.toLowerCase() === selectedFlight.toLowerCase());
+      setFlightStanding(flightData);
+      
+      // Get recent merits for this flight's cadets
+      const merits = await getMeritDemerits({ limit: 20 });
+      const cadetIds = cadets.map(c => c.id);
+      const flightMerits = merits.filter(m => cadetIds.includes(m.participant_id));
+      setRecentMerits(flightMerits.slice(0, 10));
+    } catch (error) {
+      console.error('Failed to load flight points:', error);
+    }
+  };
+
+  const handleQuickMerit = (cadet, type) => {
+    setSelectedCadet(cadet);
+    setMeritForm({
+      entry_type: type,
+      points: type === 'merit' ? '5' : '5',
+      reason: ''
+    });
+    setIsMeritModalOpen(true);
+  };
+
+  const handleSubmitMerit = async (e) => {
+    e.preventDefault();
+    if (!selectedCadet || !meritForm.points || !meritForm.reason) {
+      toast.error('Please fill all fields');
+      return;
+    }
+
+    try {
+      await recordMeritDemerit({
+        participant_id: selectedCadet.id,
+        entry_type: meritForm.entry_type,
+        points: parseFloat(meritForm.points),
+        reason: meritForm.reason,
+        date: new Date().toISOString().split('T')[0]
+      });
+      
+      toast.success(`${meritForm.entry_type === 'merit' ? 'Merit' : 'Demerit'} recorded for ${selectedCadet.name}`);
+      setIsMeritModalOpen(false);
+      setSelectedCadet(null);
+      setMeritForm({ entry_type: 'merit', points: '', reason: '' });
+      loadFlightPoints();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to record');
     }
   };
 
