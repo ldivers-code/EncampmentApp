@@ -48,8 +48,23 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Active Users / Who's Online Feature**
 - [x] **Password Reset (Self-Service & Admin)**
 - [x] **My Flight Points Tab (Flight-specific point tracking)**
+- [x] **Receipt Repository (Finance Page)**
 
 ## What's Been Implemented
+
+### Feb 24, 2026 - Receipt Repository
+- **Receipt Repository Tab** on Finance/Budget page:
+  - **Stats Dashboard**: Total Receipts, Documented Expenses, Missing Receipts counts
+  - **Search Bar**: Filter receipts by item name, category, or vendor
+  - **Receipt Gallery**: Grid display of receipt cards with:
+    - Image preview (or PDF icon for documents)
+    - Item name, category, actual amount
+    - Vendor name
+    - View, Download, Delete action buttons
+  - **Receipt Preview Modal**: Full-size view with details (Category, Amount, Vendor, Filename)
+  - **Missing Receipts Alert**: Shows expense items that don't have receipts uploaded
+- **Tab Badge**: Shows count of uploaded receipts
+- **Integrated**: Uses existing receipt upload functionality for budget items
 
 ### Feb 24, 2026 - My Flight Points Tab
 - **Points Tab** added to My Flight page with:
