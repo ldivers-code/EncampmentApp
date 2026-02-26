@@ -119,10 +119,10 @@ const AnalyticsPage = () => {
             Encampment Analytics
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {analytics.total_count} total participants
+            {analytics.total_count || 0} total participants
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center overflow-visible">
           {/* Export Dropdown */}
           <div className="relative group">
             <Button 
