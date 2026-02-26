@@ -68,6 +68,10 @@ const BudgetPage = () => {
   // Inline editing state
   const [editingActual, setEditingActual] = useState(null);
   const [editingActualValue, setEditingActualValue] = useState('');
+  // Receipt repository state
+  const [activeTab, setActiveTab] = useState('budget'); // 'budget' or 'receipts'
+  const [receiptSearch, setReceiptSearch] = useState('');
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
 
   const [formData, setFormData] = useState({
     category: '',
