@@ -205,7 +205,7 @@ const AnalyticsPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Seniors</p>
-                  <p className="text-3xl font-bold text-[#00205B]">{analytics.by_role.seniors.count}</p>
+                  <p className="text-3xl font-bold text-[#00205B]">{safeGet(analytics, 'by_role.seniors.count', 0)}</p>
                   <p className="text-xs text-slate-400 mt-1">Senior Members</p>
                 </div>
                 <UserCheck className="w-8 h-8 text-[#00205B]/20" />
@@ -216,8 +216,8 @@ const AnalyticsPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Staff</p>
-                  <p className="text-3xl font-bold text-amber-600">{analytics.by_role.staff.count}</p>
-                  <p className="text-xs text-slate-400 mt-1">Avg age: {analytics.by_role.staff.avg_age || 'N/A'}</p>
+                  <p className="text-3xl font-bold text-amber-600">{safeGet(analytics, 'by_role.staff.count', 0)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Avg age: {safeGet(analytics, 'by_role.staff.avg_age', null) || 'N/A'}</p>
                 </div>
                 <Users className="w-8 h-8 text-amber-600/20" />
               </div>
@@ -227,8 +227,8 @@ const AnalyticsPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Cadre</p>
-                  <p className="text-3xl font-bold text-emerald-600">{analytics.by_role.cadre.count}</p>
-                  <p className="text-xs text-slate-400 mt-1">Avg age: {analytics.by_role.cadre.avg_age || 'N/A'}</p>
+                  <p className="text-3xl font-bold text-emerald-600">{safeGet(analytics, 'by_role.cadre.count', 0)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Avg age: {safeGet(analytics, 'by_role.cadre.avg_age', null) || 'N/A'}</p>
                 </div>
                 <Users className="w-8 h-8 text-emerald-600/20" />
               </div>
@@ -238,8 +238,8 @@ const AnalyticsPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Students</p>
-                  <p className="text-3xl font-bold text-blue-600">{analytics.by_role.students.count}</p>
-                  <p className="text-xs text-slate-400 mt-1">Avg age: {analytics.by_role.students.avg_age || 'N/A'}</p>
+                  <p className="text-3xl font-bold text-blue-600">{safeGet(analytics, 'by_role.students.count', 0)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Avg age: {safeGet(analytics, 'by_role.students.avg_age', null) || 'N/A'}</p>
                 </div>
                 <Users className="w-8 h-8 text-blue-600/20" />
               </div>
