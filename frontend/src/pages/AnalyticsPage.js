@@ -93,7 +93,8 @@ const AnalyticsPage = () => {
     );
   }
 
-  if (!analytics) {
+  // Handle null, error, or missing data
+  if (!analytics || analytics.error) {
     return (
       <div className="p-6 lg:p-8 animate-fade-in">
         <div className="text-center py-12">
@@ -103,6 +104,11 @@ const AnalyticsPage = () => {
       </div>
     );
   }
+
+  // Helper function to safely get nested values with defaults
+  const safeGet = (obj, path, defaultValue = 0) => {
+    return path.split('.').reduce((acc, part) => acc?.[part], obj) ?? defaultValue;
+  };
 
   return (
     <div className="p-6 lg:p-8 animate-fade-in">
