@@ -447,8 +447,12 @@ Staff/Cadre
 - [x] User approval workflow with roster linking
 - [x] **Point Tracking System** (flight standings, squadron standings, individual rankings)
 - [x] **Schedule Filter for All Users** (all members can filter by flight/squadron)
+- [x] **Analytics Page Empty State Handling** (gracefully shows zeros and "No data" messages when roster is empty)
 
-### P1 (High Priority)
+### P1 (High Priority) - COMPLETED
+- [x] **Header buttons CSS fix** (dropdown visibility and z-index issue resolved)
+
+### P1 (High Priority) - PENDING
 - [ ] Implement Handbooks page (upload/view PDF documents)
 - [ ] Implement Official Documents page (upload/view files)
 - [ ] PDF export for roster reports
