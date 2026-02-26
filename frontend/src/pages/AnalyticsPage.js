@@ -134,7 +134,7 @@ const AnalyticsPage = () => {
               <Download className="w-4 h-4 mr-2" />
               {exporting ? 'Exporting...' : 'Export'}
             </Button>
-            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+            <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-sm shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
               <button
                 onClick={() => handleExport('csv')}
                 className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
