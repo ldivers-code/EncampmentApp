@@ -655,6 +655,40 @@ const BudgetPage = () => {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('budget')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === 'budget'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="tab-budget"
+        >
+          <DollarSign className="w-4 h-4" />
+          Budget Items
+        </button>
+        <button
+          onClick={() => setActiveTab('receipts')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === 'receipts'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="tab-receipts"
+        >
+          <Receipt className="w-4 h-4" />
+          Receipt Repository
+          {itemsWithReceipts.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-slate-100">{itemsWithReceipts.length}</span>
+          )}
+        </button>
+      </div>
+
+      {/* Budget Tab Content */}
+      {activeTab === 'budget' && (
+        <>
       {/* Live Budget Summary Dashboard */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         {/* Income Section */}
