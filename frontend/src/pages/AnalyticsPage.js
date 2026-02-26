@@ -436,19 +436,23 @@ const AnalyticsPage = () => {
               <MapPin className="w-4 h-4" />
               Wing Distribution
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {Object.entries(analytics.by_wing)
-                .sort((a, b) => b[1] - a[1])
-                .map(([wing, count]) => (
-                  <div key={wing} className="bg-slate-50 p-3 rounded text-center">
-                    <p className="text-xs uppercase text-slate-500">{wing}</p>
-                    <p className="text-xl font-bold text-[#00205B]">{count}</p>
-                    <p className="text-xs text-slate-400">
-                      {((count / analytics.total_count) * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                ))}
-            </div>
+            {Object.keys(analytics.by_wing || {}).length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {Object.entries(analytics.by_wing)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([wing, count]) => (
+                    <div key={wing} className="bg-slate-50 p-3 rounded text-center">
+                      <p className="text-xs uppercase text-slate-500">{wing}</p>
+                      <p className="text-xl font-bold text-[#00205B]">{count}</p>
+                      <p className="text-xs text-slate-400">
+                        {analytics.total_count > 0 ? ((count / analytics.total_count) * 100).toFixed(0) : 0}%
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm text-center py-4">No wing data available</p>
+            )}
           </div>
 
           {/* Region Distribution */}
@@ -456,20 +460,24 @@ const AnalyticsPage = () => {
             <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
               Region Distribution
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.entries(analytics.by_region)
-                .sort((a, b) => b[1] - a[1])
-                .map(([region, count]) => (
-                  <div key={region} className="bg-slate-50 p-3 rounded text-center">
-                    <p className="text-xs uppercase text-slate-500">{region}</p>
-                    <p className="text-xl font-bold text-[#00205B]">{count}</p>
-                  </div>
-                ))}
-            </div>
+            {Object.keys(analytics.by_region || {}).length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {Object.entries(analytics.by_region)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([region, count]) => (
+                    <div key={region} className="bg-slate-50 p-3 rounded text-center">
+                      <p className="text-xs uppercase text-slate-500">{region}</p>
+                      <p className="text-xl font-bold text-[#00205B]">{count}</p>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm text-center py-4">No region data available</p>
+            )}
           </div>
 
           {/* TN Group Distribution */}
-          {Object.keys(analytics.by_group).length > 0 && (
+          {Object.keys(analytics.by_group || {}).length > 0 && (
             <div className="bg-white border border-slate-200 rounded-sm p-4">
               <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
                 Tennessee Group Distribution
@@ -493,44 +501,52 @@ const AnalyticsPage = () => {
               <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
                 Squadron Distribution
               </h3>
-              <div className="space-y-2">
-                {Object.entries(analytics.by_squadron)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([sq, count]) => (
-                    <div key={sq} className="flex items-center gap-2">
-                      <span className="flex-1 text-sm">{sq}</span>
-                      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
-                        <div 
-                          className="h-full bg-[#00205B] rounded-full"
-                          style={{ width: `${(count / analytics.total_count) * 100}%` }}
-                        />
+              {Object.keys(analytics.by_squadron || {}).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(analytics.by_squadron)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([sq, count]) => (
+                      <div key={sq} className="flex items-center gap-2">
+                        <span className="flex-1 text-sm">{sq}</span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                          <div 
+                            className="h-full bg-[#00205B] rounded-full"
+                            style={{ width: `${analytics.total_count > 0 ? (count / analytics.total_count) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-mono w-8 text-right">{count}</span>
                       </div>
-                      <span className="text-sm font-mono w-8 text-right">{count}</span>
-                    </div>
-                  ))}
-              </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-sm text-center py-4">No squadron assignments yet</p>
+              )}
             </div>
 
             <div className="bg-white border border-slate-200 rounded-sm p-4">
               <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
                 Flight Distribution
               </h3>
-              <div className="space-y-2">
-                {Object.entries(analytics.by_flight)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([fl, count]) => (
-                    <div key={fl} className="flex items-center gap-2">
-                      <span className="flex-1 text-sm">{fl}</span>
-                      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${(count / analytics.total_count) * 100}%` }}
-                        />
+              {Object.keys(analytics.by_flight || {}).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(analytics.by_flight)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([fl, count]) => (
+                      <div key={fl} className="flex items-center gap-2">
+                        <span className="flex-1 text-sm">{fl}</span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full"
+                            style={{ width: `${analytics.total_count > 0 ? (count / analytics.total_count) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-mono w-8 text-right">{count}</span>
                       </div>
-                      <span className="text-sm font-mono w-8 text-right">{count}</span>
-                    </div>
-                  ))}
-              </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-sm text-center py-4">No flight assignments yet</p>
+              )}
             </div>
           </div>
         </div>
