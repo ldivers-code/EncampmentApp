@@ -1390,8 +1390,30 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
     """Get comprehensive analytics for encampment attendees"""
     participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
     
+    # Return empty analytics structure when no participants
     if not participants:
-        return {"error": "No participants found"}
+        return {
+            'total_count': 0,
+            'by_role': {
+                'seniors': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
+                'staff': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
+                'cadre': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
+                'students': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
+            },
+            'by_rank': {},
+            'by_wing': {},
+            'by_region': {},
+            'by_gender': {'M': 0, 'F': 0, 'Unknown': 0},
+            'by_group': {},
+            'by_squadron': {},
+            'by_flight': {},
+            'age_stats': {
+                'total': {'avg': None, 'min': None, 'max': None},
+                'by_squadron': {},
+                'by_flight': {}
+            },
+            'pending_payments': [],
+        }
     
     # Initialize analytics structure
     analytics = {
