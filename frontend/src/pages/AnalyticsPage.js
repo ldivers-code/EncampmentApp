@@ -297,27 +297,30 @@ const AnalyticsPage = () => {
                 </thead>
                 <tbody>
                   {[
-                    { name: 'Staff', data: analytics.by_role.staff, color: 'bg-amber-50' },
-                    { name: 'Cadre', data: analytics.by_role.cadre, color: 'bg-emerald-50' },
-                    { name: 'Students', data: analytics.by_role.students, color: 'bg-blue-50' },
-                  ].map(({ name, data, color }) => (
-                    <tr key={name} className={`border-b border-slate-100 ${color}`}>
-                      <td className="py-2 px-3 font-medium">{name}</td>
-                      <td className="py-2 px-3 text-center font-bold">{data.count}</td>
-                      <td className="py-2 px-3 text-center text-blue-600">{data.male}</td>
-                      <td className="py-2 px-3 text-center text-pink-600">{data.female}</td>
-                      <td className="py-2 px-3 text-center">
-                        <span className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-mono">
-                          {formatPercent(data.male_pct)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <span className="inline-block bg-pink-100 text-pink-700 px-2 py-0.5 rounded text-xs font-mono">
-                          {formatPercent(data.female_pct)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                    { name: 'Staff', key: 'staff', color: 'bg-amber-50' },
+                    { name: 'Cadre', key: 'cadre', color: 'bg-emerald-50' },
+                    { name: 'Students', key: 'students', color: 'bg-blue-50' },
+                  ].map(({ name, key, color }) => {
+                    const data = analytics.by_role?.[key] || { count: 0, male: 0, female: 0, male_pct: 0, female_pct: 0 };
+                    return (
+                      <tr key={name} className={`border-b border-slate-100 ${color}`}>
+                        <td className="py-2 px-3 font-medium">{name}</td>
+                        <td className="py-2 px-3 text-center font-bold">{data.count || 0}</td>
+                        <td className="py-2 px-3 text-center text-blue-600">{data.male || 0}</td>
+                        <td className="py-2 px-3 text-center text-pink-600">{data.female || 0}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-mono">
+                            {formatPercent(data.male_pct || 0)}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="inline-block bg-pink-100 text-pink-700 px-2 py-0.5 rounded text-xs font-mono">
+                            {formatPercent(data.female_pct || 0)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
