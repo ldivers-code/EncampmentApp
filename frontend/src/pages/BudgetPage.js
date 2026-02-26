@@ -39,6 +39,7 @@ import {
   X,
   FileImage,
   AlertCircle,
+  AlertTriangle,
   Lock,
   FileSpreadsheet,
   Check,
@@ -46,7 +47,10 @@ import {
   Clock,
   Banknote,
   ArrowUpDown,
-  Target
+  Target,
+  Eye,
+  Download,
+  Search
 } from 'lucide-react';
 
 const BudgetPage = () => {
