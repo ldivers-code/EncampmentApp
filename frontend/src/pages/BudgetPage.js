@@ -418,6 +418,23 @@ const BudgetPage = () => {
     });
   };
 
+  // Get all items with receipts
+  const itemsWithReceipts = useMemo(() => {
+    return items.filter(item => item.receipt_url);
+  }, [items]);
+
+  // Filter receipts by search
+  const filteredReceipts = useMemo(() => {
+    if (!receiptSearch) return itemsWithReceipts;
+    const search = receiptSearch.toLowerCase();
+    return itemsWithReceipts.filter(item => 
+      item.item_name?.toLowerCase().includes(search) ||
+      item.category?.toLowerCase().includes(search) ||
+      item.vendor?.toLowerCase().includes(search) ||
+      item.receipt_filename?.toLowerCase().includes(search)
+    );
+  }, [itemsWithReceipts, receiptSearch]);
+
   if (loading) {
     return (
       <div className="p-6 lg:p-8 animate-fade-in">
