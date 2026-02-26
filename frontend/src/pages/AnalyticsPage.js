@@ -256,20 +256,20 @@ const AnalyticsPage = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Average Age</p>
-                <p className="text-2xl font-bold text-[#00205B]">{analytics.age_stats.total.avg || 'N/A'}</p>
+                <p className="text-2xl font-bold text-[#00205B]">{safeGet(analytics, 'age_stats.total.avg', null) || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Youngest</p>
-                <p className="text-2xl font-bold text-emerald-600">{analytics.age_stats.total.min || 'N/A'}</p>
+                <p className="text-2xl font-bold text-emerald-600">{safeGet(analytics, 'age_stats.total.min', null) || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Oldest</p>
-                <p className="text-2xl font-bold text-amber-600">{analytics.age_stats.total.max || 'N/A'}</p>
+                <p className="text-2xl font-bold text-amber-600">{safeGet(analytics, 'age_stats.total.max', null) || 'N/A'}</p>
               </div>
               <div className="text-center p-3 bg-slate-50 rounded">
                 <p className="text-xs uppercase text-slate-500">Age Range</p>
                 <p className="text-2xl font-bold text-slate-700">
-                  {analytics.age_stats.total.max && analytics.age_stats.total.min 
+                  {safeGet(analytics, 'age_stats.total.max', null) && safeGet(analytics, 'age_stats.total.min', null) 
                     ? `${analytics.age_stats.total.max - analytics.age_stats.total.min} yrs`
                     : 'N/A'}
                 </p>
