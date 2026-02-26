@@ -340,24 +340,24 @@ const AnalyticsPage = () => {
               <div className="flex-1">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-blue-600 font-medium">Male</span>
-                  <span className="font-mono">{analytics.by_gender.M || 0}</span>
+                  <span className="font-mono">{analytics.by_gender?.M || 0}</span>
                 </div>
                 <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-blue-500 rounded-full transition-all"
-                    style={{ width: `${analytics.total_count > 0 ? (analytics.by_gender.M || 0) / analytics.total_count * 100 : 0}%` }}
+                    style={{ width: `${analytics.total_count > 0 ? ((analytics.by_gender?.M || 0) / analytics.total_count) * 100 : 0}%` }}
                   />
                 </div>
               </div>
               <div className="flex-1">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-pink-600 font-medium">Female</span>
-                  <span className="font-mono">{analytics.by_gender.F || 0}</span>
+                  <span className="font-mono">{analytics.by_gender?.F || 0}</span>
                 </div>
                 <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-pink-500 rounded-full transition-all"
-                    style={{ width: `${analytics.total_count > 0 ? (analytics.by_gender.F || 0) / analytics.total_count * 100 : 0}%` }}
+                    style={{ width: `${analytics.total_count > 0 ? ((analytics.by_gender?.F || 0) / analytics.total_count) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -370,16 +370,20 @@ const AnalyticsPage = () => {
               <BarChart3 className="w-4 h-4" />
               Rank Distribution
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {Object.entries(analytics.by_rank)
-                .sort((a, b) => b[1] - a[1])
-                .map(([rank, count]) => (
-                  <div key={rank} className="bg-slate-50 p-3 rounded text-center">
-                    <p className="text-xs uppercase text-slate-500 truncate">{rank}</p>
-                    <p className="text-xl font-bold text-[#00205B]">{count}</p>
-                  </div>
-                ))}
-            </div>
+            {Object.keys(analytics.by_rank || {}).length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {Object.entries(analytics.by_rank)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([rank, count]) => (
+                    <div key={rank} className="bg-slate-50 p-3 rounded text-center">
+                      <p className="text-xs uppercase text-slate-500 truncate">{rank}</p>
+                      <p className="text-xl font-bold text-[#00205B]">{count}</p>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm text-center py-4">No rank data available</p>
+            )}
           </div>
 
           {/* Average Age by Squadron/Flight */}
@@ -388,7 +392,7 @@ const AnalyticsPage = () => {
               <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
                 Average Age by Squadron
               </h3>
-              {Object.keys(analytics.age_stats.by_squadron).length > 0 ? (
+              {Object.keys(analytics.age_stats?.by_squadron || {}).length > 0 ? (
                 <div className="space-y-2">
                   {Object.entries(analytics.age_stats.by_squadron).map(([sq, avg]) => (
                     <div key={sq} className="flex items-center justify-between py-2 border-b border-slate-100">
@@ -406,7 +410,7 @@ const AnalyticsPage = () => {
               <h3 className="font-bold text-[#00205B] uppercase text-sm tracking-wide mb-4">
                 Average Age by Flight
               </h3>
-              {Object.keys(analytics.age_stats.by_flight).length > 0 ? (
+              {Object.keys(analytics.age_stats?.by_flight || {}).length > 0 ? (
                 <div className="space-y-2">
                   {Object.entries(analytics.age_stats.by_flight).map(([fl, avg]) => (
                     <div key={fl} className="flex items-center justify-between py-2 border-b border-slate-100">
