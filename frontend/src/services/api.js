@@ -644,3 +644,24 @@ export const getGoogleSheetsSyncStatus = async () => {
   return response.data;
 };
 
+// Daily Settings (Uniform & Weather Flag)
+export const getDailySettings = async () => {
+  const response = await axios.get(`${API}/daily-settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateUniformOfDay = async (uniform) => {
+  const response = await axios.post(`${API}/daily-settings/uniform`, uniform, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateWeatherFlag = async (weather) => {
+  const response = await axios.post(`${API}/daily-settings/weather-flag`, weather, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getWeatherGuidelines = async () => {
+  const response = await axios.get(`${API}/daily-settings/weather-guidelines`, { headers: getAuthHeaders() });
+  return response.data;
+};
+

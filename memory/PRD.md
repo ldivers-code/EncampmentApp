@@ -457,6 +457,8 @@ Staff/Cadre
 - [x] **Org Chart Google Sheets Integration** (parses org chart spreadsheet and updates roles with assigned staff names)
 - [x] **Flight Assignment Auto-Sync** (parses student flight assignments from spreadsheet rows 45+ and auto-assigns to flights/squadrons)
 - [x] **Squadron Designations Updated** (6th CTS, 21st CTS, 22nd CTS with proper names, mascots, and patches)
+- [x] **Uniform of the Day** (Dashboard widget for daily uniform updates with admin controls)
+- [x] **Weather Flag System** (Heat condition flags with CAP-compliant guidelines, rest schedules, and activity restrictions)
 
 ### P1 (High Priority) - PENDING
 - [ ] Implement Handbooks page (upload/view PDF documents)

@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { getDashboardStats } from '../services/api';
+import { getDashboardStats, getDailySettings, updateUniformOfDay, updateWeatherFlag } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
+import { toast } from 'sonner';
 import { 
   Users, 
   DollarSign, 
@@ -9,7 +15,15 @@ import {
   TrendingDown,
   UserCheck,
   UserX,
-  Radio
+  Radio,
+  Shirt,
+  Thermometer,
+  Flag,
+  Edit,
+  AlertTriangle,
+  Droplets,
+  Clock,
+  Info
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -26,9 +40,21 @@ const DashboardPage = () => {
   const { user, activeUsers } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dailySettings, setDailySettings] = useState(null);
+  
+  // Admin edit dialogs
+  const [uniformDialogOpen, setUniformDialogOpen] = useState(false);
+  const [weatherDialogOpen, setWeatherDialogOpen] = useState(false);
+  const [uniformForm, setUniformForm] = useState({ uniform_code: '', description: '', special_instructions: '' });
+  const [weatherForm, setWeatherForm] = useState({ flag_color: 'green', heat_index: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+
+  // Check if user can edit daily settings
+  const canEditSettings = ['commander', 'plans_programs', 'staff', 'executive_cadre'].includes(user?.role);
 
   useEffect(() => {
     loadStats();
+    loadDailySettings();
   }, []);
 
   const loadStats = async () => {
@@ -40,6 +66,68 @@ const DashboardPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadDailySettings = async () => {
+    try {
+      const data = await getDailySettings();
+      setDailySettings(data);
+      if (data.uniform) {
+        setUniformForm({
+          uniform_code: data.uniform.uniform_code || '',
+          description: data.uniform.description || '',
+          special_instructions: data.uniform.special_instructions || ''
+        });
+      }
+      if (data.weather_flag) {
+        setWeatherForm({
+          flag_color: data.weather_flag.flag_color || 'green',
+          heat_index: data.weather_flag.heat_index || '',
+          notes: data.weather_flag.notes || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load daily settings:', error);
+    }
+  };
+
+  const handleSaveUniform = async () => {
+    setSaving(true);
+    try {
+      await updateUniformOfDay(uniformForm);
+      toast.success('Uniform of the Day updated');
+      setUniformDialogOpen(false);
+      loadDailySettings();
+    } catch (error) {
+      toast.error('Failed to update uniform');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveWeather = async () => {
+    setSaving(true);
+    try {
+      await updateWeatherFlag({
+        ...weatherForm,
+        heat_index: weatherForm.heat_index ? parseFloat(weatherForm.heat_index) : null
+      });
+      toast.success('Weather flag updated');
+      setWeatherDialogOpen(false);
+      loadDailySettings();
+    } catch (error) {
+      toast.error('Failed to update weather flag');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Weather flag colors
+  const flagColors = {
+    green: { bg: 'bg-green-500', text: 'text-green-700', bgLight: 'bg-green-50', border: 'border-green-200' },
+    yellow: { bg: 'bg-yellow-400', text: 'text-yellow-700', bgLight: 'bg-yellow-50', border: 'border-yellow-200' },
+    red: { bg: 'bg-red-500', text: 'text-red-700', bgLight: 'bg-red-50', border: 'border-red-200' },
+    black: { bg: 'bg-gray-900', text: 'text-gray-900', bgLight: 'bg-gray-100', border: 'border-gray-400' }
   };
 
   const formatCurrency = (value) => {
@@ -96,6 +184,225 @@ const DashboardPage = () => {
         <p className="text-slate-500 text-sm mt-1">
           July 17-24, 2026 • VTS Catoosa, GA
         </p>
+      </div>
+
+      {/* Daily Info Cards - Uniform & Weather */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {/* Uniform of the Day */}
+        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden" data-testid="uniform-of-day">
+          <div className="bg-[#00205B] px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shirt className="w-4 h-4 text-white" />
+              <h2 className="text-white font-bold text-sm uppercase tracking-wide">Uniform of the Day</h2>
+            </div>
+            {canEditSettings && (
+              <Dialog open={uniformDialogOpen} onOpenChange={setUniformDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-7 px-2">
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Update Uniform of the Day</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <Label>Uniform</Label>
+                      <Select value={uniformForm.uniform_code} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select uniform" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
+                          <SelectItem value="Blues">Service Dress Blues</SelectItem>
+                          <SelectItem value="PT">PT Gear</SelectItem>
+                          <SelectItem value="Flight Suit">Flight Suit</SelectItem>
+                          <SelectItem value="Civilian">Civilian Attire</SelectItem>
+                          <SelectItem value="Class A">Class A</SelectItem>
+                          <SelectItem value="Class B">Class B</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Description (optional)</Label>
+                      <Input
+                        value={uniformForm.description}
+                        onChange={(e) => setUniformForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="e.g., With boots"
+                      />
+                    </div>
+                    <div>
+                      <Label>Special Instructions (optional)</Label>
+                      <Input
+                        value={uniformForm.special_instructions}
+                        onChange={(e) => setUniformForm(prev => ({ ...prev, special_instructions: e.target.value }))}
+                        placeholder="e.g., Bring rain gear"
+                      />
+                    </div>
+                    <Button onClick={handleSaveUniform} disabled={saving} className="w-full bg-[#00205B]">
+                      {saving ? 'Saving...' : 'Save Uniform'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+          <div className="p-4">
+            <div className="text-3xl font-black text-[#00205B] mb-1">
+              {dailySettings?.uniform?.uniform_code || 'ABU'}
+            </div>
+            <p className="text-slate-600 text-sm">
+              {dailySettings?.uniform?.description || 'Airman Battle Uniform'}
+            </p>
+            {dailySettings?.uniform?.special_instructions && (
+              <p className="text-amber-600 text-sm mt-2 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                {dailySettings.uniform.special_instructions}
+              </p>
+            )}
+            {dailySettings?.uniform?.updated_at && (
+              <p className="text-xs text-slate-400 mt-2">
+                Updated {new Date(dailySettings.uniform.updated_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Weather Flag */}
+        <div className={`bg-white border rounded-sm overflow-hidden ${flagColors[dailySettings?.weather_flag?.flag_color || 'green']?.border}`} data-testid="weather-flag">
+          <div className={`${flagColors[dailySettings?.weather_flag?.flag_color || 'green']?.bg} px-4 py-2 flex items-center justify-between`}>
+            <div className="flex items-center gap-2">
+              <Flag className="w-4 h-4 text-white" />
+              <h2 className="text-white font-bold text-sm uppercase tracking-wide">Heat Condition Flag</h2>
+            </div>
+            {canEditSettings && (
+              <Dialog open={weatherDialogOpen} onOpenChange={setWeatherDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-7 px-2">
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Update Weather Flag</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <Label>Flag Color</Label>
+                      <div className="grid grid-cols-4 gap-2 mt-2">
+                        {['green', 'yellow', 'red', 'black'].map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => setWeatherForm(prev => ({ ...prev, flag_color: color }))}
+                            className={`p-3 rounded-sm border-2 transition-all ${
+                              weatherForm.flag_color === color 
+                                ? 'ring-2 ring-[#00205B] ring-offset-2' 
+                                : 'border-transparent'
+                            }`}
+                          >
+                            <div className={`h-8 rounded ${flagColors[color].bg}`} />
+                            <p className="text-xs mt-1 capitalize font-medium">{color}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Heat Index (°F)</Label>
+                      <Input
+                        type="number"
+                        value={weatherForm.heat_index}
+                        onChange={(e) => setWeatherForm(prev => ({ ...prev, heat_index: e.target.value }))}
+                        placeholder="e.g., 95"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        Green: &lt;85° | Yellow: 85-90° | Red: 91-102° | Black: &gt;103°
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Notes (optional)</Label>
+                      <Input
+                        value={weatherForm.notes}
+                        onChange={(e) => setWeatherForm(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="e.g., Expected to cool down after 1600"
+                      />
+                    </div>
+                    <Button onClick={handleSaveWeather} disabled={saving} className="w-full bg-[#00205B]">
+                      {saving ? 'Saving...' : 'Update Flag Status'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+          <div className={`p-4 ${flagColors[dailySettings?.weather_flag?.flag_color || 'green']?.bgLight}`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-16 h-20 ${flagColors[dailySettings?.weather_flag?.flag_color || 'green']?.bg} rounded shadow-lg flex items-center justify-center`}>
+                <Flag className="w-8 h-8 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className={`text-2xl font-black uppercase ${flagColors[dailySettings?.weather_flag?.flag_color || 'green']?.text}`}>
+                  {dailySettings?.weather_flag?.flag_color || 'Green'} Flag
+                </div>
+                {dailySettings?.weather_flag?.heat_index && (
+                  <div className="flex items-center gap-1 text-slate-600 text-sm">
+                    <Thermometer className="w-4 h-4" />
+                    Heat Index: {dailySettings.weather_flag.heat_index}°F
+                  </div>
+                )}
+                <p className="text-sm text-slate-600 mt-1">
+                  {dailySettings?.weather_flag?.guidelines?.water_intake && (
+                    <span className="flex items-center gap-1">
+                      <Droplets className="w-3 h-3" />
+                      Water: {dailySettings.weather_flag.guidelines.water_intake}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            
+            {/* Guidelines */}
+            {dailySettings?.weather_flag?.guidelines && (
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <p className="text-xs font-bold uppercase text-slate-500 mb-2">Activity Guidelines</p>
+                <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                  <div className="bg-white p-2 rounded text-xs">
+                    <p className="text-slate-500">Low</p>
+                    <p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.low}</p>
+                  </div>
+                  <div className="bg-white p-2 rounded text-xs">
+                    <p className="text-slate-500">Medium</p>
+                    <p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.medium}</p>
+                  </div>
+                  <div className="bg-white p-2 rounded text-xs">
+                    <p className="text-slate-500">High</p>
+                    <p className={`font-bold ${dailySettings.weather_flag.guidelines.rest_schedule?.high === 'PROHIBITED' ? 'text-red-600' : ''}`}>
+                      {dailySettings.weather_flag.guidelines.rest_schedule?.high}
+                    </p>
+                  </div>
+                </div>
+                <ul className="text-xs text-slate-600 space-y-1">
+                  {dailySettings.weather_flag.guidelines.instructions?.slice(0, 3).map((instruction, idx) => (
+                    <li key={idx} className="flex items-start gap-1">
+                      <span className="text-slate-400">•</span>
+                      {instruction}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {dailySettings?.weather_flag?.notes && (
+              <p className="text-amber-700 text-sm mt-3 flex items-center gap-1 bg-amber-50 p-2 rounded">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                {dailySettings.weather_flag.notes}
+              </p>
+            )}
+            {dailySettings?.weather_flag?.updated_at && (
+              <p className="text-xs text-slate-400 mt-2">
+                Updated {new Date(dailySettings.weather_flag.updated_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid */}
