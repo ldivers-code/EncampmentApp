@@ -78,19 +78,19 @@ const AdminPage = () => {
     { value: 'support_cadre', label: 'Support Cadre' },
     { value: 'exec_cadre', label: 'Exec Cadre' },
     { value: 'ops_cadre', label: 'Ops Cadre' },
-    { value: 'sq1', label: 'Squadron 1' },
-    { value: 'sq2', label: 'Squadron 2' },
-    { value: 'sq3', label: 'Squadron 3' }
+    { value: '6th_cts', label: '6th CTS' },
+    { value: '21st_cts', label: '21st CTS' },
+    { value: '22nd_cts', label: '22nd CTS' }
   ];
 
   const flights = [
     { value: 'none', label: 'Not Assigned' },
-    { value: 'alpha', label: 'Alpha', squadron: 'sq1' },
-    { value: 'bravo', label: 'Bravo', squadron: 'sq1' },
-    { value: 'charlie', label: 'Charlie', squadron: 'sq2' },
-    { value: 'delta', label: 'Delta', squadron: 'sq2' },
-    { value: 'echo', label: 'Echo', squadron: 'sq3' },
-    { value: 'foxtrot', label: 'Foxtrot', squadron: 'sq3' }
+    { value: 'alpha', label: 'Alpha', squadron: '6th_cts' },
+    { value: 'bravo', label: 'Bravo', squadron: '6th_cts' },
+    { value: 'charlie', label: 'Charlie', squadron: '21st_cts' },
+    { value: 'delta', label: 'Delta', squadron: '21st_cts' },
+    { value: 'echo', label: 'Echo', squadron: '22nd_cts' },
+    { value: 'foxtrot', label: 'Foxtrot', squadron: '22nd_cts' }
   ];
 
   const permissionLabels = {

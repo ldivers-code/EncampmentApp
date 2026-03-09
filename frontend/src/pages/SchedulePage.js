@@ -270,13 +270,13 @@ const SchedulePage = () => {
         
         // Check squadron membership for flight filters
         const flightToSquadron = {
-          'alpha': 'sq1', 'bravo': 'sq1',
-          'charlie': 'sq2', 'delta': 'sq2',
-          'echo': 'sq3', 'foxtrot': 'sq3'
+          'alpha': '6th_cts', 'bravo': '6th_cts',
+          'charlie': '21st_cts', 'delta': '21st_cts',
+          'echo': '22nd_cts', 'foxtrot': '22nd_cts'
         };
         
         // If filtering by squadron, also show events for its flights
-        if (['sq1', 'sq2', 'sq3'].includes(scheduleFilter)) {
+        if (['6th_cts', '21st_cts', '22nd_cts'].includes(scheduleFilter)) {
           const squadronFlights = Object.entries(flightToSquadron)
             .filter(([_, sq]) => sq === scheduleFilter)
             .map(([fl, _]) => fl);

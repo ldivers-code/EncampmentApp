@@ -792,7 +792,7 @@ async def assign_user_unit(
     if assignment.squadron in no_flight_units:
         assignment.flight = None
     
-    # Validate flight belongs to squadron (only for sq1, sq2, sq3, ops_cadre)
+    # Validate flight belongs to squadron (only for 6th_cts, 21st_cts, 22nd_cts, ops_cadre)
     flight_squadron_map = {
         "alpha": "6th_cts", "bravo": "6th_cts",
         "charlie": "21st_cts", "delta": "21st_cts",
@@ -1179,7 +1179,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://cap-command-hub.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://flight-tracker-125.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),
@@ -3914,9 +3914,9 @@ def can_access_document(user: dict, doc: dict) -> bool:
         user_flight = user.get("flight", "").lower()
         doc_squadron = doc.get("squadron")
         flight_to_squadron = {
-            "alpha": "sq1", "bravo": "sq1",
-            "charlie": "sq2", "delta": "sq2",
-            "echo": "sq3", "foxtrot": "sq3"
+            "alpha": "6th_cts", "bravo": "6th_cts",
+            "charlie": "21st_cts", "delta": "21st_cts",
+            "echo": "22nd_cts", "foxtrot": "22nd_cts"
         }
         if flight_to_squadron.get(user_flight) == doc_squadron:
             return True
@@ -4122,12 +4122,12 @@ async def delete_document(
 async def get_flights(user: dict = Depends(get_current_user)):
     """Get list of all flights with their squadrons"""
     flights = [
-        {"value": "alpha", "label": "Alpha Flight", "squadron": "sq1"},
-        {"value": "bravo", "label": "Bravo Flight", "squadron": "sq1"},
-        {"value": "charlie", "label": "Charlie Flight", "squadron": "sq2"},
-        {"value": "delta", "label": "Delta Flight", "squadron": "sq2"},
-        {"value": "echo", "label": "Echo Flight", "squadron": "sq3"},
-        {"value": "foxtrot", "label": "Foxtrot Flight", "squadron": "sq3"}
+        {"value": "alpha", "label": "Alpha Flight", "squadron": "6th_cts"},
+        {"value": "bravo", "label": "Bravo Flight", "squadron": "6th_cts"},
+        {"value": "charlie", "label": "Charlie Flight", "squadron": "21st_cts"},
+        {"value": "delta", "label": "Delta Flight", "squadron": "21st_cts"},
+        {"value": "echo", "label": "Echo Flight", "squadron": "22nd_cts"},
+        {"value": "foxtrot", "label": "Foxtrot Flight", "squadron": "22nd_cts"}
     ]
     return flights
 
@@ -4135,9 +4135,9 @@ async def get_flights(user: dict = Depends(get_current_user)):
 async def get_squadrons(user: dict = Depends(get_current_user)):
     """Get list of all squadrons"""
     squadrons = [
-        {"value": "sq1", "label": "Squadron 1", "flights": ["alpha", "bravo"]},
-        {"value": "sq2", "label": "Squadron 2", "flights": ["charlie", "delta"]},
-        {"value": "sq3", "label": "Squadron 3", "flights": ["echo", "foxtrot"]}
+        {"value": "6th_cts", "label": "6th CTS", "flights": ["alpha", "bravo"]},
+        {"value": "21st_cts", "label": "21st CTS", "flights": ["charlie", "delta"]},
+        {"value": "22nd_cts", "label": "22nd CTS", "flights": ["echo", "foxtrot"]}
     ]
     return squadrons
 
@@ -4198,9 +4198,9 @@ async def get_squadron_roster(
 ):
     """Get roster for a specific squadron (all flights in squadron)"""
     squadron_flights = {
-        "sq1": ["alpha", "bravo"],
-        "sq2": ["charlie", "delta"],
-        "sq3": ["echo", "foxtrot"]
+        "6th_cts": ["alpha", "bravo"],
+        "21st_cts": ["charlie", "delta"],
+        "22nd_cts": ["echo", "foxtrot"]
     }
     
     flights = squadron_flights.get(squadron.lower(), [])
@@ -4254,7 +4254,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
     }
     
     all_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
-    all_squadrons = ["sq1", "sq2", "sq3"]
+    all_squadrons = ["6th_cts", "21st_cts", "22nd_cts"]
     
     # Determine accessible flights
     if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
@@ -4263,9 +4263,9 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
     elif user_squadron:
         # Squadron-level staff
         squadron_flights = {
-            "sq1": ["alpha", "bravo"],
-            "sq2": ["charlie", "delta"],
-            "sq3": ["echo", "foxtrot"]
+            "6th_cts": ["alpha", "bravo"],
+            "21st_cts": ["charlie", "delta"],
+            "22nd_cts": ["echo", "foxtrot"]
         }
         accessible_flights = squadron_flights.get(user_squadron, [])
         accessible_squadrons = [user_squadron]
@@ -4509,50 +4509,50 @@ async def seed_default_org_chart(
          "responsibilities": "- Maintain radios and comm equipment\n- Coordinate communication channels\n- Support emergency communications\n- Train users on equipment"},
         
         # ===== LEVEL 4 - Training Officers (3 squadrons) =====
-        {"role_id": "to-sq1", "title": "Training Officer - Sq 1", "level": 4, "order": 0, "reports_to": "chief-training-officer",
-         "summary": "Training Officer for Squadron 1.",
-         "responsibilities": "- Oversee Squadron 1 training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
-        {"role_id": "to-sq2", "title": "Training Officer - Sq 2", "level": 4, "order": 1, "reports_to": "chief-training-officer",
-         "summary": "Training Officer for Squadron 2.",
-         "responsibilities": "- Oversee Squadron 2 training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
-        {"role_id": "to-sq3", "title": "Training Officer - Sq 3", "level": 4, "order": 2, "reports_to": "chief-training-officer",
-         "summary": "Training Officer for Squadron 3.",
-         "responsibilities": "- Oversee Squadron 3 training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
+        {"role_id": "to-sq1", "title": "Training Officer - 6th CTS", "level": 4, "order": 0, "reports_to": "chief-training-officer",
+         "summary": "Training Officer for 6th CTS.",
+         "responsibilities": "- Oversee 6th CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
+        {"role_id": "to-sq2", "title": "Training Officer - 21st CTS", "level": 4, "order": 1, "reports_to": "chief-training-officer",
+         "summary": "Training Officer for 21st CTS.",
+         "responsibilities": "- Oversee 21st CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
+        {"role_id": "to-sq3", "title": "Training Officer - 22nd CTS", "level": 4, "order": 2, "reports_to": "chief-training-officer",
+         "summary": "Training Officer for 22nd CTS.",
+         "responsibilities": "- Oversee 22nd CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
         
         # ===== LEVEL 5 - Asst Training Officers =====
-        {"role_id": "ato-sq1", "title": "Asst Training Officer - Sq 1", "level": 5, "order": 0, "reports_to": "to-sq1",
-         "summary": "Assistant Training Officer for Squadron 1.",
+        {"role_id": "ato-sq1", "title": "Asst Training Officer - 6th CTS", "level": 5, "order": 0, "reports_to": "to-sq1",
+         "summary": "Assistant Training Officer for 6th CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
-        {"role_id": "ato-sq2", "title": "Asst Training Officer - Sq 2", "level": 5, "order": 1, "reports_to": "to-sq2",
-         "summary": "Assistant Training Officer for Squadron 2.",
+        {"role_id": "ato-sq2", "title": "Asst Training Officer - 21st CTS", "level": 5, "order": 1, "reports_to": "to-sq2",
+         "summary": "Assistant Training Officer for 21st CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
-        {"role_id": "ato-sq3", "title": "Asst Training Officer - Sq 3", "level": 5, "order": 2, "reports_to": "to-sq3",
-         "summary": "Assistant Training Officer for Squadron 3.",
+        {"role_id": "ato-sq3", "title": "Asst Training Officer - 22nd CTS", "level": 5, "order": 2, "reports_to": "to-sq3",
+         "summary": "Assistant Training Officer for 22nd CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
         
         # ===== LEVEL 5 - Squadron Commanders =====
-        {"role_id": "sq1-cc", "title": "Squadron Commander - Sq 1", "level": 5, "order": 3, "reports_to": "to-sq1",
-         "summary": "Commands cadet Squadron 1.",
-         "responsibilities": "- Lead Squadron 1 cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
-        {"role_id": "sq2-cc", "title": "Squadron Commander - Sq 2", "level": 5, "order": 4, "reports_to": "to-sq2",
-         "summary": "Commands cadet Squadron 2.",
-         "responsibilities": "- Lead Squadron 2 cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
-        {"role_id": "sq3-cc", "title": "Squadron Commander - Sq 3", "level": 5, "order": 5, "reports_to": "to-sq3",
-         "summary": "Commands cadet Squadron 3.",
-         "responsibilities": "- Lead Squadron 3 cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
+        {"role_id": "sq1-cc", "title": "Squadron Commander - 6th CTS", "level": 5, "order": 3, "reports_to": "to-sq1",
+         "summary": "Commands 6th CTS cadets.",
+         "responsibilities": "- Lead 6th CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
+        {"role_id": "sq2-cc", "title": "Squadron Commander - 21st CTS", "level": 5, "order": 4, "reports_to": "to-sq2",
+         "summary": "Commands 21st CTS cadets.",
+         "responsibilities": "- Lead 21st CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
+        {"role_id": "sq3-cc", "title": "Squadron Commander - 22nd CTS", "level": 5, "order": 5, "reports_to": "to-sq3",
+         "summary": "Commands 22nd CTS cadets.",
+         "responsibilities": "- Lead 22nd CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
         {"role_id": "support-sq-cc", "title": "Support Squadron Commander", "level": 5, "order": 6, "reports_to": "deputy-support",
          "summary": "Commands Support Squadron personnel.",
          "responsibilities": "- Lead support squadron staff\n- Coordinate support operations\n- Supervise support OICs\n- Report to Deputy Support"},
         
         # ===== LEVEL 6 - Squadron Staff =====
-        {"role_id": "sq1-super", "title": "Sqdn Superintendent - Sq 1", "level": 6, "order": 0, "reports_to": "sq1-cc",
-         "summary": "Squadron 1 Superintendent.",
+        {"role_id": "sq1-super", "title": "Sqdn Superintendent - 6th CTS", "level": 6, "order": 0, "reports_to": "sq1-cc",
+         "summary": "6th CTS Superintendent.",
          "responsibilities": "- Support Squadron CC\n- Manage squadron admin\n- Coordinate with flights"},
-        {"role_id": "sq2-super", "title": "Sqdn Superintendent - Sq 2", "level": 6, "order": 1, "reports_to": "sq2-cc",
-         "summary": "Squadron 2 Superintendent.",
+        {"role_id": "sq2-super", "title": "Sqdn Superintendent - 21st CTS", "level": 6, "order": 1, "reports_to": "sq2-cc",
+         "summary": "21st CTS Superintendent.",
          "responsibilities": "- Support Squadron CC\n- Manage squadron admin\n- Coordinate with flights"},
-        {"role_id": "sq3-super", "title": "Sqdn Superintendent - Sq 3", "level": 6, "order": 2, "reports_to": "sq3-cc",
-         "summary": "Squadron 3 Superintendent.",
+        {"role_id": "sq3-super", "title": "Sqdn Superintendent - 22nd CTS", "level": 6, "order": 2, "reports_to": "sq3-cc",
+         "summary": "22nd CTS Superintendent.",
          "responsibilities": "- Support Squadron CC\n- Manage squadron admin\n- Coordinate with flights"},
         
         # ===== LEVEL 6 - Support Squadron OICs =====

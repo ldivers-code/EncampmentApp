@@ -96,18 +96,18 @@ const MyFlightPage = () => {
   });
 
   const allFlights = [
-    { value: 'alpha', label: 'Alpha Flight', squadron: 'sq1' },
-    { value: 'bravo', label: 'Bravo Flight', squadron: 'sq1' },
-    { value: 'charlie', label: 'Charlie Flight', squadron: 'sq2' },
-    { value: 'delta', label: 'Delta Flight', squadron: 'sq2' },
-    { value: 'echo', label: 'Echo Flight', squadron: 'sq3' },
-    { value: 'foxtrot', label: 'Foxtrot Flight', squadron: 'sq3' }
+    { value: 'alpha', label: 'Alpha Flight', squadron: '6th_cts' },
+    { value: 'bravo', label: 'Bravo Flight', squadron: '6th_cts' },
+    { value: 'charlie', label: 'Charlie Flight', squadron: '21st_cts' },
+    { value: 'delta', label: 'Delta Flight', squadron: '21st_cts' },
+    { value: 'echo', label: 'Echo Flight', squadron: '22nd_cts' },
+    { value: 'foxtrot', label: 'Foxtrot Flight', squadron: '22nd_cts' }
   ];
 
   const allSquadrons = [
-    { value: 'sq1', label: 'Squadron 1' },
-    { value: 'sq2', label: 'Squadron 2' },
-    { value: 'sq3', label: 'Squadron 3' }
+    { value: '6th_cts', label: '6th CTS' },
+    { value: '21st_cts', label: '21st CTS' },
+    { value: '22nd_cts', label: '22nd CTS' }
   ];
 
   useEffect(() => {

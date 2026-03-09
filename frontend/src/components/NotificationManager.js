@@ -63,9 +63,9 @@ const NotificationManager = ({ compact = false }) => {
   const targetGroupOptions = [
     { value: 'all', label: 'All Participants' },
     { value: 'staff', label: 'Staff/Cadre' },
-    { value: 'sq1', label: 'Squadron 1' },
-    { value: 'sq2', label: 'Squadron 2' },
-    { value: 'sq3', label: 'Squadron 3' },
+    { value: '6th_cts', label: '6th CTS' },
+    { value: '21st_cts', label: '21st CTS' },
+    { value: '22nd_cts', label: '22nd CTS' },
     { value: 'alpha', label: 'Alpha Flight' },
     { value: 'bravo', label: 'Bravo Flight' },
     { value: 'charlie', label: 'Charlie Flight' },
