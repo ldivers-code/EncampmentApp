@@ -5323,11 +5323,94 @@ async def sync_orgchart_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                 await db.org_chart_roles.insert_one(role_data)
                 roles_created += 1
         
+        # ================= PARSE FLIGHT ASSIGNMENTS =================
+        # Find the row with flight headers (ALPHA, BRAVO, etc.)
+        flights_header_idx = None
+        for idx, row in enumerate(rows):
+            if len(row) > 0 and 'ALPHA' in str(row[0]).upper():
+                flights_header_idx = idx
+                break
+        
+        students_assigned = 0
+        if flights_header_idx is not None:
+            # Flight column positions (each flight spans ~6 columns)
+            # Based on the spreadsheet: ALPHA(0-5), BRAVO(6-11), CHARLIE(12-17), DELTA(18-23), ECHO(24-29), FOXTROT(30-35)
+            flight_config = {
+                'Alpha': {'col_offset': 0, 'squadron': '6th CTS', 'squadron_full': '6th Cadet Training Squadron'},
+                'Bravo': {'col_offset': 6, 'squadron': '6th CTS', 'squadron_full': '6th Cadet Training Squadron'},
+                'Charlie': {'col_offset': 12, 'squadron': '21st CTS', 'squadron_full': '21st Cadet Training Squadron'},
+                'Delta': {'col_offset': 18, 'squadron': '21st CTS', 'squadron_full': '21st Cadet Training Squadron'},
+                'Echo': {'col_offset': 24, 'squadron': '22nd CTS', 'squadron_full': '22nd Cadet Training Squadron'},
+                'Foxtrot': {'col_offset': 30, 'squadron': '22nd CTS', 'squadron_full': '22nd Cadet Training Squadron'},
+            }
+            
+            # Skip header row (GRADE, LAST NAME...) and start from data rows (2 rows after ALPHA header)
+            data_start_idx = flights_header_idx + 2
+            
+            # Parse each row until we hit "Total Cadets" or empty rows
+            for row_idx in range(data_start_idx, len(rows)):
+                row = rows[row_idx]
+                
+                # Check if we've reached the end (Total Cadets row)
+                row_str = ','.join(row).lower()
+                if 'total cadets' in row_str:
+                    break
+                
+                # Process each flight column
+                for flight_name, config in flight_config.items():
+                    col = config['col_offset']
+                    
+                    # Get rank/grade (col+0), name (col+1), age (col+2), unit (col+3)
+                    if len(row) > col + 3:
+                        rank = row[col].strip() if row[col] else ''
+                        name = row[col + 1].strip() if len(row) > col + 1 else ''
+                        age_str = row[col + 2].strip() if len(row) > col + 2 else ''
+                        unit = row[col + 3].strip() if len(row) > col + 3 else ''
+                        
+                        # Skip empty entries
+                        if not name or name == '':
+                            continue
+                        
+                        # Parse name (format: "LAST, FIRST M.I.")
+                        name = name.strip().strip('"')
+                        name_parts = name.split(',')
+                        if len(name_parts) >= 2:
+                            last_name = name_parts[0].strip()
+                            first_part = name_parts[1].strip()
+                            first_name = first_part.split()[0] if first_part else ''
+                        else:
+                            continue
+                        
+                        # Try to find matching participant in the roster
+                        participant = await db.participants.find_one({
+                            '$or': [
+                                {'last_name': {'$regex': f'^{last_name}$', '$options': 'i'}, 
+                                 'first_name': {'$regex': f'^{first_name}', '$options': 'i'}},
+                                {'name': {'$regex': f'{last_name}.*{first_name}', '$options': 'i'}},
+                            ]
+                        })
+                        
+                        if participant:
+                            # Update participant with flight and squadron assignment
+                            await db.participants.update_one(
+                                {'_id': participant['_id']},
+                                {'$set': {
+                                    'flight': flight_name,
+                                    'squadron': config['squadron'],
+                                    'squadron_full': config['squadron_full'],
+                                    'participant_type': 'basic_student',
+                                    'updated_at': now
+                                }}
+                            )
+                            students_assigned += 1
+                            logger.info(f"Assigned {last_name}, {first_name} to {flight_name} Flight ({config['squadron']})")
+        
         return {
             "success": True,
-            "message": f"Org chart sync complete: {roles_created} new, {roles_updated} updated",
+            "message": f"Org chart sync complete: {roles_created} new roles, {roles_updated} updated, {students_assigned} students assigned to flights",
             "created": roles_created,
             "updated": roles_updated,
+            "students_assigned": students_assigned,
             "total": roles_created + roles_updated
         }
     

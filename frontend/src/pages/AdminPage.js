@@ -853,24 +853,46 @@ const AdminPage = () => {
             </div>
             <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-3 bg-blue-50 rounded-sm border border-blue-200">
-                <p className="font-bold text-blue-800 mb-2">Squadron 1</p>
-                <div className="flex gap-2">
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">Alpha</span>
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">Bravo</span>
+                <div className="flex items-center gap-3 mb-2">
+                  <img src="/patches/6th_cts.png" alt="6th CTS" className="w-12 h-12 object-contain rounded" />
+                  <div>
+                    <p className="font-bold text-blue-800">6th CTS</p>
+                    <p className="text-xs text-blue-600">6th Cadet Training Squadron</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium">Alpha</span>
+                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium">Bravo</span>
                 </div>
               </div>
-              <div className="p-3 bg-emerald-50 rounded-sm border border-emerald-200">
-                <p className="font-bold text-emerald-800 mb-2">Squadron 2</p>
-                <div className="flex gap-2">
-                  <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">Charlie</span>
-                  <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">Delta</span>
+              <div className="p-3 bg-red-50 rounded-sm border border-red-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <img src="/patches/21st_cts.png" alt="21st CTS" className="w-12 h-12 object-contain rounded" />
+                  <div>
+                    <p className="font-bold text-red-800">21st CTS</p>
+                    <p className="text-xs text-red-600">21st Cadet Training Squadron</p>
+                    <p className="text-xs text-red-500 italic">Scorpions</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-medium">Charlie</span>
+                  <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-medium">Delta</span>
                 </div>
               </div>
-              <div className="p-3 bg-purple-50 rounded-sm border border-purple-200">
-                <p className="font-bold text-purple-800 mb-2">Squadron 3</p>
-                <div className="flex gap-2">
-                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Echo</span>
-                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Foxtrot</span>
+              <div className="p-3 bg-amber-50 rounded-sm border border-amber-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 bg-amber-100 rounded flex items-center justify-center">
+                    <Plane className="w-6 h-6 text-amber-700" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-800">22nd CTS</p>
+                    <p className="text-xs text-amber-600">22nd Cadet Training Squadron</p>
+                    <p className="text-xs text-amber-500 italic">Night Owls</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-medium">Echo</span>
+                  <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-medium">Foxtrot</span>
                 </div>
               </div>
             </div>

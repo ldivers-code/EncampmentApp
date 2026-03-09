@@ -455,6 +455,8 @@ Staff/Cadre
 - [x] **Roster Import Enhancement** (supports CAP Admin Reports without CAPID column by auto-generating unique identifiers)
 - [x] **Google Sheets Live Sync** (automatic hourly sync from Google Sheets to update roster data)
 - [x] **Org Chart Google Sheets Integration** (parses org chart spreadsheet and updates roles with assigned staff names)
+- [x] **Flight Assignment Auto-Sync** (parses student flight assignments from spreadsheet rows 45+ and auto-assigns to flights/squadrons)
+- [x] **Squadron Designations Updated** (6th CTS, 21st CTS, 22nd CTS with proper names, mascots, and patches)
 
 ### P1 (High Priority) - PENDING
 - [ ] Implement Handbooks page (upload/view PDF documents)
