@@ -4867,6 +4867,17 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                 val = get_val(key, default)
                 return str(val).strip() if val is not None else default
             
+            def get_unit(key, default=''):
+                """Get unit value and clean up float formatting (e.g., '96.0' -> '96')"""
+                val = get_val(key, default)
+                if val is None:
+                    return default
+                val_str = str(val).strip()
+                # Remove .0 suffix if present (from float conversion)
+                if val_str.endswith('.0'):
+                    val_str = val_str[:-2]
+                return val_str
+            
             def get_bool(key):
                 val = get_val(key)
                 if val is None:
@@ -4935,7 +4946,7 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                 'first_name': get_str('first_name'),
                 'middle_name': get_str('middle_name'),
                 'name': f"{get_str('last_name')}, {get_str('first_name')}",
-                'unit': get_str('unit'),
+                'unit': get_unit('unit'),
                 'wing': get_str('wing'),
                 'region': get_str('region'),
                 'gender': get_str('gender'),
