@@ -311,6 +311,7 @@ class ScheduleEventBase(BaseModel):
     location: Optional[str] = None
     event_type: str = "general"  # general, training, ceremony, meal, recreation, pt, admin, leadership, academics
     target_groups: List[str] = ["all"]  # all, staff, 6th_cts, 21st_cts, 22nd_cts, alpha, bravo, charlie, delta, echo, foxtrot
+    uniform: Optional[str] = None  # ABU, Blues, PT, Flight Suit, Civilian, Class A, Class B, or None for default
 
 class ScheduleEventCreate(ScheduleEventBase):
     pass

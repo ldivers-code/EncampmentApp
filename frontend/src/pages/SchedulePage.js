@@ -36,7 +36,8 @@ import {
   Users,
   Filter,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shirt
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
@@ -73,7 +74,8 @@ const SchedulePage = () => {
     end_time: '',
     location: '',
     event_type: 'training',
-    target_groups: ['all']
+    target_groups: ['all'],
+    uniform: 'default'
   });
 
   // Detect mobile viewport
@@ -111,9 +113,9 @@ const SchedulePage = () => {
   const targetGroupOptions = [
     { value: 'all', label: 'All Participants', category: 'general' },
     { value: 'staff', label: 'Staff/Cadre', category: 'general' },
-    { value: 'sq1', label: 'Squadron 1', category: 'squadron' },
-    { value: 'sq2', label: 'Squadron 2', category: 'squadron' },
-    { value: 'sq3', label: 'Squadron 3', category: 'squadron' },
+    { value: '6th_cts', label: '6th CTS', category: 'squadron' },
+    { value: '21st_cts', label: '21st CTS', category: 'squadron' },
+    { value: '22nd_cts', label: '22nd CTS', category: 'squadron' },
     { value: 'alpha', label: 'Alpha Flight', category: 'flight' },
     { value: 'bravo', label: 'Bravo Flight', category: 'flight' },
     { value: 'charlie', label: 'Charlie Flight', category: 'flight' },
@@ -122,13 +124,25 @@ const SchedulePage = () => {
     { value: 'foxtrot', label: 'Foxtrot Flight', category: 'flight' }
   ];
 
+  // Uniform options for events
+  const uniformOptions = [
+    { value: 'default', label: 'Default (UoD)' },
+    { value: 'ABU', label: 'ABU' },
+    { value: 'Blues', label: 'Service Dress Blues' },
+    { value: 'PT', label: 'PT Gear' },
+    { value: 'Flight Suit', label: 'Flight Suit' },
+    { value: 'Civilian', label: 'Civilian Attire' },
+    { value: 'Class A', label: 'Class A' },
+    { value: 'Class B', label: 'Class B' }
+  ];
+
   // Schedule filter options - available to ALL members
   const scheduleFilterOptions = [
     { value: 'all', label: 'All Events' },
     { value: 'staff', label: 'Staff Only' },
-    { value: 'sq1', label: 'Squadron 1' },
-    { value: 'sq2', label: 'Squadron 2' },
-    { value: 'sq3', label: 'Squadron 3' },
+    { value: '6th_cts', label: '6th CTS' },
+    { value: '21st_cts', label: '21st CTS' },
+    { value: '22nd_cts', label: '22nd CTS' },
     { value: 'alpha', label: 'Alpha Flight' },
     { value: 'bravo', label: 'Bravo Flight' },
     { value: 'charlie', label: 'Charlie Flight' },
@@ -340,7 +354,8 @@ const SchedulePage = () => {
       end_time: event.end_time,
       location: event.location || '',
       event_type: event.event_type,
-      target_groups: event.target_groups || ['all']
+      target_groups: event.target_groups || ['all'],
+      uniform: event.uniform || 'default'
     });
     setIsModalOpen(true);
   };
@@ -449,7 +464,8 @@ const SchedulePage = () => {
       end_time: '',
       location: '',
       event_type: 'training',
-      target_groups: ['all']
+      target_groups: ['all'],
+      uniform: ''
     });
   };
 
@@ -732,6 +748,27 @@ const SchedulePage = () => {
                         className="mt-1 rounded-sm text-sm"
                       />
                     </div>
+                    <div>
+                      <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-1">
+                        <Shirt className="w-3 h-3" />
+                        Uniform
+                      </Label>
+                      <Select
+                        value={formData.uniform || ''}
+                        onValueChange={(value) => setFormData({ ...formData, uniform: value })}
+                      >
+                        <SelectTrigger className="mt-1 rounded-sm text-sm">
+                          <SelectValue placeholder="Default (UoD)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {uniformOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     
                     {/* Target Groups - Compact for mobile */}
                     <div>
@@ -1004,6 +1041,28 @@ const SchedulePage = () => {
                           placeholder="Parade Ground, DFAC, TR-1..."
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
+                          <Shirt className="w-3 h-3" />
+                          Uniform
+                        </Label>
+                        <Select
+                          value={formData.uniform || ''}
+                          onValueChange={(value) => setFormData({ ...formData, uniform: value })}
+                        >
+                          <SelectTrigger className="mt-1 rounded-sm">
+                            <SelectValue placeholder="Default (Uniform of the Day)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {uniformOptions.map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-slate-400 mt-1">Leave blank to use Uniform of the Day</p>
+                      </div>
                       
                       <div>
                         <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
@@ -1182,6 +1241,12 @@ const SchedulePage = () => {
                             {event.location}
                           </span>
                         )}
+                        {event.uniform && event.uniform !== 'default' && (
+                          <span className="text-[10px] text-indigo-600 flex items-center gap-0.5 font-medium">
+                            <Shirt className="w-2.5 h-2.5" />
+                            {event.uniform}
+                          </span>
+                        )}
                       </div>
                       {getTargetGroupsLabel(event.target_groups) && (
                         <span className="inline-block mt-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
@@ -1255,6 +1320,12 @@ const SchedulePage = () => {
                             >
                               <span className="font-medium">{event.title}</span>
                               {event.location && <span className="opacity-75">@ {event.location}</span>}
+                              {event.uniform && event.uniform !== 'default' && (
+                                <span className="bg-white/30 px-1 rounded text-[10px] flex items-center gap-0.5">
+                                  <Shirt className="w-2.5 h-2.5" />
+                                  {event.uniform}
+                                </span>
+                              )}
                               {getTargetGroupsLabel(event.target_groups) && (
                                 <span className="bg-white/20 px-1 rounded text-[10px]">
                                   {getTargetGroupsLabel(event.target_groups)}
@@ -1331,6 +1402,12 @@ const SchedulePage = () => {
                           <span className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
                             {event.location}
+                          </span>
+                        )}
+                        {event.uniform && event.uniform !== 'default' && (
+                          <span className="flex items-center gap-1 text-indigo-600 font-medium">
+                            <Shirt className="w-4 h-4" />
+                            {event.uniform}
                           </span>
                         )}
                       </div>
