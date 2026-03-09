@@ -49,8 +49,22 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Password Reset (Self-Service & Admin)**
 - [x] **My Flight Points Tab (Flight-specific point tracking)**
 - [x] **Receipt Repository (Finance Page)**
+- [x] **Squadron Name Standardization (6th CTS, 21st CTS, 22nd CTS)**
 
 ## What's Been Implemented
+
+### Mar 9, 2026 - Squadron Name Standardization
+- **Replaced all "Squadron 1/2/3" references** with proper designations:
+  - Squadron 1 → 6th CTS (6th Cadet Training Squadron)
+  - Squadron 2 → 21st CTS (21st Cadet Training Squadron)
+  - Squadron 3 → 22nd CTS (22nd Cadet Training Squadron)
+- **Updated Files**:
+  - `AdminPage.js`: Squadron dropdown and flight-to-squadron mappings
+  - `NotificationManager.js`: Target group options for notifications
+  - `SchedulePage.js`: Filter options and flight-to-squadron logic
+  - `server.py`: API endpoints (/api/squadrons, /api/flights), org chart defaults, validation logic
+- **API Changes**: `/api/squadrons` now returns `{value: "6th_cts", label: "6th CTS"}` format
+- **Verified**: All UI components and API endpoints display correct squadron names
 
 ### Feb 24, 2026 - Receipt Repository
 - **Receipt Repository Tab** on Finance/Budget page:
@@ -176,7 +190,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ### Feb 24, 2026 - Schedule Filter Enhancement
 - **Schedule Filter for All Users**: Previously editors-only, now visible to ALL members
-  - Filter by: All Events, Staff Only, Squadron 1/2/3, Alpha/Bravo/Charlie/Delta/Echo/Foxtrot flights
+  - Filter by: All Events, Staff Only, 6th CTS/21st CTS/22nd CTS, Alpha/Bravo/Charlie/Delta/Echo/Foxtrot flights
   - Mobile and desktop versions both support filtering
 
 ### Feb 21, 2026 - Roles, Units & Granular Permissions System
@@ -189,7 +203,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - **Cadre**: View-only permissions
 - **Updated Unit Structure**:
   - Staff, Support Cadre, Exec Cadre, Ops Cadre
-  - Squadron 1 (Alpha, Bravo), Squadron 2 (Charlie, Delta), Squadron 3 (Echo, Foxtrot)
+  - 6th CTS (Alpha, Bravo), 21st CTS (Charlie, Delta), 22nd CTS (Echo, Foxtrot)
 - **Granular Permissions System** (12 access types):
   - Dashboard, Roster (View/Edit), Schedule (View/Edit), Budget (View/Edit)
   - Analytics, Org Chart, Handbooks, Documents, Admin Panel
@@ -344,7 +358,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ### Feb 21, 2026 - Flight-Specific Schedules & Real-Time Sync
 - **User Unit Assignment**: Admin page now allows assigning users to squadrons and flights
-  - Squadron options: Staff/Cadre, Squadron 1, 2, 3
+  - Squadron options: Staff/Cadre, 6th CTS, 21st CTS, 22nd CTS
   - Flight options: Alpha/Bravo (SQ1), Charlie/Delta (SQ2), Echo/Foxtrot (SQ3)
 - **Target Groups for Events**: Events can now target specific groups
   - All Participants, Staff/Cadre
@@ -419,13 +433,13 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 ### Unit Structure
 ```
 Staff/Cadre
-├── Squadron 1
+├── 6th CTS (6th Cadet Training Squadron)
 │   ├── Alpha Flight
 │   └── Bravo Flight
-├── Squadron 2
+├── 21st CTS (21st Cadet Training Squadron)
 │   ├── Charlie Flight
 │   └── Delta Flight
-└── Squadron 3
+└── 22nd CTS (22nd Cadet Training Squadron)
     ├── Echo Flight
     └── Foxtrot Flight
 ```
