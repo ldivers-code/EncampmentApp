@@ -52,8 +52,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Squadron Name Standardization (6th CTS, 21st CTS, 22nd CTS)**
 - [x] **Daily Schedule on Dashboard (Today's Schedule quick view)**
 - [x] **Flight Reporting System (Daily reports with 7 sections)**
+- [x] **Role-Based Roster Visibility (Sensitive data restricted)**
 
 ## What's Been Implemented
+
+### Mar 9, 2026 - Role-Based Roster Data Visibility
+- **Public Data (visible to everyone)**: Rank, Name, Flight, Squadron, Gender, Age, Type
+- **Restricted Data (privileged roles only)**: Contact info (email, phone), Payment status, Approval status, Address, Emergency contacts, Notes
+- **Privileged Roles**: Commander, Exec Cadre, Plans & Programs, Finance, Staff (includes Health Services)
+- **Frontend Changes**: 
+  - Table columns dynamically shown/hidden based on role
+  - Payment filter hidden for non-privileged users
+  - Participant detail modal shows "Restricted" placeholders for sensitive sections
+- **Backend Changes**: API endpoints filter sensitive fields based on user role
 
 ### Mar 9, 2026 - Flight Reporting System
 - **Flight Reports Feature** under My Flight page:

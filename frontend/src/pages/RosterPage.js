@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 const RosterPage = () => {
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const [participants, setParticipants] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +57,12 @@ const RosterPage = () => {
   const [removalReason, setRemovalReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+
+  // Check if user can see full roster details (sensitive info)
+  const canViewSensitiveData = () => {
+    const privilegedRoles = ['commander', 'exec_cadre', 'plans_programs', 'finance', 'staff'];
+    return privilegedRoles.includes(user?.role);
+  };
 
   const [formData, setFormData] = useState({
     capid: '',
@@ -722,6 +728,7 @@ const RosterPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            {canViewSensitiveData() && (
             <Select value={paidFilter} onValueChange={(value) => {
               setPaidFilter(value);
               setCurrentPage(1);
@@ -735,6 +742,7 @@ const RosterPage = () => {
                 <SelectItem value="unpaid">Unpaid</SelectItem>
               </SelectContent>
             </Select>
+            )}
             {/* Show Removed Toggle */}
             <Button
               variant={showRemoved ? "default" : "outline"}
@@ -764,11 +772,13 @@ const RosterPage = () => {
                 <th className="text-left">Name</th>
                 <th className="text-left">Flight</th>
                 <th className="text-left">Squadron</th>
-                <th className="text-left">Unit</th>
-                <th className="text-left">Wing</th>
+                <th className="text-left">Gender</th>
+                <th className="text-left">Age</th>
+                {canViewSensitiveData() && <th className="text-left">Unit</th>}
+                {canViewSensitiveData() && <th className="text-left">Wing</th>}
                 <th className="text-left">Type</th>
-                <th className="text-center">Paid</th>
-                {!showRemoved && <th className="text-center">Approved</th>}
+                {canViewSensitiveData() && <th className="text-center">Paid</th>}
+                {canViewSensitiveData() && !showRemoved && <th className="text-center">Approved</th>}
                 {showRemoved && <th className="text-left">Removal Reason</th>}
                 <th className="text-right">Actions</th>
               </tr>
@@ -813,13 +823,16 @@ const RosterPage = () => {
                     <td className={`text-xs font-medium ${squadronInfo.color}`}>
                       {squadronInfo.name}
                     </td>
-                    <td className="font-mono text-sm">{p.unit}</td>
-                    <td className="text-sm text-slate-500">{p.wing || '-'}</td>
+                    <td className="text-sm">{p.gender === 'M' ? 'Male' : p.gender === 'F' ? 'Female' : p.gender || '-'}</td>
+                    <td className="font-mono text-sm">{p.age || p.age_at_event || '-'}</td>
+                    {canViewSensitiveData() && <td className="font-mono text-sm">{p.unit || '-'}</td>}
+                    {canViewSensitiveData() && <td className="text-sm text-slate-500">{p.wing || '-'}</td>}
                     <td>
                       <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm border ${getTypeBadgeColor(p.participant_type)}`}>
                         {p.participant_type?.replace(/_/g, ' ')}
                       </span>
                     </td>
+                    {canViewSensitiveData() && (
                     <td className="text-center">
                       {p.paid || p.paid_in_full ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 text-xs">
@@ -832,7 +845,8 @@ const RosterPage = () => {
                         </span>
                       )}
                     </td>
-                    {!showRemoved && (
+                    )}
+                    {canViewSensitiveData() && !showRemoved && (
                       <td className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           {p.unit_approved && <span className="text-[10px] px-1 bg-blue-100 text-blue-700 rounded">Unit</span>}
@@ -1006,8 +1020,12 @@ const RosterPage = () => {
                       <span className="font-medium">{selectedParticipant.gender === 'M' ? 'Male' : selectedParticipant.gender === 'F' ? 'Female' : selectedParticipant.gender || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">First Encampment:</span>
-                      <span className="font-medium">{selectedParticipant.first_encampment ? 'Yes' : 'No'}</span>
+                      <span className="text-slate-500">Flight:</span>
+                      <span className="font-medium capitalize">{selectedParticipant.flight || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Squadron:</span>
+                      <span className="font-medium">{selectedParticipant.squadron?.replace('_', ' ').toUpperCase() || '-'}</span>
                     </div>
                   </div>
                 </div>
@@ -1030,76 +1048,106 @@ const RosterPage = () => {
                       <span className="text-slate-500">Region:</span>
                       <span className="font-medium">{selectedParticipant.region || '-'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Unit Approved:</span>
-                      <span className={selectedParticipant.unit_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.unit_approved ? 'Yes' : 'No'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Wing Approved:</span>
-                      <span className={selectedParticipant.wing_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.wing_approved ? 'Yes' : 'No'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contact Info */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                    <Phone className="w-3 h-3" /> Contact Information
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-slate-400" />
-                      <span>{selectedParticipant.email || '-'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-slate-400" />
-                      <span>{selectedParticipant.phone || selectedParticipant.cell_phone || '-'}</span>
-                    </div>
-                    {selectedParticipant.cadet_parent_email && (
-                      <div className="pt-2 border-t border-slate-100">
-                        <p className="text-xs text-slate-500 mb-1">Parent/Guardian:</p>
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-slate-400" />
-                          <span>{selectedParticipant.cadet_parent_email}</span>
+                    {canViewSensitiveData() && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Unit Approved:</span>
+                          <span className={selectedParticipant.unit_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.unit_approved ? 'Yes' : 'No'}</span>
                         </div>
-                        {selectedParticipant.cadet_parent_phone && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            <span>{selectedParticipant.cadet_parent_phone}</span>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Wing Approved:</span>
+                          <span className={selectedParticipant.wing_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.wing_approved ? 'Yes' : 'No'}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contact Info - Only for privileged roles */}
+                {canViewSensitiveData() ? (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                      <Phone className="w-3 h-3" /> Contact Information
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-slate-400" />
+                        <span>{selectedParticipant.email || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-slate-400" />
+                        <span>{selectedParticipant.phone || selectedParticipant.cell_phone || '-'}</span>
+                      </div>
+                      {selectedParticipant.cadet_parent_email && (
+                        <div className="pt-2 border-t border-slate-100">
+                          <p className="text-xs text-slate-500 mb-1">Parent/Guardian:</p>
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-slate-400" />
+                            <span>{selectedParticipant.cadet_parent_email}</span>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Payment Info */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                    <DollarSign className="w-3 h-3" /> Payment Status
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Paid:</span>
-                      <span className={selectedParticipant.paid || selectedParticipant.paid_in_full ? 'text-emerald-600 font-medium' : 'text-red-500'}>
-                        {selectedParticipant.paid || selectedParticipant.paid_in_full ? 'Yes' : 'No'}
-                      </span>
+                          {selectedParticipant.cadet_parent_phone && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Phone className="w-4 h-4 text-slate-400" />
+                              <span>{selectedParticipant.cadet_parent_phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {selectedParticipant.amount_paid > 0 && (
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                      <Phone className="w-3 h-3" /> Contact Information
+                    </h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-sm p-3 text-center">
+                      <Shield className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">Restricted</p>
+                      <p className="text-xs text-slate-400">Contact info is only visible to authorized staff</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Info - Only for privileged roles */}
+                {canViewSensitiveData() ? (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                      <DollarSign className="w-3 h-3" /> Payment Status
+                    </h4>
+                    <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Amount Paid:</span>
-                        <span className="font-mono font-medium text-emerald-600">${selectedParticipant.amount_paid}</span>
+                        <span className="text-slate-500">Paid:</span>
+                        <span className={selectedParticipant.paid || selectedParticipant.paid_in_full ? 'text-emerald-600 font-medium' : 'text-red-500'}>
+                          {selectedParticipant.paid || selectedParticipant.paid_in_full ? 'Yes' : 'No'}
+                        </span>
                       </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Registration Status:</span>
-                      <span className="font-medium">{selectedParticipant.registration_status || '-'}</span>
+                      {selectedParticipant.amount_paid > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Amount Paid:</span>
+                          <span className="font-mono font-medium text-emerald-600">${selectedParticipant.amount_paid}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Registration Status:</span>
+                        <span className="font-medium">{selectedParticipant.registration_status || '-'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
+                      <DollarSign className="w-3 h-3" /> Payment Status
+                    </h4>
+                    <div className="bg-slate-50 border border-slate-200 rounded-sm p-3 text-center">
+                      <Shield className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">Restricted</p>
+                      <p className="text-xs text-slate-400">Payment info is only visible to finance staff</p>
+                    </div>
+                  </div>
+                )}
 
-                {/* Address */}
-                {(selectedParticipant.address || selectedParticipant.city) && (
+                {/* Address - Only for privileged roles */}
+                {canViewSensitiveData() && (selectedParticipant.address || selectedParticipant.city) && (
                   <div className="col-span-2 space-y-4">
                     <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
                       <MapPin className="w-3 h-3" /> Address
@@ -1113,8 +1161,8 @@ const RosterPage = () => {
                   </div>
                 )}
 
-                {/* Notes */}
-                {(selectedParticipant.notes || selectedParticipant.comments) && (
+                {/* Notes - Only for privileged roles */}
+                {canViewSensitiveData() && (selectedParticipant.notes || selectedParticipant.comments) && (
                   <div className="col-span-2 space-y-4">
                     <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
                       Notes

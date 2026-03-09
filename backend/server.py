@@ -1405,6 +1405,46 @@ async def find_matching_participants(
 @api_router.get("/participants", response_model=List[ParticipantResponse])
 async def get_participants(user: dict = Depends(get_current_user)):
     participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    # Define roles that can see all data
+    privileged_roles = [
+        UserRole.COMMANDER,
+        UserRole.EXEC_CADRE,
+        UserRole.PLANS_PROGRAMS,
+        UserRole.FINANCE,
+        UserRole.STAFF  # Health Services falls under staff
+    ]
+    
+    user_role = user.get('role')
+    
+    # If user doesn't have a privileged role, filter sensitive fields
+    if user_role not in privileged_roles:
+        # Sensitive fields to hide (set to empty/default values)
+        sensitive_fields = [
+            'email', 'phone', 'cell_phone', 'address', 'city', 'state', 'zip_code',
+            'emergency_contact', 'emergency_phone', 'cadet_parent_name', 
+            'cadet_parent_phone', 'cadet_parent_email', 'amount_paid',
+            'registration_status', 'notes', 'comments', 'religious_preference',
+            'shirt_size', 'unit_cc_name', 'unit_cc_email'
+        ]
+        filtered_participants = []
+        for p in participants:
+            # Create a copy of the participant
+            filtered_p = dict(p)
+            # Hide sensitive string/numeric fields
+            for field in sensitive_fields:
+                if field in filtered_p:
+                    filtered_p[field] = None
+            # Hide payment info but keep as boolean False
+            filtered_p['paid'] = False
+            filtered_p['paid_in_full'] = False
+            filtered_p['amount_paid'] = None
+            # Hide approval info
+            filtered_p['unit_approved'] = False
+            filtered_p['wing_approved'] = False
+            filtered_participants.append(filtered_p)
+        return [ParticipantResponse(**p) for p in filtered_participants]
+    
     return [ParticipantResponse(**p) for p in participants]
 
 
@@ -1889,6 +1929,39 @@ async def get_participant(participant_id: str, user: dict = Depends(get_current_
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # Define roles that can see all data
+    privileged_roles = [
+        UserRole.COMMANDER,
+        UserRole.EXEC_CADRE,
+        UserRole.PLANS_PROGRAMS,
+        UserRole.FINANCE,
+        UserRole.STAFF
+    ]
+    
+    user_role = user.get('role')
+    
+    # If user doesn't have a privileged role, filter sensitive fields
+    if user_role not in privileged_roles:
+        sensitive_fields = [
+            'email', 'phone', 'cell_phone', 'address', 'city', 'state', 'zip_code',
+            'emergency_contact', 'emergency_phone', 'cadet_parent_name', 
+            'cadet_parent_phone', 'cadet_parent_email', 'amount_paid',
+            'registration_status', 'notes', 'comments', 'religious_preference',
+            'shirt_size', 'unit_cc_name', 'unit_cc_email'
+        ]
+        filtered_p = dict(participant)
+        for field in sensitive_fields:
+            if field in filtered_p:
+                filtered_p[field] = None
+        # Hide payment/approval info
+        filtered_p['paid'] = False
+        filtered_p['paid_in_full'] = False
+        filtered_p['amount_paid'] = None
+        filtered_p['unit_approved'] = False
+        filtered_p['wing_approved'] = False
+        return ParticipantResponse(**filtered_p)
+    
     return ParticipantResponse(**participant)
 
 @api_router.post("/participants", response_model=ParticipantResponse)
