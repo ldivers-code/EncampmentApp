@@ -66,6 +66,21 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Participant detail modal shows "Restricted" placeholders for sensitive sections
 - **Backend Changes**: API endpoints filter sensitive fields based on user role
 
+### Mar 9, 2026 - Flight Reporting Role Auto-Detection
+- **Auto-Detection**: System automatically detects reporter role based on user's position
+  - Squadron Commander: Users with "squadron commander" or "sq cc" in position
+  - Flight Commander: Users with "flight commander" or "flt cc" in position
+  - Flight Sergeant: Default for cadre/staff without specific position
+- **Role Restrictions**:
+  - Cadre users can ONLY submit reports for their assigned flight
+  - Warning message and disabled button when viewing other flights
+  - Role selector is locked (non-editable) for cadre users
+- **Exec Cadre Full Access**:
+  - Can view reports from all flights
+  - "Full Access - All Flights" header displayed
+  - Can choose any reporter role when submitting
+  - Can filter by specific flight or view all
+
 ### Mar 9, 2026 - Flight Reporting System
 - **Flight Reports Feature** under My Flight page:
   - **Submit Daily Report Modal**: Full form with all 7 required sections from the Encampment Reporting Guide

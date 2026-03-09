@@ -216,11 +216,19 @@ const MyFlightPage = () => {
 
   const loadReports = async () => {
     try {
-      const flightData = allFlights.find(f => f.value === selectedFlight);
-      const data = await getFlightReports({ 
-        flight: selectedFlight,
-        squadron: flightData?.squadron 
-      });
+      // Exec Cadre and Commander can see all reports, others see only their flight
+      let filters = {};
+      if (!canViewAllFlights()) {
+        const flightData = allFlights.find(f => f.value === selectedFlight);
+        filters = { 
+          flight: selectedFlight,
+          squadron: flightData?.squadron 
+        };
+      } else if (selectedFlight) {
+        // If a flight is selected, filter by it even for admins
+        filters = { flight: selectedFlight };
+      }
+      const data = await getFlightReports(filters);
       setReports(data);
     } catch (error) {
       console.error('Failed to load reports:', error);
@@ -239,7 +247,7 @@ const MyFlightPage = () => {
   const resetReportForm = () => {
     setReportForm({
       report_date: new Date().toISOString().split('T')[0],
-      reporter_role: 'flight_sergeant',
+      reporter_role: getAutoReporterRole(),
       morale: { content: '', has_issues: false },
       safety_concerns: { content: '', has_issues: false },
       discipline_issues: { content: '', has_issues: false },
@@ -252,6 +260,12 @@ const MyFlightPage = () => {
 
   const handleSubmitReport = async (e) => {
     e.preventDefault();
+    
+    // Cadre can only submit for their assigned flight
+    if (canOnlySubmitOwnFlight() && selectedFlight !== user?.flight?.toLowerCase()) {
+      toast.error('You can only submit reports for your assigned flight');
+      return;
+    }
     
     if (!selectedFlight) {
       toast.error('Please select a flight');
@@ -327,6 +341,68 @@ const MyFlightPage = () => {
   const canReviewReports = () => {
     // Commanders and exec cadre can review
     return ['commander', 'exec_cadre'].includes(user?.role);
+  };
+
+  // Auto-detect reporter role based on user's actual role/position
+  const getAutoReporterRole = () => {
+    const userRole = user?.role?.toLowerCase();
+    const userPosition = user?.position?.toLowerCase() || '';
+    
+    // Check if user is a Squadron Commander
+    if (userPosition.includes('squadron commander') || userPosition.includes('sq cc') || 
+        userPosition.includes('squadron cc')) {
+      return 'squadron_commander';
+    }
+    
+    // Check if user is a Flight Commander
+    if (userPosition.includes('flight commander') || userPosition.includes('flt cc') ||
+        userPosition.includes('flight cc')) {
+      return 'flight_commander';
+    }
+    
+    // Check if user is a Flight Sergeant
+    if (userPosition.includes('flight sergeant') || userPosition.includes('flt sgt') ||
+        userPosition.includes('first sergeant')) {
+      return 'flight_sergeant';
+    }
+    
+    // Default based on general role
+    if (userRole === 'commander' || userRole === 'exec_cadre') {
+      return 'squadron_commander';
+    }
+    
+    if (userRole === 'staff' || userRole === 'cadre') {
+      return 'flight_sergeant';
+    }
+    
+    return 'flight_sergeant';
+  };
+
+  // Check if user can view all flights (Exec Cadre and Commander)
+  const canViewAllFlights = () => {
+    return ['commander', 'exec_cadre'].includes(user?.role);
+  };
+
+  // Check if user can only submit reports for their assigned flight
+  const canOnlySubmitOwnFlight = () => {
+    return ['cadre', 'staff'].includes(user?.role) && !canViewAllFlights();
+  };
+
+  // Get available reporter roles for this user
+  const getAvailableReporterRoles = () => {
+    const autoRole = getAutoReporterRole();
+    
+    // If user is exec_cadre or commander, they can choose any role
+    if (canViewAllFlights()) {
+      return [
+        { value: 'flight_sergeant', label: 'Flight Sergeant' },
+        { value: 'flight_commander', label: 'Flight Commander' },
+        { value: 'squadron_commander', label: 'Squadron Commander' }
+      ];
+    }
+    
+    // For cadre/staff, only allow their detected role
+    return [{ value: autoRole, label: autoRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }];
   };
 
   const handleQuickMerit = (cadet, type) => {
@@ -1036,7 +1112,10 @@ const MyFlightPage = () => {
                   Flight Reports
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Daily reports for {getFlightLabel(selectedFlight)}
+                  {canViewAllFlights() 
+                    ? (selectedFlight ? `Viewing ${getFlightLabel(selectedFlight)}` : 'All Flights (Exec View)')
+                    : `Daily reports for ${getFlightLabel(selectedFlight)}`
+                  }
                 </p>
               </div>
             </div>
@@ -1056,9 +1135,14 @@ const MyFlightPage = () => {
               
               {canSubmitReports() && (
                 <Button 
-                  onClick={() => setIsReportModalOpen(true)}
+                  onClick={() => {
+                    // Set the auto-detected reporter role when opening the modal
+                    setReportForm(prev => ({...prev, reporter_role: getAutoReporterRole()}));
+                    setIsReportModalOpen(true);
+                  }}
                   className="bg-[#00205B] hover:bg-[#00205B]/90 rounded-sm"
                   data-testid="new-report-btn"
+                  disabled={canOnlySubmitOwnFlight() && selectedFlight !== user?.flight?.toLowerCase()}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Submit Report
@@ -1067,11 +1151,33 @@ const MyFlightPage = () => {
             </div>
           </div>
 
+          {/* Role restriction notice for cadre */}
+          {canOnlySubmitOwnFlight() && selectedFlight !== user?.flight?.toLowerCase() && (
+            <div className="bg-amber-50 border border-amber-200 rounded-sm p-3 flex items-center gap-3">
+              <Shield className="w-5 h-5 text-amber-600" />
+              <p className="text-sm text-amber-800">
+                You can only submit reports for your assigned flight: <strong className="capitalize">{user?.flight}</strong>. 
+                Switch to your flight to submit a report.
+              </p>
+            </div>
+          )}
+
+          {/* Exec Cadre notice - viewing all flights */}
+          {canViewAllFlights() && !selectedFlight && (
+            <div className="bg-blue-50 border border-blue-200 rounded-sm p-3 flex items-center gap-3">
+              <Eye className="w-5 h-5 text-blue-600" />
+              <p className="text-sm text-blue-800">
+                As <strong className="capitalize">{user?.role?.replace('_', ' ')}</strong>, you can view reports from all flights. 
+                Select a specific flight to filter, or view all below.
+              </p>
+            </div>
+          )}
+
           {/* Report Deadline Info */}
           {reportSettings.is_enabled && (
-            <div className="bg-amber-50 border border-amber-200 rounded-sm p-3 flex items-center gap-3">
-              <Clock className="w-5 h-5 text-amber-600" />
-              <p className="text-sm text-amber-800">
+            <div className="bg-slate-50 border border-slate-200 rounded-sm p-3 flex items-center gap-3">
+              <Clock className="w-5 h-5 text-slate-600" />
+              <p className="text-sm text-slate-700">
                 Daily reports are due by <strong>{reportSettings.deadline_time}</strong>
               </p>
             </div>
@@ -1174,24 +1280,36 @@ const MyFlightPage = () => {
               </div>
               <div>
                 <Label className="text-xs uppercase tracking-wide text-slate-600">Reporter Role *</Label>
-                <Select
-                  value={reportForm.reporter_role}
-                  onValueChange={(v) => setReportForm({...reportForm, reporter_role: v})}
-                >
-                  <SelectTrigger className="mt-1 rounded-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="flight_sergeant">Flight Sergeant</SelectItem>
-                    <SelectItem value="flight_commander">Flight Commander</SelectItem>
-                    <SelectItem value="squadron_commander">Squadron Commander</SelectItem>
-                  </SelectContent>
-                </Select>
+                {canViewAllFlights() ? (
+                  <Select
+                    value={reportForm.reporter_role}
+                    onValueChange={(v) => setReportForm({...reportForm, reporter_role: v})}
+                  >
+                    <SelectTrigger className="mt-1 rounded-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableReporterRoles().map(role => (
+                        <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="mt-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-sm text-sm font-medium capitalize">
+                    {getAutoReporterRole().replace(/_/g, ' ')}
+                    <span className="text-xs text-slate-500 ml-2">(Auto-detected)</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-sm">
               <strong>Flight:</strong> {getFlightLabel(selectedFlight)}
+              {canOnlySubmitOwnFlight() && selectedFlight !== user?.flight?.toLowerCase() && (
+                <span className="ml-2 text-amber-600 text-xs font-medium">
+                  (You can only submit reports for your assigned flight: {user?.flight})
+                </span>
+              )}
               {' · '}
               <strong>Squadron:</strong> {allFlights.find(f => f.value === selectedFlight)?.squadron?.replace('_', ' ').toUpperCase() || 'N/A'}
             </div>
