@@ -282,6 +282,34 @@ const RosterPage = () => {
     return colors[type] || colors.basic_student;
   };
 
+  // Flight/Squadron colors matching the master roster spreadsheet
+  const getFlightColors = (flight) => {
+    const flightColors = {
+      // 6th CTS - Light Blue
+      'Alpha': { bg: 'bg-sky-100', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
+      'Bravo': { bg: 'bg-sky-100', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
+      // 21st CTS - Dark Red
+      'Charlie': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
+      'Delta': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
+      // 22nd CTS - Dark Blue
+      'Echo': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
+      'Foxtrot': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
+    };
+    return flightColors[flight] || { bg: '', border: '', text: 'text-slate-500', badge: 'bg-slate-200 text-slate-700' };
+  };
+
+  const getSquadronInfo = (flight) => {
+    const squadronMap = {
+      'Alpha': { name: '6th CTS', color: 'text-sky-600' },
+      'Bravo': { name: '6th CTS', color: 'text-sky-600' },
+      'Charlie': { name: '21st CTS', color: 'text-red-700' },
+      'Delta': { name: '21st CTS', color: 'text-red-700' },
+      'Echo': { name: '22nd CTS', color: 'text-indigo-800' },
+      'Foxtrot': { name: '22nd CTS', color: 'text-indigo-800' },
+    };
+    return squadronMap[flight] || { name: '-', color: 'text-slate-400' };
+  };
+
   if (loading) {
     return (
       <div className="p-6 lg:p-8 animate-fade-in">
@@ -734,6 +762,8 @@ const RosterPage = () => {
                 <th className="text-left">CAP ID</th>
                 <th className="text-left">Rank</th>
                 <th className="text-left">Name</th>
+                <th className="text-left">Flight</th>
+                <th className="text-left">Squadron</th>
                 <th className="text-left">Unit</th>
                 <th className="text-left">Wing</th>
                 <th className="text-left">Type</th>
@@ -746,7 +776,7 @@ const RosterPage = () => {
             <tbody>
               {paginatedParticipants.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-slate-400">
+                  <td colSpan={11} className="text-center py-8 text-slate-400">
                     {showRemoved 
                       ? 'No removed participants' 
                       : (searchTerm || typeFilter !== 'all' || paidFilter !== 'all' 
@@ -755,10 +785,13 @@ const RosterPage = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedParticipants.map((p) => (
+                paginatedParticipants.map((p) => {
+                  const flightColors = getFlightColors(p.flight);
+                  const squadronInfo = getSquadronInfo(p.flight);
+                  return (
                   <tr 
                     key={p.id} 
-                    className={`hover:bg-slate-50 cursor-pointer transition-colors ${p.is_removed ? 'bg-red-50/50' : ''}`}
+                    className={`hover:bg-slate-50 cursor-pointer transition-colors ${p.is_removed ? 'bg-red-50/50' : flightColors.bg} ${flightColors.border}`}
                     onClick={() => handleViewParticipant(p)}
                     data-testid={`roster-row-${p.capid}`}
                   >
@@ -767,6 +800,18 @@ const RosterPage = () => {
                     <td className="font-medium">
                       {p.last_name}, {p.first_name}
                       {p.is_removed && <span className="ml-2 text-xs text-red-500">(Removed)</span>}
+                    </td>
+                    <td>
+                      {p.flight ? (
+                        <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm ${flightColors.badge}`}>
+                          {p.flight}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className={`text-xs font-medium ${squadronInfo.color}`}>
+                      {squadronInfo.name}
                     </td>
                     <td className="font-mono text-sm">{p.unit}</td>
                     <td className="text-sm text-slate-500">{p.wing || '-'}</td>
@@ -859,7 +904,8 @@ const RosterPage = () => {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
