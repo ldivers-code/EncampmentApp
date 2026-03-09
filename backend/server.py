@@ -430,6 +430,50 @@ class DailyAward(BaseModel):
     notes: Optional[str] = None
 
 
+# ================= FLIGHT REPORTING MODELS =================
+
+class FlightReportSection(BaseModel):
+    """Individual section of a flight report"""
+    content: str = ""
+    has_issues: bool = False
+
+class FlightReportBase(BaseModel):
+    """Daily flight report following Encampment Reporting Guide"""
+    report_date: str  # YYYY-MM-DD
+    flight: str  # alpha, bravo, charlie, delta, echo, foxtrot
+    squadron: str  # 6th_cts, 21st_cts, 22nd_cts
+    reporter_role: str  # flight_sergeant, flight_commander, squadron_commander
+    # 7 Required Sections
+    morale: FlightReportSection = FlightReportSection()
+    safety_concerns: FlightReportSection = FlightReportSection()
+    discipline_issues: FlightReportSection = FlightReportSection()
+    training_performance: FlightReportSection = FlightReportSection()
+    significant_events: FlightReportSection = FlightReportSection()
+    recommendations: FlightReportSection = FlightReportSection()
+    commander_issues: FlightReportSection = FlightReportSection()  # Items requiring escalation
+
+class FlightReportCreate(FlightReportBase):
+    pass
+
+class FlightReportResponse(FlightReportBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    submitted_by: str
+    submitted_by_name: str
+    status: str  # submitted, reviewed, escalated
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+class ReportDeadlineSettings(BaseModel):
+    """Settings for report submission deadlines"""
+    deadline_time: str = "21:00"  # 24-hour format (default 9 PM)
+    reminder_minutes_before: int = 60  # Send reminder 60 mins before deadline
+    is_enabled: bool = True
+
+
 class BudgetItemCreate(BudgetItemBase):
     pass
 
@@ -4959,6 +5003,257 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
         "sync_interval_hours": settings.get('sync_interval_hours', 1)
     }
 
+# ================= FLIGHT REPORTING API =================
+
+@api_router.get("/reports/settings")
+async def get_report_settings(user: dict = Depends(get_current_user)):
+    """Get report deadline settings"""
+    settings = await db.report_settings.find_one({'_id': 'settings'})
+    if not settings:
+        # Return defaults
+        return {
+            "deadline_time": "21:00",
+            "reminder_minutes_before": 60,
+            "is_enabled": True
+        }
+    return {
+        "deadline_time": settings.get("deadline_time", "21:00"),
+        "reminder_minutes_before": settings.get("reminder_minutes_before", 60),
+        "is_enabled": settings.get("is_enabled", True)
+    }
+
+@api_router.post("/reports/settings")
+async def update_report_settings(
+    settings: ReportDeadlineSettings,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]))
+):
+    """Update report deadline settings (admin only)"""
+    await db.report_settings.update_one(
+        {'_id': 'settings'},
+        {'$set': {
+            'deadline_time': settings.deadline_time,
+            'reminder_minutes_before': settings.reminder_minutes_before,
+            'is_enabled': settings.is_enabled,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+            'updated_by': user['id']
+        }},
+        upsert=True
+    )
+    return {"message": "Settings updated successfully"}
+
+@api_router.get("/reports/my/submitted")
+async def get_my_submitted_reports(
+    user: dict = Depends(get_current_user)
+):
+    """Get reports submitted by the current user"""
+    reports = await db.flight_reports.find(
+        {"submitted_by": user['id']},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return reports
+
+@api_router.get("/reports/commander-issues")
+async def get_commander_issues(
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXEC_CADRE]))
+):
+    """Get all reports with commander issues (escalated status)"""
+    reports = await db.flight_reports.find(
+        {"status": "escalated"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return reports
+
+@api_router.post("/reports")
+async def create_flight_report(
+    report: FlightReportCreate,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user)
+):
+    """Submit a new flight report"""
+    now = datetime.now(timezone.utc).isoformat()
+    report_id = str(uuid.uuid4())
+    
+    # Determine if there are commander issues that need escalation
+    has_commander_issues = report.commander_issues.content.strip() != "" and report.commander_issues.has_issues
+    
+    report_doc = {
+        "id": report_id,
+        "report_date": report.report_date,
+        "flight": report.flight,
+        "squadron": report.squadron,
+        "reporter_role": report.reporter_role,
+        "morale": report.morale.model_dump(),
+        "safety_concerns": report.safety_concerns.model_dump(),
+        "discipline_issues": report.discipline_issues.model_dump(),
+        "training_performance": report.training_performance.model_dump(),
+        "significant_events": report.significant_events.model_dump(),
+        "recommendations": report.recommendations.model_dump(),
+        "commander_issues": report.commander_issues.model_dump(),
+        "submitted_by": user['id'],
+        "submitted_by_name": user['name'],
+        "status": "escalated" if has_commander_issues else "submitted",
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "review_notes": None,
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.flight_reports.insert_one(report_doc)
+    
+    # Send notification if there are commander issues
+    if has_commander_issues:
+        # Get flight label
+        flight_labels = {
+            "alpha": "Alpha", "bravo": "Bravo", "charlie": "Charlie",
+            "delta": "Delta", "echo": "Echo", "foxtrot": "Foxtrot"
+        }
+        flight_label = flight_labels.get(report.flight, report.flight.title())
+        
+        # Store notification for commanders
+        notification_id = str(uuid.uuid4())
+        await db.notifications.insert_one({
+            "id": notification_id,
+            "title": f"Commander Issue - {flight_label} Flight",
+            "body": f"A flight report from {flight_label} Flight contains items requiring command attention.",
+            "target_groups": ["commander", "exec_cadre"],
+            "report_id": report_id,
+            "sent_by": user["id"],
+            "sent_at": now,
+            "notification_type": "commander_issue"
+        })
+    
+    return {
+        "message": "Report submitted successfully",
+        "id": report_id,
+        "status": report_doc["status"]
+    }
+
+@api_router.get("/reports")
+async def get_flight_reports(
+    flight: Optional[str] = None,
+    squadron: Optional[str] = None,
+    report_date: Optional[str] = None,
+    status: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Get flight reports (filtered by user's access level)"""
+    query = {}
+    
+    user_role = user.get('role')
+    user_flight = user.get('flight', '').lower() if user.get('flight') else None
+    user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
+    
+    # Access control based on role
+    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+        # Full access - can see all reports
+        pass
+    elif user_squadron and user_squadron in ['6th_cts', '21st_cts', '22nd_cts']:
+        # Squadron commander - can see their squadron's reports
+        query['squadron'] = user_squadron
+    elif user_flight:
+        # Flight staff - can see their flight's reports only
+        query['flight'] = user_flight
+    else:
+        # Limited access - only own reports
+        query['submitted_by'] = user['id']
+    
+    # Apply additional filters
+    if flight:
+        query['flight'] = flight.lower()
+    if squadron:
+        query['squadron'] = squadron.lower()
+    if report_date:
+        query['report_date'] = report_date
+    if status:
+        query['status'] = status
+    
+    reports = await db.flight_reports.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return reports
+
+@api_router.get("/reports/{report_id}")
+async def get_flight_report(
+    report_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Get a specific flight report"""
+    report = await db.flight_reports.find_one({"id": report_id}, {"_id": 0})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Access control
+    user_role = user.get('role')
+    user_flight = user.get('flight', '').lower() if user.get('flight') else None
+    user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
+    
+    if user_role not in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+        if user_squadron and user_squadron in ['6th_cts', '21st_cts', '22nd_cts']:
+            if report['squadron'] != user_squadron:
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif user_flight:
+            if report['flight'] != user_flight:
+                raise HTTPException(status_code=403, detail="Access denied")
+        elif report['submitted_by'] != user['id']:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    return report
+
+@api_router.put("/reports/{report_id}/review")
+async def review_flight_report(
+    report_id: str,
+    review_notes: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Mark a report as reviewed (for commanders/supervisors)"""
+    report = await db.flight_reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Only commanders, exec cadre, or squadron commanders can review
+    user_role = user.get('role')
+    user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
+    
+    can_review = False
+    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+        can_review = True
+    elif user_squadron and user_squadron == report['squadron']:
+        # Squadron commander can review their squadron's reports
+        can_review = True
+    
+    if not can_review:
+        raise HTTPException(status_code=403, detail="You don't have permission to review this report")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.flight_reports.update_one(
+        {"id": report_id},
+        {"$set": {
+            "status": "reviewed",
+            "reviewed_by": user['id'],
+            "reviewed_at": now,
+            "review_notes": review_notes,
+            "updated_at": now
+        }}
+    )
+    
+    return {"message": "Report marked as reviewed"}
+
+@api_router.delete("/reports/{report_id}")
+async def delete_flight_report(
+    report_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Delete a flight report (only author or commander)"""
+    report = await db.flight_reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Only the author or a commander can delete
+    if report['submitted_by'] != user['id'] and user.get('role') != UserRole.COMMANDER:
+        raise HTTPException(status_code=403, detail="You don't have permission to delete this report")
+    
+    await db.flight_reports.delete_one({"id": report_id})
+    return {"message": "Report deleted successfully"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -5678,6 +5973,7 @@ async def perform_scheduled_sync():
                 'last_sync_message': str(e)
             }}
         )
+
 
 # ================= APP STARTUP/SHUTDOWN =================
 

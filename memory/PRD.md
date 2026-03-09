@@ -51,8 +51,30 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Receipt Repository (Finance Page)**
 - [x] **Squadron Name Standardization (6th CTS, 21st CTS, 22nd CTS)**
 - [x] **Daily Schedule on Dashboard (Today's Schedule quick view)**
+- [x] **Flight Reporting System (Daily reports with 7 sections)**
 
 ## What's Been Implemented
+
+### Mar 9, 2026 - Flight Reporting System
+- **Flight Reports Feature** under My Flight page:
+  - **Submit Daily Report Modal**: Full form with all 7 required sections from the Encampment Reporting Guide
+  - **7 Report Sections**: Morale, Safety Concerns, Discipline Issues, Training Performance, Significant Events, Recommendations, Commander Issue Items
+  - **Reporter Roles**: Flight Sergeant, Flight Commander, Squadron Commander
+  - **Status Tracking**: Submitted, Reviewed, Escalated
+  - **Commander Issues Escalation**: Auto-flags reports with Commander Issue Items checked
+  - **Notifications**: Creates notification for commanders when reports have escalation items
+  - **Deadline Settings**: Editable daily report deadline (default 21:00), admin-configurable
+  - **View Reports**: Click to view full report details in modal
+  - **Mark as Reviewed**: Commanders can mark reports as reviewed
+- **Backend API Endpoints**:
+  - `GET/POST /api/reports/settings` - Deadline configuration
+  - `POST /api/reports` - Submit new report
+  - `GET /api/reports` - Get reports (filtered by access level)
+  - `GET /api/reports/{id}` - Get specific report
+  - `PUT /api/reports/{id}/review` - Mark as reviewed
+  - `GET /api/reports/commander-issues` - Get escalated reports
+  - `DELETE /api/reports/{id}` - Delete report
+- **Access Control**: Reports visible based on user's flight/squadron assignment
 
 ### Mar 9, 2026 - Daily Schedule Dashboard Widget
 - **Today's Schedule Widget** on Dashboard page:

@@ -4,7 +4,8 @@ import {
   getMyFlightInfo, getFlightRoster, getSquadronRoster, 
   getFlightDocuments, getDocuments, createDocument, deleteDocument,
   getScoreCategories, recordMeritDemerit, getMeritDemerits, getIndividualLeaderboard,
-  getFlightLeaderboard, getCumulativeStandings
+  getFlightLeaderboard, getCumulativeStandings,
+  getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,7 +33,14 @@ import {
   RefreshCw,
   Trophy,
   TrendingUp,
-  Award
+  Award,
+  ClipboardList,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Send,
+  Eye,
+  Settings
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
@@ -95,6 +103,25 @@ const MyFlightPage = () => {
     squadron: ''
   });
 
+  // Reports state
+  const [reports, setReports] = useState([]);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isViewReportModalOpen, setIsViewReportModalOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reportSettings, setReportSettings] = useState({ deadline_time: '21:00', is_enabled: true });
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [reportForm, setReportForm] = useState({
+    report_date: new Date().toISOString().split('T')[0],
+    reporter_role: 'flight_sergeant',
+    morale: { content: '', has_issues: false },
+    safety_concerns: { content: '', has_issues: false },
+    discipline_issues: { content: '', has_issues: false },
+    training_performance: { content: '', has_issues: false },
+    significant_events: { content: '', has_issues: false },
+    recommendations: { content: '', has_issues: false },
+    commander_issues: { content: '', has_issues: false }
+  });
+
   const allFlights = [
     { value: 'alpha', label: 'Alpha Flight', squadron: '6th_cts' },
     { value: 'bravo', label: 'Bravo Flight', squadron: '6th_cts' },
@@ -127,6 +154,13 @@ const MyFlightPage = () => {
       loadFlightPoints();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'reports' && selectedFlight) {
+      loadReports();
+      loadReportSettings();
+    }
+  }, [activeTab, selectedFlight]);
 
   const loadFlightInfo = async () => {
     try {
@@ -176,6 +210,123 @@ const MyFlightPage = () => {
     } catch (error) {
       console.error('Failed to load flight points:', error);
     }
+  };
+
+  // ================= REPORTS FUNCTIONS =================
+
+  const loadReports = async () => {
+    try {
+      const flightData = allFlights.find(f => f.value === selectedFlight);
+      const data = await getFlightReports({ 
+        flight: selectedFlight,
+        squadron: flightData?.squadron 
+      });
+      setReports(data);
+    } catch (error) {
+      console.error('Failed to load reports:', error);
+    }
+  };
+
+  const loadReportSettings = async () => {
+    try {
+      const settings = await getReportSettings();
+      setReportSettings(settings);
+    } catch (error) {
+      console.error('Failed to load report settings:', error);
+    }
+  };
+
+  const resetReportForm = () => {
+    setReportForm({
+      report_date: new Date().toISOString().split('T')[0],
+      reporter_role: 'flight_sergeant',
+      morale: { content: '', has_issues: false },
+      safety_concerns: { content: '', has_issues: false },
+      discipline_issues: { content: '', has_issues: false },
+      training_performance: { content: '', has_issues: false },
+      significant_events: { content: '', has_issues: false },
+      recommendations: { content: '', has_issues: false },
+      commander_issues: { content: '', has_issues: false }
+    });
+  };
+
+  const handleSubmitReport = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedFlight) {
+      toast.error('Please select a flight');
+      return;
+    }
+
+    // Validate at least morale section has content
+    if (!reportForm.morale.content.trim()) {
+      toast.error('Please fill in the Morale section at minimum');
+      return;
+    }
+
+    try {
+      const flightData = allFlights.find(f => f.value === selectedFlight);
+      const payload = {
+        ...reportForm,
+        flight: selectedFlight,
+        squadron: flightData?.squadron || ''
+      };
+      
+      await createFlightReport(payload);
+      toast.success('Report submitted successfully');
+      setIsReportModalOpen(false);
+      resetReportForm();
+      loadReports();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to submit report');
+    }
+  };
+
+  const handleReviewReport = async (reportId) => {
+    try {
+      await reviewFlightReport(reportId);
+      toast.success('Report marked as reviewed');
+      loadReports();
+      setIsViewReportModalOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to review report');
+    }
+  };
+
+  const handleSaveReportSettings = async () => {
+    try {
+      await updateReportSettings(reportSettings);
+      toast.success('Settings saved');
+      setIsSettingsModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to save settings');
+    }
+  };
+
+  const getReportStatusBadge = (status) => {
+    const statusConfig = {
+      submitted: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock },
+      reviewed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle },
+      escalated: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle }
+    };
+    const config = statusConfig[status] || statusConfig.submitted;
+    const Icon = config.icon;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+        <Icon className="w-3 h-3" />
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
+  };
+
+  const canSubmitReports = () => {
+    // Staff, cadre, commanders can submit reports
+    return ['commander', 'staff', 'cadre', 'plans_programs', 'exec_cadre'].includes(user?.role);
+  };
+
+  const canReviewReports = () => {
+    // Commanders and exec cadre can review
+    return ['commander', 'exec_cadre'].includes(user?.role);
   };
 
   const handleQuickMerit = (cadet, type) => {
@@ -399,7 +550,8 @@ const MyFlightPage = () => {
         {[
           { id: 'roster', label: 'Roster', icon: Users },
           { id: 'points', label: 'Points', icon: Trophy, count: flightCadets.length },
-          { id: 'documents', label: 'Documents', icon: FileText, count: getDocumentCount() }
+          { id: 'documents', label: 'Documents', icon: FileText, count: getDocumentCount() },
+          { id: 'reports', label: 'Reports', icon: ClipboardList, count: reports.filter(r => r.status === 'escalated').length || undefined }
         ].map(tab => (
           <button
             key={tab.id}
@@ -871,6 +1023,543 @@ const MyFlightPage = () => {
           </div>
         </div>
       )}
+
+      {/* Reports Tab */}
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          {/* Header with Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <ClipboardList className="w-6 h-6 text-[#00205B]" />
+              <div>
+                <h2 className="font-bold uppercase tracking-tight text-[#00205B]">
+                  Flight Reports
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Daily reports for {getFlightLabel(selectedFlight)}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {canReviewReports() && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="rounded-sm"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Deadline Settings
+                </Button>
+              )}
+              
+              {canSubmitReports() && (
+                <Button 
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="bg-[#00205B] hover:bg-[#00205B]/90 rounded-sm"
+                  data-testid="new-report-btn"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Submit Report
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Report Deadline Info */}
+          {reportSettings.is_enabled && (
+            <div className="bg-amber-50 border border-amber-200 rounded-sm p-3 flex items-center gap-3">
+              <Clock className="w-5 h-5 text-amber-600" />
+              <p className="text-sm text-amber-800">
+                Daily reports are due by <strong>{reportSettings.deadline_time}</strong>
+              </p>
+            </div>
+          )}
+
+          {/* Reports List */}
+          <div className="bg-white border border-slate-200 rounded-sm">
+            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm uppercase text-[#00205B]">
+                Submitted Reports
+              </h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={loadReports}
+                className="text-slate-500"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {reports.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No reports submitted yet</p>
+                {canSubmitReports() && (
+                  <p className="text-sm mt-2">Click "Submit Report" to create your first daily report</p>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {reports.map(report => (
+                  <div 
+                    key={report.id} 
+                    className="p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                    onClick={() => { setSelectedReport(report); setIsViewReportModalOpen(true); }}
+                    data-testid={`report-${report.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-sm text-[#00205B]">
+                            {new Date(report.report_date).toLocaleDateString('en-US', { 
+                              weekday: 'short', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </span>
+                          {getReportStatusBadge(report.status)}
+                        </div>
+                        <p className="text-sm text-slate-600">
+                          Submitted by <span className="font-medium">{report.submitted_by_name}</span>
+                          {' · '}
+                          <span className="capitalize">{report.reporter_role.replace('_', ' ')}</span>
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {new Date(report.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {report.commander_issues?.has_issues && (
+                          <span className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+                            <AlertTriangle className="w-3 h-3" />
+                            Cmd Issue
+                          </span>
+                        )}
+                        <Eye className="w-4 h-4 text-slate-400" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Submit Report Modal */}
+      <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2">
+              <ClipboardList className="w-5 h-5" />
+              Submit Daily Report
+            </DialogTitle>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmitReport} className="space-y-6 mt-4">
+            {/* Meta Info */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Report Date *</Label>
+                <Input
+                  type="date"
+                  value={reportForm.report_date}
+                  onChange={(e) => setReportForm({...reportForm, report_date: e.target.value})}
+                  className="mt-1 rounded-sm"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">Reporter Role *</Label>
+                <Select
+                  value={reportForm.reporter_role}
+                  onValueChange={(v) => setReportForm({...reportForm, reporter_role: v})}
+                >
+                  <SelectTrigger className="mt-1 rounded-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flight_sergeant">Flight Sergeant</SelectItem>
+                    <SelectItem value="flight_commander">Flight Commander</SelectItem>
+                    <SelectItem value="squadron_commander">Squadron Commander</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-sm">
+              <strong>Flight:</strong> {getFlightLabel(selectedFlight)}
+              {' · '}
+              <strong>Squadron:</strong> {allFlights.find(f => f.value === selectedFlight)?.squadron?.replace('_', ' ').toUpperCase() || 'N/A'}
+            </div>
+
+            {/* Report Sections */}
+            <div className="space-y-4">
+              {/* 1. Morale */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200">
+                  <h4 className="font-bold text-sm text-[#00205B]">1. Morale *</h4>
+                  <p className="text-xs text-slate-500">Describe overall motivation and emotional tone. Identify reasons for high or low morale.</p>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.morale.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm, 
+                      morale: { ...reportForm.morale, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={3}
+                    placeholder="e.g., Morale was strong in the morning, but dipped during afternoon drill due to heat..."
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* 2. Safety Concerns */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm text-[#00205B]">2. Safety Concerns</h4>
+                    <p className="text-xs text-slate-500">Hazards, medical issues, environmental risks. Actions taken and unresolved risks.</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={reportForm.safety_concerns.has_issues}
+                      onChange={(e) => setReportForm({
+                        ...reportForm,
+                        safety_concerns: { ...reportForm.safety_concerns, has_issues: e.target.checked }
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-amber-600 font-medium">Has Issues</span>
+                  </label>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.safety_concerns.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      safety_concerns: { ...reportForm.safety_concerns, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={2}
+                    placeholder="e.g., Two heat stress incidents. Medical responded and monitored both cadets..."
+                  />
+                </div>
+              </div>
+
+              {/* 3. Discipline Issues */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm text-[#00205B]">3. Discipline Issues</h4>
+                    <p className="text-xs text-slate-500">Violations of standards, corrective actions, patterns or repeat offenders.</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={reportForm.discipline_issues.has_issues}
+                      onChange={(e) => setReportForm({
+                        ...reportForm,
+                        discipline_issues: { ...reportForm.discipline_issues, has_issues: e.target.checked }
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-amber-600 font-medium">Has Issues</span>
+                  </label>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.discipline_issues.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      discipline_issues: { ...reportForm.discipline_issues, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={2}
+                    placeholder="e.g., C/Amn J.R. repeatedly talked during instruction. Received verbal counseling..."
+                  />
+                </div>
+              </div>
+
+              {/* 4. Training Performance */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200">
+                  <h4 className="font-bold text-sm text-[#00205B]">4. Training Performance</h4>
+                  <p className="text-xs text-slate-500">How well objectives were met, strengths/weaknesses, engagement level.</p>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.training_performance.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      training_performance: { ...reportForm.training_performance, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={2}
+                    placeholder="e.g., Basics mastered basic facing movements. Need more practice on column movements..."
+                  />
+                </div>
+              </div>
+
+              {/* 5. Significant Events */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200">
+                  <h4 className="font-bold text-sm text-[#00205B]">5. Significant Events</h4>
+                  <p className="text-xs text-slate-500">Important activities, visitors, disruptions, medical runs, weather delays, achievements.</p>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.significant_events.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      significant_events: { ...reportForm.significant_events, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={2}
+                    placeholder="e.g., Wing Commander visited Bravo Flight during academics. One cadet sent to medical..."
+                  />
+                </div>
+              </div>
+
+              {/* 6. Recommendations */}
+              <div className="border border-slate-200 rounded-sm">
+                <div className="bg-slate-50 p-3 border-b border-slate-200">
+                  <h4 className="font-bold text-sm text-[#00205B]">6. Recommendations</h4>
+                  <p className="text-xs text-slate-500">Suggestions to improve safety, training, morale. Corrective measures, needed resources.</p>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.recommendations.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      recommendations: { ...reportForm.recommendations, content: e.target.value }
+                    })}
+                    className="rounded-sm"
+                    rows={2}
+                    placeholder="e.g., Recommend shaded rest area near drill pad. Consider moving PT to early morning..."
+                  />
+                </div>
+              </div>
+
+              {/* 7. Commander Issue Items */}
+              <div className="border-2 border-red-200 rounded-sm bg-red-50/30">
+                <div className="bg-red-100 p-3 border-b border-red-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <div>
+                      <h4 className="font-bold text-sm text-red-700">7. Commander Issue Items</h4>
+                      <p className="text-xs text-red-600">Items requiring escalation to higher authority. This is the most important section.</p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={reportForm.commander_issues.has_issues}
+                      onChange={(e) => setReportForm({
+                        ...reportForm,
+                        commander_issues: { ...reportForm.commander_issues, has_issues: e.target.checked }
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-red-600 font-bold">ESCALATE</span>
+                  </label>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    value={reportForm.commander_issues.content}
+                    onChange={(e) => setReportForm({
+                      ...reportForm,
+                      commander_issues: { ...reportForm.commander_issues, content: e.target.value }
+                    })}
+                    className="rounded-sm border-red-200"
+                    rows={2}
+                    placeholder="e.g., Logistics cannot supply enough water coolers for barracks. Request support from Supply..."
+                  />
+                  <p className="text-xs text-red-500 mt-2">
+                    Check "ESCALATE" if this report contains items beyond your authority that require command attention.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => { setIsReportModalOpen(false); resetReportForm(); }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-[#00205B] hover:bg-[#00205B]/90">
+                <Send className="w-4 h-4 mr-2" />
+                Submit Report
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Report Modal */}
+      <Dialog open={isViewReportModalOpen} onOpenChange={setIsViewReportModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2">
+              <ClipboardList className="w-5 h-5" />
+              Flight Report Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedReport && (
+            <div className="space-y-4 mt-4">
+              {/* Report Meta */}
+              <div className="bg-slate-50 rounded-sm p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">Report Date</p>
+                    <p className="font-bold text-[#00205B]">
+                      {new Date(selectedReport.report_date).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  {getReportStatusBadge(selectedReport.status)}
+                </div>
+                <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-200">
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase">Submitted By</p>
+                    <p className="text-sm font-medium">{selectedReport.submitted_by_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase">Role</p>
+                    <p className="text-sm font-medium capitalize">{selectedReport.reporter_role?.replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase">Flight</p>
+                    <p className="text-sm font-medium">{getFlightLabel(selectedReport.flight)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Report Sections */}
+              <div className="space-y-3">
+                {[
+                  { key: 'morale', label: '1. Morale', color: 'blue' },
+                  { key: 'safety_concerns', label: '2. Safety Concerns', color: 'amber' },
+                  { key: 'discipline_issues', label: '3. Discipline Issues', color: 'orange' },
+                  { key: 'training_performance', label: '4. Training Performance', color: 'teal' },
+                  { key: 'significant_events', label: '5. Significant Events', color: 'purple' },
+                  { key: 'recommendations', label: '6. Recommendations', color: 'indigo' },
+                  { key: 'commander_issues', label: '7. Commander Issue Items', color: 'red' }
+                ].map(section => {
+                  const data = selectedReport[section.key];
+                  if (!data?.content) return null;
+                  return (
+                    <div 
+                      key={section.key} 
+                      className={`border rounded-sm ${section.key === 'commander_issues' && data.has_issues ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                    >
+                      <div className={`px-3 py-2 border-b ${section.key === 'commander_issues' && data.has_issues ? 'bg-red-100 border-red-200' : 'bg-slate-50 border-slate-200'} flex items-center gap-2`}>
+                        <h4 className={`font-bold text-sm ${section.key === 'commander_issues' && data.has_issues ? 'text-red-700' : 'text-[#00205B]'}`}>
+                          {section.label}
+                        </h4>
+                        {data.has_issues && (
+                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded">ISSUE FLAGGED</span>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{data.content}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Review Info */}
+              {selectedReport.reviewed_by && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-3">
+                  <p className="text-sm text-emerald-700">
+                    <CheckCircle className="w-4 h-4 inline mr-1" />
+                    Reviewed on {new Date(selectedReport.reviewed_at).toLocaleString()}
+                  </p>
+                  {selectedReport.review_notes && (
+                    <p className="text-sm text-emerald-600 mt-1">{selectedReport.review_notes}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                <Button variant="outline" onClick={() => setIsViewReportModalOpen(false)}>
+                  Close
+                </Button>
+                {canReviewReports() && selectedReport.status !== 'reviewed' && (
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => handleReviewReport(selectedReport.id)}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Mark as Reviewed
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Deadline Settings Modal */}
+      <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Report Deadline Settings
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-slate-600">Daily Deadline Time</Label>
+              <Input
+                type="time"
+                value={reportSettings.deadline_time}
+                onChange={(e) => setReportSettings({...reportSettings, deadline_time: e.target.value})}
+                className="mt-1 rounded-sm"
+              />
+              <p className="text-xs text-slate-400 mt-1">Reports should be submitted by this time daily</p>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Enable deadline reminders</Label>
+              <input
+                type="checkbox"
+                checked={reportSettings.is_enabled}
+                onChange={(e) => setReportSettings({...reportSettings, is_enabled: e.target.checked})}
+                className="rounded"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <Button variant="outline" onClick={() => setIsSettingsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button className="bg-[#00205B]" onClick={handleSaveReportSettings}>
+                Save Settings
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Merit/Demerit Modal */}
       <Dialog open={isMeritModalOpen} onOpenChange={setIsMeritModalOpen}>

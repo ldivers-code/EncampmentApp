@@ -665,3 +665,55 @@ export const getWeatherGuidelines = async () => {
   return response.data;
 };
 
+// ================= FLIGHT REPORTS =================
+
+export const getReportSettings = async () => {
+  const response = await axios.get(`${API}/reports/settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateReportSettings = async (settings) => {
+  const response = await axios.post(`${API}/reports/settings`, settings, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createFlightReport = async (report) => {
+  const response = await axios.post(`${API}/reports`, report, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFlightReports = async (filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.flight) params.append('flight', filters.flight);
+  if (filters.squadron) params.append('squadron', filters.squadron);
+  if (filters.report_date) params.append('report_date', filters.report_date);
+  if (filters.status) params.append('status', filters.status);
+  const response = await axios.get(`${API}/reports?${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFlightReport = async (reportId) => {
+  const response = await axios.get(`${API}/reports/${reportId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const reviewFlightReport = async (reportId, reviewNotes = null) => {
+  const params = reviewNotes ? `?review_notes=${encodeURIComponent(reviewNotes)}` : '';
+  const response = await axios.put(`${API}/reports/${reportId}/review${params}`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getMySubmittedReports = async () => {
+  const response = await axios.get(`${API}/reports/my/submitted`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getCommanderIssues = async () => {
+  const response = await axios.get(`${API}/reports/commander-issues`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deleteFlightReport = async (reportId) => {
+  const response = await axios.delete(`${API}/reports/${reportId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
