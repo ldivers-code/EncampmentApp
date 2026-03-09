@@ -1443,8 +1443,13 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
     for p in participants:
         member_type = (p.get('member_type') or '').upper()
         ptype = p.get('participant_type', '')
-        gender = (p.get('gender') or 'Unknown').upper()
-        if gender not in ['M', 'F']:
+        raw_gender = (p.get('gender') or 'Unknown').upper()
+        # Normalize gender values (handle MALE/FEMALE or M/F)
+        if raw_gender in ['M', 'MALE']:
+            gender = 'M'
+        elif raw_gender in ['F', 'FEMALE']:
+            gender = 'F'
+        else:
             gender = 'Unknown'
         age = p.get('age') or p.get('age_at_event')
         rank = p.get('rank', 'Unknown')
@@ -1977,13 +1982,8 @@ async def import_participants(
             'total_collected': 0.0
         }
         
-        for _, row in df.iterrows():
+        for idx, row in df.iterrows():
             row_dict = row.to_dict()
-            
-            # Skip rows without CAPID
-            capid = str(row_dict.get('capid', '')).strip()
-            if not capid or capid == 'nan':
-                continue
             
             # Helper function to safely get value
             def get_val(key, default=None):
@@ -1995,6 +1995,35 @@ async def import_participants(
             def get_str(key, default=''):
                 val = get_val(key, default)
                 return str(val).strip() if val is not None else default
+            
+            # Get CAPID or generate one from available data
+            capid = str(row_dict.get('capid', '')).strip()
+            if not capid or capid == 'nan':
+                # Try to extract CAPID from email (e.g., 123456@wing.cap.gov or 123456cap@gmail.com)
+                email = get_str('email', '')
+                if email:
+                    email_prefix = email.split('@')[0] if '@' in email else ''
+                    # Check if prefix is numeric or contains numeric CAPID
+                    numeric_parts = ''.join(filter(str.isdigit, email_prefix))
+                    if len(numeric_parts) >= 5:  # CAPIDs are typically 5-6 digits
+                        capid = numeric_parts[:6]
+                
+                # If still no CAPID, generate from name + unit + wing
+                if not capid or capid == 'nan':
+                    last_name = get_str('last_name', '')
+                    first_name = get_str('first_name', '')
+                    wing = get_str('wing', 'XX')
+                    unit = get_str('unit', '000')
+                    if last_name and first_name:
+                        # Generate a pseudo-CAPID from hash of name + unit
+                        import hashlib
+                        composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
+                        hash_digest = hashlib.md5(composite.encode()).hexdigest()[:6]
+                        capid = f"GEN{hash_digest.upper()}"
+                    else:
+                        # Skip rows without enough identifying info
+                        continue
+            
             
             def get_bool(key):
                 val = get_val(key)

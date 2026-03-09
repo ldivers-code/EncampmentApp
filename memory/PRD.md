@@ -448,9 +448,11 @@ Staff/Cadre
 - [x] **Point Tracking System** (flight standings, squadron standings, individual rankings)
 - [x] **Schedule Filter for All Users** (all members can filter by flight/squadron)
 - [x] **Analytics Page Empty State Handling** (gracefully shows zeros and "No data" messages when roster is empty)
+- [x] **Gender Analytics Fix** (handles MALE/FEMALE values in addition to M/F)
 
 ### P1 (High Priority) - COMPLETED
 - [x] **Header buttons CSS fix** (dropdown visibility and z-index issue resolved)
+- [x] **Roster Import Enhancement** (supports CAP Admin Reports without CAPID column by auto-generating unique identifiers)
 
 ### P1 (High Priority) - PENDING
 - [ ] Implement Handbooks page (upload/view PDF documents)
