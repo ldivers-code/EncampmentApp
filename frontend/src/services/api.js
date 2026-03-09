@@ -24,6 +24,12 @@ export const goOffline = async () => {
   return response.data;
 };
 
+// Notification Badges
+export const getNotificationBadges = async () => {
+  const response = await axios.get(`${API}/notification-badges`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Password Reset
 export const forgotPassword = async (email, capid) => {
   const params = new URLSearchParams({ email, capid });

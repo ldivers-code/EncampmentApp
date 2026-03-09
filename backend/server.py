@@ -470,8 +470,12 @@ class FlightReportResponse(FlightReportBase):
     updated_at: str
 
 class EscalateReportRequest(BaseModel):
-    """Request to escalate a report up the chain"""
-    escalate_to: str  # exec_cadre, encampment_commander
+    """Request to escalate a report up the chain
+    
+    Chain of command:
+    flight_sergeant -> flight_commander -> squadron_commander -> exec_cadre -> dcs_commandant -> encampment_commander
+    """
+    escalate_to: str  # flight_commander, squadron_commander, exec_cadre, dcs_commandant, encampment_commander
     notes: Optional[str] = None
 
 class ReportDeadlineSettings(BaseModel):
@@ -1230,7 +1234,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://flight-tracker-125.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://flight-roster-mgmt.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),
@@ -5083,6 +5087,106 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
         "sync_interval_hours": settings.get('sync_interval_hours', 1)
     }
 
+# ================= NOTIFICATION BADGES API =================
+
+@api_router.get("/notification-badges")
+async def get_notification_badges(user: dict = Depends(get_current_user)):
+    """Get notification badge counts for sidebar items"""
+    user_role = user.get('role')
+    user_flight = user.get('flight', '').lower() if user.get('flight') else None
+    user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
+    
+    badges = {}
+    
+    # Reports needing attention (for authorized roles)
+    full_access_roles = [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
+    
+    if user_role in full_access_roles:
+        # Count escalated reports needing attention (all levels in the chain)
+        escalated_count = await db.flight_reports.count_documents({
+            "status": {"$in": [
+                "escalated_flight_commander", "escalated_squadron", 
+                "escalated_exec", "escalated_dcs", "escalated_commander", "at_commander"
+            ]},
+            "commander_issues.has_issues": True
+        })
+        
+        # Count unreviewed reports
+        unreviewed_count = await db.flight_reports.count_documents({
+            "status": "submitted"
+        })
+        
+        if escalated_count > 0 or unreviewed_count > 0:
+            badges['my-flight'] = {
+                "count": escalated_count + unreviewed_count,
+                "type": "alert" if escalated_count > 0 else "info",
+                "label": f"{escalated_count} escalated" if escalated_count > 0 else f"{unreviewed_count} unreviewed"
+            }
+    elif user_flight:
+        # For flight staff - show unreviewed reports for their flight
+        unreviewed_count = await db.flight_reports.count_documents({
+            "flight": user_flight,
+            "status": "submitted"
+        })
+        if unreviewed_count > 0:
+            badges['my-flight'] = {
+                "count": unreviewed_count,
+                "type": "info",
+                "label": f"{unreviewed_count} pending"
+            }
+    
+    # Admin badges (for commanders)
+    if user_role == UserRole.COMMANDER:
+        # Pending user approvals
+        pending_users = await db.users.count_documents({"is_approved": False})
+        if pending_users > 0:
+            badges['admin'] = {
+                "count": pending_users,
+                "type": "alert",
+                "label": f"{pending_users} pending approval"
+            }
+    
+    # Unread notifications count
+    unread_notifications = await db.notifications.count_documents({
+        "target_groups": {"$in": [user_role, "all"]},
+        "read_by": {"$ne": user.get('id')}
+    })
+    if unread_notifications > 0:
+        badges['notifications'] = {
+            "count": unread_notifications,
+            "type": "info"
+        }
+    
+    # Schedule updates (events in the last hour)
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    
+    # Check for any schedule updates in the last hour
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    recent_schedule_updates = await db.schedule_events.count_documents({
+        "updated_at": {"$gte": one_hour_ago}
+    })
+    if recent_schedule_updates > 0:
+        badges['schedule'] = {
+            "count": recent_schedule_updates,
+            "type": "info",
+            "label": "Recently updated"
+        }
+    
+    # Financial tracker - pending receipts (for finance role)
+    if user_role in [UserRole.COMMANDER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS]:
+        pending_receipts = await db.receipts.count_documents({
+            "status": {"$in": ["pending", "submitted"]}
+        })
+        if pending_receipts > 0:
+            badges['budget'] = {
+                "count": pending_receipts,
+                "type": "info",
+                "label": f"{pending_receipts} pending receipts"
+            }
+    
+    return badges
+
 # ================= FLIGHT REPORTING API =================
 
 @api_router.get("/reports/settings")
@@ -5171,8 +5275,8 @@ async def create_flight_report(
         "commander_issues": report.commander_issues.model_dump(),
         "submitted_by": user['id'],
         "submitted_by_name": user['name'],
-        "status": "escalated_squadron" if has_commander_issues else "submitted",
-        "escalation_level": "squadron_commander" if has_commander_issues else None,
+        "status": "escalated_flight_commander" if has_commander_issues else "submitted",
+        "escalation_level": "flight_sergeant" if has_commander_issues else None,
         "escalation_history": [],
         "reviewed_by": None,
         "reviewed_at": None,
@@ -5335,17 +5439,31 @@ async def escalate_flight_report(
     request: EscalateReportRequest,
     user: dict = Depends(get_current_user)
 ):
-    """Escalate a report up the chain of command"""
+    """Escalate a report up the chain of command
+    
+    Full chain: Flight Sergeant -> Flight Commander -> Squadron Commander -> 
+                Exec Cadre -> DCS & Commandant -> Encampment Commander
+    """
     report = await db.flight_reports.find_one({"id": report_id})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     
     user_role = user.get('role')
-    current_level = report.get('escalation_level', 'squadron_commander')
+    current_level = report.get('escalation_level', 'flight_sergeant')
     
-    # Define escalation chain and who can escalate
-    # Squadron Commander -> Exec Cadre -> Encampment Commander
+    # Define the complete escalation chain with who can escalate at each level
+    # Each level defines: who can escalate FROM this level, the next level, and the status name
     escalation_chain = {
+        'flight_sergeant': {
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.CADRE],
+            'next_level': 'flight_commander',
+            'status': 'escalated_flight_commander'
+        },
+        'flight_commander': {
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
+            'next_level': 'squadron_commander',
+            'status': 'escalated_squadron'
+        },
         'squadron_commander': {
             'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
             'next_level': 'exec_cadre',
@@ -5353,6 +5471,11 @@ async def escalate_flight_report(
         },
         'exec_cadre': {
             'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE],
+            'next_level': 'dcs_commandant',
+            'status': 'escalated_dcs'
+        },
+        'dcs_commandant': {
+            'can_escalate_roles': [UserRole.COMMANDER],
             'next_level': 'encampment_commander',
             'status': 'escalated_commander'
         },
@@ -5363,8 +5486,11 @@ async def escalate_flight_report(
         }
     }
     
+    # Valid escalation targets
+    valid_targets = ['flight_commander', 'squadron_commander', 'exec_cadre', 'dcs_commandant', 'encampment_commander']
+    
     # Check if user can escalate from current level
-    current_chain = escalation_chain.get(current_level, escalation_chain['squadron_commander'])
+    current_chain = escalation_chain.get(current_level, escalation_chain['flight_sergeant'])
     
     if user_role not in current_chain['can_escalate_roles']:
         raise HTTPException(
@@ -5374,15 +5500,20 @@ async def escalate_flight_report(
     
     # Determine target escalation level
     target_level = request.escalate_to
-    if target_level not in ['exec_cadre', 'encampment_commander']:
+    if target_level not in valid_targets:
         raise HTTPException(status_code=400, detail="Invalid escalation target")
     
-    # Validate escalation path
+    # Validate escalation path - must go to the next level in chain
     if current_level == 'encampment_commander':
         raise HTTPException(status_code=400, detail="Report is already at the highest level")
     
-    if current_level == 'exec_cadre' and target_level == 'exec_cadre':
-        raise HTTPException(status_code=400, detail="Report is already at Exec Cadre level")
+    # Ensure we're escalating to the correct next level
+    expected_next = current_chain['next_level']
+    if target_level != expected_next:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot skip levels. Must escalate to {expected_next.replace('_', ' ').title()} next"
+        )
     
     now = datetime.now(timezone.utc).isoformat()
     
@@ -5396,8 +5527,8 @@ async def escalate_flight_report(
         "notes": request.notes or ""
     }
     
-    # Determine new status
-    new_status = 'escalated_exec' if target_level == 'exec_cadre' else 'escalated_commander'
+    # Determine new status from the chain
+    new_status = current_chain['status']  # Use the status defined for escalating FROM the current level
     
     # Update the report
     await db.flight_reports.update_one(
@@ -5421,13 +5552,31 @@ async def escalate_flight_report(
     }
     flight_label = flight_labels.get(report.get('flight', ''), report.get('flight', '').title())
     
-    notification_targets = ['commander'] if target_level == 'encampment_commander' else ['exec_cadre', 'commander']
+    # Determine notification targets based on escalation level
+    level_display_names = {
+        'flight_commander': 'Flight Commander',
+        'squadron_commander': 'Squadron Commander',
+        'exec_cadre': 'Exec Cadre',
+        'dcs_commandant': 'DCS & Commandant',
+        'encampment_commander': 'Encampment Commander'
+    }
+    target_display = level_display_names.get(target_level, target_level.replace('_', ' ').title())
+    
+    # Notify relevant groups based on target level
+    if target_level == 'encampment_commander':
+        notification_targets = ['commander']
+    elif target_level == 'dcs_commandant':
+        notification_targets = ['commander']  # DCS and Commandant level
+    elif target_level == 'exec_cadre':
+        notification_targets = ['exec_cadre', 'commander']
+    else:
+        notification_targets = ['staff', 'exec_cadre', 'commander']
     
     notification_id = str(uuid.uuid4())
     await db.notifications.insert_one({
         "id": notification_id,
         "title": f"Commander Issue Escalated - {flight_label} Flight",
-        "body": f"A commander issue has been escalated to {target_level.replace('_', ' ').title()} for review.",
+        "body": f"A commander issue has been escalated to {target_display} for review.",
         "target_groups": notification_targets,
         "report_id": report_id,
         "sent_by": user["id"],
@@ -5436,7 +5585,7 @@ async def escalate_flight_report(
     })
     
     return {
-        "message": f"Report escalated to {target_level.replace('_', ' ').title()}",
+        "message": f"Report escalated to {target_display}",
         "new_level": target_level,
         "status": new_status
     }

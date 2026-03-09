@@ -7,7 +7,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://flight-tracker-125.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://flight-roster-mgmt.preview.emergentagent.com')
 
 class TestMyFlightAPIs:
     """Test My Flight page backend APIs"""

@@ -326,10 +326,13 @@ const MyFlightPage = () => {
       submitted: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock, label: 'Submitted' },
       reviewed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle, label: 'Reviewed' },
       escalated: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle, label: 'Escalated' },
+      // New detailed escalation chain statuses
+      escalated_flight_commander: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: ArrowUpCircle, label: 'Flight Commander' },
       escalated_squadron: { bg: 'bg-amber-100', text: 'text-amber-700', icon: ArrowUpCircle, label: 'Sq. Commander' },
       escalated_exec: { bg: 'bg-orange-100', text: 'text-orange-700', icon: ArrowUpCircle, label: 'Exec Cadre' },
+      escalated_dcs: { bg: 'bg-rose-100', text: 'text-rose-700', icon: ArrowUpCircle, label: 'DCS & Commandant' },
       escalated_commander: { bg: 'bg-red-100', text: 'text-red-700', icon: ArrowUpCircle, label: 'Encampment Cmdr' },
-      at_commander: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle, label: 'At Commander' },
+      at_commander: { bg: 'bg-red-200', text: 'text-red-800', icon: AlertTriangle, label: 'At Cmdr Level' },
       resolved: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle2, label: 'Resolved' }
     };
     const config = statusConfig[status] || statusConfig.submitted;
@@ -407,25 +410,33 @@ const MyFlightPage = () => {
     return ['commander', 'exec_cadre'].includes(user?.role);
   };
 
-  // Get the next escalation level for a report
+  // Get the next escalation level for a report based on current level
   const getNextEscalationLevel = (currentLevel) => {
-    if (!currentLevel || currentLevel === 'squadron_commander') {
-      return 'exec_cadre';
-    }
-    if (currentLevel === 'exec_cadre') {
-      return 'encampment_commander';
-    }
-    return null; // Already at top
+    // Complete chain: flight_sergeant -> flight_commander -> squadron_commander -> exec_cadre -> dcs_commandant -> encampment_commander
+    const escalationOrder = {
+      'flight_sergeant': 'flight_commander',
+      'flight_commander': 'squadron_commander',
+      'squadron_commander': 'exec_cadre',
+      'exec_cadre': 'dcs_commandant',
+      'dcs_commandant': 'encampment_commander',
+      'encampment_commander': null
+    };
+    
+    if (!currentLevel) return 'flight_commander'; // Default first escalation
+    return escalationOrder[currentLevel] || null;
   };
 
   // Get escalation level label
   const getEscalationLabel = (level) => {
     const labels = {
+      'flight_sergeant': 'Flight Sergeant',
+      'flight_commander': 'Flight Commander',
       'squadron_commander': 'Squadron Commander',
       'exec_cadre': 'Exec Cadre',
+      'dcs_commandant': 'DCS & Commandant',
       'encampment_commander': 'Encampment Commander'
     };
-    return labels[level] || level;
+    return labels[level] || level?.replace('_', ' ');
   };
 
   // Handle escalation
@@ -691,7 +702,9 @@ const MyFlightPage = () => {
           { id: 'roster', label: 'Roster', icon: Users },
           { id: 'points', label: 'Points', icon: Trophy, count: flightCadets.length },
           { id: 'documents', label: 'Documents', icon: FileText, count: getDocumentCount() },
-          { id: 'reports', label: 'Reports', icon: ClipboardList, count: reports.filter(r => r.status === 'escalated').length || undefined }
+          { id: 'reports', label: 'Reports', icon: ClipboardList, count: reports.filter(r => 
+            ['escalated_flight_commander', 'escalated_squadron', 'escalated_exec', 'escalated_dcs', 'escalated_commander', 'at_commander'].includes(r.status)
+          ).length || undefined }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1745,29 +1758,27 @@ const MyFlightPage = () => {
                   </Button>
                 )}
 
-                {/* Escalation buttons for reports with commander issues */}
+                {/* Escalation buttons for reports with commander issues - dynamic chain */}
                 {canEscalateReports() && selectedReport.commander_issues?.has_issues && 
                  !['resolved', 'reviewed'].includes(selectedReport.status) && (
                   <>
-                    {/* Escalate to Exec Cadre (if at squadron level or not escalated) */}
-                    {(!selectedReport.escalation_level || selectedReport.escalation_level === 'squadron_commander') && (
+                    {/* Dynamic escalation button based on current level */}
+                    {getNextEscalationLevel(selectedReport.escalation_level) && (
                       <Button 
-                        className="bg-amber-600 hover:bg-amber-700"
-                        onClick={() => handleEscalateReport(selectedReport.id, 'exec_cadre')}
+                        className={
+                          selectedReport.escalation_level === 'dcs_commandant' ? 'bg-red-600 hover:bg-red-700' :
+                          selectedReport.escalation_level === 'exec_cadre' ? 'bg-rose-600 hover:bg-rose-700' :
+                          selectedReport.escalation_level === 'squadron_commander' ? 'bg-orange-600 hover:bg-orange-700' :
+                          selectedReport.escalation_level === 'flight_commander' ? 'bg-amber-600 hover:bg-amber-700' :
+                          'bg-yellow-600 hover:bg-yellow-700'
+                        }
+                        onClick={() => handleEscalateReport(
+                          selectedReport.id, 
+                          getNextEscalationLevel(selectedReport.escalation_level)
+                        )}
                       >
                         <ArrowUpCircle className="w-4 h-4 mr-2" />
-                        Escalate to Exec Cadre
-                      </Button>
-                    )}
-                    
-                    {/* Escalate to Encampment Commander (if at exec level) */}
-                    {selectedReport.escalation_level === 'exec_cadre' && canResolveReports() && (
-                      <Button 
-                        className="bg-red-600 hover:bg-red-700"
-                        onClick={() => handleEscalateReport(selectedReport.id, 'encampment_commander')}
-                      >
-                        <ArrowUpCircle className="w-4 h-4 mr-2" />
-                        Escalate to Encampment Cmdr
+                        Escalate to {getEscalationLabel(getNextEscalationLevel(selectedReport.escalation_level))}
                       </Button>
                     )}
                   </>
@@ -1775,7 +1786,7 @@ const MyFlightPage = () => {
 
                 {/* Resolve button for escalated reports */}
                 {canResolveReports() && 
-                 ['escalated_squadron', 'escalated_exec', 'escalated_commander', 'at_commander'].includes(selectedReport.status) && (
+                 ['escalated_flight_commander', 'escalated_squadron', 'escalated_exec', 'escalated_dcs', 'escalated_commander', 'at_commander'].includes(selectedReport.status) && (
                   <Button 
                     className="bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => handleResolveReport(selectedReport.id)}

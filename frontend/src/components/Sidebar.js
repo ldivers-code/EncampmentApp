@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getNotificationBadges } from '../services/api';
 import { 
   LayoutDashboard, 
   Users, 
@@ -27,6 +28,38 @@ const Sidebar = ({ children }) => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [badges, setBadges] = useState({});
+
+  // Fetch notification badges
+  useEffect(() => {
+    const fetchBadges = async () => {
+      try {
+        const data = await getNotificationBadges();
+        setBadges(data);
+      } catch (error) {
+        console.error('Failed to fetch notification badges:', error);
+      }
+    };
+
+    if (user) {
+      fetchBadges();
+      // Refresh badges every 30 seconds
+      const interval = setInterval(fetchBadges, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  // Get badge key from path
+  const getBadgeKey = (path) => {
+    const keyMap = {
+      '/my-flight': 'my-flight',
+      '/admin': 'admin',
+      '/schedule': 'schedule',
+      '/budget': 'budget',
+      '/roster': 'roster'
+    };
+    return keyMap[path];
+  };
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -51,10 +84,13 @@ const Sidebar = ({ children }) => {
 
   const NavItem = ({ item }) => {
     const isActive = location.pathname === item.path;
+    const badgeKey = getBadgeKey(item.path);
+    const badge = badgeKey ? badges[badgeKey] : null;
+    
     return (
       <NavLink
         to={item.path}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-sm transition-colors duration-150 ${
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-sm transition-colors duration-150 relative ${
           isActive 
             ? 'bg-[#00205B] text-white' 
             : 'text-slate-700 hover:bg-slate-100'
@@ -62,8 +98,35 @@ const Sidebar = ({ children }) => {
         onClick={() => setMobileOpen(false)}
         data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
       >
-        <item.icon className="w-5 h-5 flex-shrink-0" />
-        {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+        <div className="relative">
+          <item.icon className="w-5 h-5 flex-shrink-0" />
+          {badge && badge.count > 0 && (
+            <span 
+              className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full ${
+                badge.type === 'alert' 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-amber-500 text-white'
+              }`}
+              title={badge.label || `${badge.count} items`}
+            >
+              {badge.count > 9 ? '9+' : badge.count}
+            </span>
+          )}
+        </div>
+        {!collapsed && (
+          <span className="text-sm font-medium flex-1">{item.label}</span>
+        )}
+        {!collapsed && badge && badge.count > 0 && (
+          <span 
+            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              badge.type === 'alert' 
+                ? 'bg-red-100 text-red-700' 
+                : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {badge.count}
+          </span>
+        )}
       </NavLink>
     );
   };
