@@ -623,3 +623,24 @@ export const getDocumentCategories = async () => {
   return response.data;
 };
 
+// Google Sheets Sync
+export const getGoogleSheetsSettings = async () => {
+  const response = await axios.get(`${API}/google-sheets/settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateGoogleSheetsSettings = async (settings) => {
+  const response = await axios.post(`${API}/google-sheets/settings`, settings, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const triggerGoogleSheetsSync = async () => {
+  const response = await axios.post(`${API}/google-sheets/sync`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getGoogleSheetsSyncStatus = async () => {
+  const response = await axios.get(`${API}/google-sheets/sync-status`, { headers: getAuthHeaders() });
+  return response.data;
+};
+

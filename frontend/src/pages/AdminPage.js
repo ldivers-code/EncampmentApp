@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -24,7 +25,11 @@ import {
   Unlock,
   X,
   RotateCcw,
-  Key
+  Key,
+  RefreshCw,
+  FileSpreadsheet,
+  Cloud,
+  ExternalLink
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
@@ -44,6 +49,19 @@ const AdminPage = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+
+  // Google Sheets sync state
+  const [gsheetSettings, setGsheetSettings] = useState({
+    rosterSpreadsheetId: '',
+    rosterGid: '',
+    orgChartSpreadsheetId: '',
+    orgChartGids: '',
+    syncIntervalHours: 1,
+    autoSyncEnabled: true
+  });
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [savingGsheetSettings, setSavingGsheetSettings] = useState(false);
+  const [syncingNow, setSyncingNow] = useState(false);
 
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
@@ -93,7 +111,82 @@ const AdminPage = () => {
   useEffect(() => {
     loadUsers();
     loadPendingUsers();
+    loadGoogleSheetsSettings();
   }, []);
+
+  // Load Google Sheets settings
+  const loadGoogleSheetsSettings = async () => {
+    try {
+      const settings = await getGoogleSheetsSettings();
+      if (settings) {
+        setGsheetSettings({
+          rosterSpreadsheetId: settings.roster_sheet?.spreadsheet_id || '',
+          rosterGid: settings.roster_sheet?.gid || '',
+          orgChartSpreadsheetId: settings.org_chart_sheets?.[0]?.spreadsheet_id || '',
+          orgChartGids: settings.org_chart_sheets?.map(s => s.gid).join(',') || '',
+          syncIntervalHours: settings.sync_interval_hours || 1,
+          autoSyncEnabled: settings.auto_sync_enabled !== false
+        });
+      }
+      
+      const status = await getGoogleSheetsSyncStatus();
+      setSyncStatus(status);
+    } catch (error) {
+      console.error('Failed to load Google Sheets settings', error);
+    }
+  };
+
+  // Save Google Sheets settings
+  const handleSaveGsheetSettings = async () => {
+    setSavingGsheetSettings(true);
+    try {
+      await updateGoogleSheetsSettings({
+        roster_spreadsheet_id: gsheetSettings.rosterSpreadsheetId || null,
+        roster_gid: gsheetSettings.rosterGid || null,
+        org_chart_spreadsheet_id: gsheetSettings.orgChartSpreadsheetId || null,
+        org_chart_gids: gsheetSettings.orgChartGids ? gsheetSettings.orgChartGids.split(',').map(g => g.trim()) : null,
+        sync_interval_hours: gsheetSettings.syncIntervalHours,
+        auto_sync_enabled: gsheetSettings.autoSyncEnabled
+      });
+      toast.success('Google Sheets settings saved');
+      loadGoogleSheetsSettings();
+    } catch (error) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSavingGsheetSettings(false);
+    }
+  };
+
+  // Trigger manual sync
+  const handleManualSync = async () => {
+    setSyncingNow(true);
+    try {
+      await triggerGoogleSheetsSync();
+      toast.success('Sync started! This may take a moment.');
+      // Poll for status updates
+      setTimeout(loadGoogleSheetsSettings, 2000);
+      setTimeout(loadGoogleSheetsSettings, 5000);
+      setTimeout(loadGoogleSheetsSettings, 10000);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to start sync');
+    } finally {
+      setSyncingNow(false);
+    }
+  };
+
+  // Helper to extract spreadsheet ID and gid from Google Sheets URL
+  const parseGoogleSheetsUrl = (url) => {
+    try {
+      const spreadsheetIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      const gidMatch = url.match(/gid=(\d+)/);
+      return {
+        spreadsheetId: spreadsheetIdMatch ? spreadsheetIdMatch[1] : '',
+        gid: gidMatch ? gidMatch[1] : ''
+      };
+    } catch {
+      return { spreadsheetId: '', gid: '' };
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -779,6 +872,170 @@ const AdminPage = () => {
                   <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Echo</span>
                   <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Foxtrot</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Google Sheets Sync */}
+          <div className="bg-white border border-slate-200 rounded-sm">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
+                <Cloud className="w-4 h-4" />
+                Google Sheets Live Sync
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">Connect Google Sheets to automatically update roster data</p>
+            </div>
+            <div className="p-4 space-y-6">
+              {/* Sync Status */}
+              {syncStatus && (
+                <div className={`p-3 rounded-sm flex items-center justify-between ${
+                  syncStatus.last_sync_status === 'success' ? 'bg-emerald-50 border border-emerald-200' :
+                  syncStatus.last_sync_status === 'error' ? 'bg-red-50 border border-red-200' :
+                  syncStatus.last_sync_status === 'running' ? 'bg-blue-50 border border-blue-200' :
+                  'bg-slate-50 border border-slate-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    {syncStatus.last_sync_status === 'success' && <CheckCircle className="w-5 h-5 text-emerald-600" />}
+                    {syncStatus.last_sync_status === 'error' && <AlertTriangle className="w-5 h-5 text-red-600" />}
+                    {syncStatus.last_sync_status === 'running' && <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />}
+                    {!syncStatus.last_sync_status && <Clock className="w-5 h-5 text-slate-400" />}
+                    <div>
+                      <p className="text-sm font-medium">
+                        {syncStatus.last_sync_status === 'success' && 'Last sync successful'}
+                        {syncStatus.last_sync_status === 'error' && 'Last sync failed'}
+                        {syncStatus.last_sync_status === 'running' && 'Sync in progress...'}
+                        {!syncStatus.last_sync_status && 'No sync performed yet'}
+                      </p>
+                      {syncStatus.last_sync_at && (
+                        <p className="text-xs text-slate-500">
+                          {new Date(syncStatus.last_sync_at).toLocaleString()}
+                        </p>
+                      )}
+                      {syncStatus.last_sync_message && (
+                        <p className="text-xs text-slate-600 mt-1">{syncStatus.last_sync_message}</p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleManualSync}
+                    disabled={syncingNow || syncStatus.last_sync_status === 'running'}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-sm"
+                    data-testid="sync-now-btn"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${syncingNow ? 'animate-spin' : ''}`} />
+                    Sync Now
+                  </Button>
+                </div>
+              )}
+
+              {/* Roster Sheet Config */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <Label className="text-sm font-bold uppercase text-slate-700">Roster Sheet</Label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-slate-500 mb-1 block">Spreadsheet ID</Label>
+                    <Input
+                      value={gsheetSettings.rosterSpreadsheetId}
+                      onChange={(e) => setGsheetSettings(prev => ({ ...prev, rosterSpreadsheetId: e.target.value }))}
+                      placeholder="1-HbkFiABYG3fIsF41crkD-T5aCRJ-Zq7"
+                      className="rounded-sm text-sm font-mono"
+                      data-testid="roster-spreadsheet-id"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500 mb-1 block">Sheet Tab (gid)</Label>
+                    <Input
+                      value={gsheetSettings.rosterGid}
+                      onChange={(e) => setGsheetSettings(prev => ({ ...prev, rosterGid: e.target.value }))}
+                      placeholder="345615746"
+                      className="rounded-sm text-sm font-mono"
+                      data-testid="roster-gid"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Find these in your Google Sheets URL: docs.google.com/spreadsheets/d/<strong>[SPREADSHEET_ID]</strong>/edit?gid=<strong>[GID]</strong>
+                </p>
+              </div>
+
+              {/* Org Chart Sheet Config */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                  <Label className="text-sm font-bold uppercase text-slate-700">Org Chart Sheet (Optional)</Label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-slate-500 mb-1 block">Spreadsheet ID</Label>
+                    <Input
+                      value={gsheetSettings.orgChartSpreadsheetId}
+                      onChange={(e) => setGsheetSettings(prev => ({ ...prev, orgChartSpreadsheetId: e.target.value }))}
+                      placeholder="1b9JpdOsUHT7p18fC2qykFvbuMNFidT5ydl161_lFFW8"
+                      className="rounded-sm text-sm font-mono"
+                      data-testid="orgchart-spreadsheet-id"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500 mb-1 block">Sheet Tab GIDs (comma-separated)</Label>
+                    <Input
+                      value={gsheetSettings.orgChartGids}
+                      onChange={(e) => setGsheetSettings(prev => ({ ...prev, orgChartGids: e.target.value }))}
+                      placeholder="1271574678, 123456789"
+                      className="rounded-sm text-sm font-mono"
+                      data-testid="orgchart-gids"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sync Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                <div>
+                  <Label className="text-xs text-slate-500 mb-1 block">Sync Interval</Label>
+                  <Select 
+                    value={String(gsheetSettings.syncIntervalHours)}
+                    onValueChange={(v) => setGsheetSettings(prev => ({ ...prev, syncIntervalHours: parseInt(v) }))}
+                  >
+                    <SelectTrigger className="rounded-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Every Hour</SelectItem>
+                      <SelectItem value="2">Every 2 Hours</SelectItem>
+                      <SelectItem value="4">Every 4 Hours</SelectItem>
+                      <SelectItem value="6">Every 6 Hours</SelectItem>
+                      <SelectItem value="12">Every 12 Hours</SelectItem>
+                      <SelectItem value="24">Daily</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="autoSyncEnabled"
+                    checked={gsheetSettings.autoSyncEnabled}
+                    onChange={(e) => setGsheetSettings(prev => ({ ...prev, autoSyncEnabled: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <Label htmlFor="autoSyncEnabled" className="text-sm">Enable automatic sync</Label>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={handleSaveGsheetSettings}
+                  disabled={savingGsheetSettings}
+                  className="bg-[#00205B] rounded-sm"
+                  data-testid="save-gsheet-settings-btn"
+                >
+                  {savingGsheetSettings ? 'Saving...' : 'Save Google Sheets Settings'}
+                </Button>
               </div>
             </div>
           </div>

@@ -453,6 +453,7 @@ Staff/Cadre
 ### P1 (High Priority) - COMPLETED
 - [x] **Header buttons CSS fix** (dropdown visibility and z-index issue resolved)
 - [x] **Roster Import Enhancement** (supports CAP Admin Reports without CAPID column by auto-generating unique identifiers)
+- [x] **Google Sheets Live Sync** (automatic hourly sync from Google Sheets to update roster data)
 
 ### P1 (High Priority) - PENDING
 - [ ] Implement Handbooks page (upload/view PDF documents)

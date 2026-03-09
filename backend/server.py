@@ -17,9 +17,12 @@ import bcrypt
 import pandas as pd
 from io import BytesIO
 
-# SendGrid Email
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import httpx
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -492,6 +495,33 @@ class OrgChartRoleResponse(OrgChartRoleBase):
     direct_subordinates: List[str] = []  # List of role_ids
     created_at: str
     updated_at: str
+
+
+# ================= GOOGLE SHEETS SYNC MODELS =================
+
+class GoogleSheetConfig(BaseModel):
+    sheet_type: str  # "roster" or "org_chart"
+    spreadsheet_id: str
+    gid: str  # Sheet tab ID
+    name: Optional[str] = None  # Friendly name for the sheet
+    enabled: bool = True
+
+class GoogleSheetsSettings(BaseModel):
+    roster_sheet: Optional[GoogleSheetConfig] = None
+    org_chart_sheets: List[GoogleSheetConfig] = []
+    sync_interval_hours: int = 1
+    last_sync_at: Optional[str] = None
+    last_sync_status: Optional[str] = None  # "success", "error", "running"
+    last_sync_message: Optional[str] = None
+    auto_sync_enabled: bool = True
+
+class GoogleSheetsSyncRequest(BaseModel):
+    roster_spreadsheet_id: Optional[str] = None
+    roster_gid: Optional[str] = None
+    org_chart_spreadsheet_id: Optional[str] = None
+    org_chart_gids: Optional[List[str]] = None  # Multiple tabs for squadrons
+    sync_interval_hours: int = 1
+    auto_sync_enabled: bool = True
 
 
 # ================= AUTH HELPERS =================
@@ -4637,6 +4667,114 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 async def root():
     return {"message": "CAP Encampment Roster API", "version": "1.0.0"}
 
+# ================= GOOGLE SHEETS SYNC ENDPOINTS =================
+
+@api_router.get("/google-sheets/settings")
+async def get_google_sheets_settings(user: dict = Depends(get_current_user)):
+    """Get Google Sheets sync settings"""
+    if user.get('role') not in ['commander', 'plans_programs']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
+    if not settings:
+        return {
+            "roster_sheet": None,
+            "org_chart_sheets": [],
+            "sync_interval_hours": 1,
+            "last_sync_at": None,
+            "last_sync_status": None,
+            "last_sync_message": None,
+            "auto_sync_enabled": True
+        }
+    
+    # Remove MongoDB _id
+    settings.pop('_id', None)
+    return settings
+
+@api_router.post("/google-sheets/settings")
+async def update_google_sheets_settings(
+    request: GoogleSheetsSyncRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Update Google Sheets sync settings"""
+    if user.get('role') not in ['commander', 'plans_programs']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = {
+        '_id': 'settings',
+        'sync_interval_hours': request.sync_interval_hours,
+        'auto_sync_enabled': request.auto_sync_enabled,
+    }
+    
+    if request.roster_spreadsheet_id and request.roster_gid:
+        settings['roster_sheet'] = {
+            'sheet_type': 'roster',
+            'spreadsheet_id': request.roster_spreadsheet_id,
+            'gid': request.roster_gid,
+            'name': 'Roster',
+            'enabled': True
+        }
+    
+    if request.org_chart_spreadsheet_id and request.org_chart_gids:
+        settings['org_chart_sheets'] = [
+            {
+                'sheet_type': 'org_chart',
+                'spreadsheet_id': request.org_chart_spreadsheet_id,
+                'gid': gid,
+                'name': f'Org Chart Tab {i+1}',
+                'enabled': True
+            }
+            for i, gid in enumerate(request.org_chart_gids)
+        ]
+    
+    await db.google_sheets_settings.replace_one(
+        {'_id': 'settings'},
+        settings,
+        upsert=True
+    )
+    
+    return {"message": "Settings updated successfully", "settings": settings}
+
+@api_router.post("/google-sheets/sync")
+async def trigger_manual_sync(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user)
+):
+    """Manually trigger a Google Sheets sync"""
+    if user.get('role') not in ['commander', 'plans_programs', 'staff']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
+    if not settings:
+        raise HTTPException(status_code=400, detail="No Google Sheets configured. Please configure sheets first.")
+    
+    # Run sync in background
+    background_tasks.add_task(perform_scheduled_sync)
+    
+    return {"message": "Sync started. Check status for results."}
+
+@api_router.get("/google-sheets/sync-status")
+async def get_sync_status(user: dict = Depends(get_current_user)):
+    """Get the current sync status"""
+    settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
+    if not settings:
+        return {
+            "configured": False,
+            "last_sync_at": None,
+            "last_sync_status": None,
+            "last_sync_message": None,
+            "auto_sync_enabled": False
+        }
+    
+    return {
+        "configured": True,
+        "last_sync_at": settings.get('last_sync_at'),
+        "last_sync_status": settings.get('last_sync_status'),
+        "last_sync_message": settings.get('last_sync_message'),
+        "auto_sync_enabled": settings.get('auto_sync_enabled', True),
+        "sync_interval_hours": settings.get('sync_interval_hours', 1)
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -4655,6 +4793,288 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ================= GOOGLE SHEETS SYNC SERVICE =================
+
+# Global scheduler instance
+scheduler = AsyncIOScheduler()
+
+async def fetch_google_sheet_csv(spreadsheet_id: str, gid: str) -> Optional[str]:
+    """Fetch a Google Sheet as CSV data"""
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                content = response.text
+                # Check if it's an error page
+                if "Page Not Found" in content or "<!DOCTYPE html>" in content[:100]:
+                    logger.error(f"Sheet not accessible: {spreadsheet_id}/{gid}")
+                    return None
+                return content
+            else:
+                logger.error(f"Failed to fetch sheet: {response.status_code}")
+                return None
+    except Exception as e:
+        logger.error(f"Error fetching Google Sheet: {e}")
+        return None
+
+async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
+    """Sync roster data from Google Sheet"""
+    csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid)
+    if not csv_data:
+        return {"success": False, "message": "Failed to fetch sheet data"}
+    
+    try:
+        df = pd.read_csv(BytesIO(csv_data.encode('utf-8')))
+        df.columns = df.columns.str.strip()
+        
+        # Column mapping (same as Excel import)
+        column_map = {
+            'RegistrantsCAPID': 'capid', 'CAPID': 'capid',
+            'Rank': 'rank', 'NameLast': 'last_name', 'NameFirst': 'first_name',
+            'NameMiddle': 'middle_name', 'Unit': 'unit', 'Wing': 'wing',
+            'Region': 'region', 'Gender': 'gender', 'Age': 'age',
+            'AgeAtEventStart': 'age_at_event', 'Email': 'email',
+            'HomePhonePrimary': 'phone', 'CellPhonePrimary': 'cell_phone',
+            'ShirtSize': 'shirt_size', 'MbrType': 'member_type',
+            'StaffMember': 'staff_member', 'PaidInFull': 'paid_in_full',
+            'AmountPaid': 'amount_paid', 'RegistrationStatus': 'registration_status',
+            'UnitApproved': 'unit_approved', 'WingApproved': 'wing_approved',
+            'Addr1': 'address', 'City': 'city', 'State': 'state', 'Zip': 'zip_code',
+            'EmergencyContactName': 'emergency_contact', 'EmergencyContactNumber': 'emergency_phone',
+            'CadetParentPhonePrimary': 'cadet_parent_phone', 'CadetParentEmailPrimary': 'cadet_parent_email',
+            'UnitCCName': 'unit_cc_name', 'UnitCCEmail': 'unit_cc_email',
+            'LastEncampment': 'last_encampment', 'CPPTExpiration': 'cppt_expiration',
+            'FirstAid': 'first_aid', 'SubEvents': 'sub_events',
+        }
+        
+        df = df.rename(columns=column_map)
+        
+        imported_count = 0
+        updated_count = 0
+        now = datetime.now(timezone.utc).isoformat()
+        
+        for idx, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            def get_val(key, default=None):
+                val = row_dict.get(key)
+                if pd.isna(val) or val == '' or val == 'nan':
+                    return default
+                return val
+            
+            def get_str(key, default=''):
+                val = get_val(key, default)
+                return str(val).strip() if val is not None else default
+            
+            def get_bool(key):
+                val = get_val(key)
+                if val is None:
+                    return False
+                if isinstance(val, bool):
+                    return val
+                return str(val).lower() in ['yes', 'true', '1']
+            
+            def get_float(key, default=0.0):
+                val = get_val(key)
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except:
+                    return default
+            
+            def get_int(key, default=None):
+                val = get_val(key)
+                if val is None:
+                    return default
+                try:
+                    return int(float(val))
+                except:
+                    return default
+            
+            # Generate CAPID if not present
+            capid = get_str('capid', '')
+            if not capid:
+                email = get_str('email', '')
+                if email:
+                    email_prefix = email.split('@')[0] if '@' in email else ''
+                    numeric_parts = ''.join(filter(str.isdigit, email_prefix))
+                    if len(numeric_parts) >= 5:
+                        capid = numeric_parts[:6]
+                
+                if not capid:
+                    last_name = get_str('last_name', '')
+                    first_name = get_str('first_name', '')
+                    wing = get_str('wing', 'XX')
+                    unit = get_str('unit', '000')
+                    if last_name and first_name:
+                        import hashlib
+                        composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
+                        hash_digest = hashlib.md5(composite.encode()).hexdigest()[:6]
+                        capid = f"GEN{hash_digest.upper()}"
+                    else:
+                        continue
+            
+            # Determine participant type
+            member_type = get_str('member_type', '').upper()
+            is_staff = get_bool('staff_member')
+            sub_events = get_str('sub_events', '').lower()
+            
+            if member_type == 'SENIOR':
+                participant_type = 'staff'
+            elif 'cadre' in sub_events:
+                participant_type = 'cadre'
+            else:
+                participant_type = 'basic_student'
+            
+            participant_data = {
+                'capid': capid,
+                'rank': get_str('rank'),
+                'last_name': get_str('last_name'),
+                'first_name': get_str('first_name'),
+                'middle_name': get_str('middle_name'),
+                'name': f"{get_str('last_name')}, {get_str('first_name')}",
+                'unit': get_str('unit'),
+                'wing': get_str('wing'),
+                'region': get_str('region'),
+                'gender': get_str('gender'),
+                'age': get_int('age'),
+                'age_at_event': get_int('age_at_event'),
+                'email': get_str('email'),
+                'phone': get_str('phone'),
+                'cell_phone': get_str('cell_phone'),
+                'shirt_size': get_str('shirt_size'),
+                'member_type': member_type,
+                'participant_type': participant_type,
+                'paid_in_full': get_bool('paid_in_full'),
+                'amount_paid': get_float('amount_paid'),
+                'paid': get_bool('paid_in_full') or get_float('amount_paid') > 0,
+                'registration_status': get_str('registration_status'),
+                'staff_member': is_staff,
+                'unit_approved': get_bool('unit_approved'),
+                'wing_approved': get_bool('wing_approved'),
+                'address': get_str('address'),
+                'city': get_str('city'),
+                'state': get_str('state'),
+                'zip_code': get_str('zip_code'),
+                'emergency_contact': get_str('emergency_contact'),
+                'emergency_phone': get_str('emergency_phone'),
+                'cadet_parent_phone': get_str('cadet_parent_phone'),
+                'cadet_parent_email': get_str('cadet_parent_email'),
+                'unit_cc_name': get_str('unit_cc_name'),
+                'unit_cc_email': get_str('unit_cc_email'),
+                'last_encampment': get_str('last_encampment'),
+                'cppt_expiration': get_str('cppt_expiration'),
+                'first_aid': get_str('first_aid'),
+                'updated_at': now,
+            }
+            
+            # Upsert by CAPID
+            existing = await db.participants.find_one({'capid': capid})
+            if existing:
+                await db.participants.update_one(
+                    {'capid': capid},
+                    {'$set': participant_data}
+                )
+                updated_count += 1
+            else:
+                participant_data['id'] = str(uuid.uuid4())
+                participant_data['created_at'] = now
+                participant_data['is_removed'] = False
+                await db.participants.insert_one(participant_data)
+                imported_count += 1
+        
+        return {
+            "success": True,
+            "message": f"Roster sync complete: {imported_count} new, {updated_count} updated",
+            "imported": imported_count,
+            "updated": updated_count,
+            "total": imported_count + updated_count
+        }
+    
+    except Exception as e:
+        logger.error(f"Error syncing roster: {e}")
+        return {"success": False, "message": str(e)}
+
+async def perform_scheduled_sync():
+    """Perform scheduled sync of all configured sheets"""
+    logger.info("Starting scheduled Google Sheets sync...")
+    
+    settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
+    if not settings:
+        logger.info("No Google Sheets settings configured, skipping sync")
+        return
+    
+    if not settings.get('auto_sync_enabled', True):
+        logger.info("Auto sync is disabled, skipping")
+        return
+    
+    # Update status to running
+    await db.google_sheets_settings.update_one(
+        {'_id': 'settings'},
+        {'$set': {'last_sync_status': 'running', 'last_sync_message': 'Sync in progress...'}}
+    )
+    
+    try:
+        results = []
+        
+        # Sync roster sheet
+        roster_config = settings.get('roster_sheet')
+        if roster_config and roster_config.get('enabled'):
+            roster_result = await sync_roster_from_gsheet(
+                roster_config['spreadsheet_id'],
+                roster_config['gid']
+            )
+            results.append(f"Roster: {roster_result.get('message', 'unknown')}")
+        
+        # Update success status
+        now = datetime.now(timezone.utc).isoformat()
+        await db.google_sheets_settings.update_one(
+            {'_id': 'settings'},
+            {'$set': {
+                'last_sync_at': now,
+                'last_sync_status': 'success',
+                'last_sync_message': '; '.join(results) if results else 'No sheets configured'
+            }}
+        )
+        logger.info(f"Scheduled sync completed: {results}")
+        
+    except Exception as e:
+        logger.error(f"Scheduled sync failed: {e}")
+        await db.google_sheets_settings.update_one(
+            {'_id': 'settings'},
+            {'$set': {
+                'last_sync_at': datetime.now(timezone.utc).isoformat(),
+                'last_sync_status': 'error',
+                'last_sync_message': str(e)
+            }}
+        )
+
+# ================= APP STARTUP/SHUTDOWN =================
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the scheduler on app startup"""
+    # Get sync interval from settings or use default
+    settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
+    interval_hours = 1
+    if settings:
+        interval_hours = settings.get('sync_interval_hours', 1)
+    
+    # Add the scheduled sync job
+    scheduler.add_job(
+        perform_scheduled_sync,
+        trigger=IntervalTrigger(hours=interval_hours),
+        id='gsheets_sync',
+        name='Google Sheets Sync',
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    logger.info(f"Scheduler started. Google Sheets sync scheduled every {interval_hours} hour(s)")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    scheduler.shutdown(wait=False)
     client.close()
