@@ -5,7 +5,8 @@ import {
   getFlightDocuments, getDocuments, createDocument, deleteDocument,
   getScoreCategories, recordMeritDemerit, getMeritDemerits, getIndividualLeaderboard,
   getFlightLeaderboard, getCumulativeStandings,
-  getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings
+  getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings,
+  escalateFlightReport, resolveFlightReport
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -40,7 +41,10 @@ import {
   Clock,
   Send,
   Eye,
-  Settings
+  Settings,
+  ArrowUpCircle,
+  History,
+  CheckCircle2
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
@@ -317,18 +321,23 @@ const MyFlightPage = () => {
     }
   };
 
-  const getReportStatusBadge = (status) => {
+  const getReportStatusBadge = (status, escalationLevel = null) => {
     const statusConfig = {
-      submitted: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock },
-      reviewed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle },
-      escalated: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle }
+      submitted: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock, label: 'Submitted' },
+      reviewed: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle, label: 'Reviewed' },
+      escalated: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle, label: 'Escalated' },
+      escalated_squadron: { bg: 'bg-amber-100', text: 'text-amber-700', icon: ArrowUpCircle, label: 'Sq. Commander' },
+      escalated_exec: { bg: 'bg-orange-100', text: 'text-orange-700', icon: ArrowUpCircle, label: 'Exec Cadre' },
+      escalated_commander: { bg: 'bg-red-100', text: 'text-red-700', icon: ArrowUpCircle, label: 'Encampment Cmdr' },
+      at_commander: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle, label: 'At Commander' },
+      resolved: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: CheckCircle2, label: 'Resolved' }
     };
     const config = statusConfig[status] || statusConfig.submitted;
     const Icon = config.icon;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
         <Icon className="w-3 h-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {config.label}
       </span>
     );
   };
@@ -378,14 +387,69 @@ const MyFlightPage = () => {
     return 'flight_sergeant';
   };
 
-  // Check if user can view all flights (Exec Cadre and Commander)
+  // Check if user can view all flights (Exec Cadre, Commander, Staff, Plans & Programs)
   const canViewAllFlights = () => {
-    return ['commander', 'exec_cadre'].includes(user?.role);
+    return ['commander', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
   };
 
   // Check if user can only submit reports for their assigned flight
   const canOnlySubmitOwnFlight = () => {
-    return ['cadre', 'staff'].includes(user?.role) && !canViewAllFlights();
+    return ['cadre'].includes(user?.role) && !canViewAllFlights();
+  };
+
+  // Check if user can escalate reports
+  const canEscalateReports = () => {
+    return ['commander', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+  };
+
+  // Check if user can resolve escalated reports
+  const canResolveReports = () => {
+    return ['commander', 'exec_cadre'].includes(user?.role);
+  };
+
+  // Get the next escalation level for a report
+  const getNextEscalationLevel = (currentLevel) => {
+    if (!currentLevel || currentLevel === 'squadron_commander') {
+      return 'exec_cadre';
+    }
+    if (currentLevel === 'exec_cadre') {
+      return 'encampment_commander';
+    }
+    return null; // Already at top
+  };
+
+  // Get escalation level label
+  const getEscalationLabel = (level) => {
+    const labels = {
+      'squadron_commander': 'Squadron Commander',
+      'exec_cadre': 'Exec Cadre',
+      'encampment_commander': 'Encampment Commander'
+    };
+    return labels[level] || level;
+  };
+
+  // Handle escalation
+  const handleEscalateReport = async (reportId, targetLevel, notes = '') => {
+    try {
+      await escalateFlightReport(reportId, targetLevel, notes);
+      toast.success(`Report escalated to ${getEscalationLabel(targetLevel)}`);
+      loadReports();
+      setIsViewReportModalOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to escalate report');
+    }
+  };
+
+  // Handle resolution
+  const handleResolveReport = async (reportId, notes = '') => {
+    try {
+      await resolveFlightReport(reportId, notes);
+      toast.success('Report marked as resolved');
+      loadReports();
+      setIsViewReportModalOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to resolve report');
+    }
   };
 
   // Get available reporter roles for this user
@@ -1550,9 +1614,9 @@ const MyFlightPage = () => {
                       })}
                     </p>
                   </div>
-                  {getReportStatusBadge(selectedReport.status)}
+                  {getReportStatusBadge(selectedReport.status, selectedReport.escalation_level)}
                 </div>
-                <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-200">
+                <div className="grid grid-cols-4 gap-4 pt-2 border-t border-slate-200">
                   <div>
                     <p className="text-xs text-slate-400 uppercase">Submitted By</p>
                     <p className="text-sm font-medium">{selectedReport.submitted_by_name}</p>
@@ -1565,8 +1629,44 @@ const MyFlightPage = () => {
                     <p className="text-xs text-slate-400 uppercase">Flight</p>
                     <p className="text-sm font-medium">{getFlightLabel(selectedReport.flight)}</p>
                   </div>
+                  {selectedReport.escalation_level && (
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase">Current Level</p>
+                      <p className="text-sm font-medium text-amber-600">{getEscalationLabel(selectedReport.escalation_level)}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Escalation History */}
+              {selectedReport.escalation_history && selectedReport.escalation_history.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-sm p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <History className="w-4 h-4 text-amber-600" />
+                    <h4 className="font-bold text-sm text-amber-700">Escalation History</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedReport.escalation_history.map((entry, idx) => (
+                      <div key={idx} className="flex items-start gap-2 text-sm">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full mt-1.5" />
+                        <div>
+                          {entry.action === 'resolved' ? (
+                            <p className="text-emerald-700">
+                              <strong>Resolved</strong> by {entry.resolved_by_name} on {new Date(entry.resolved_at).toLocaleString()}
+                            </p>
+                          ) : (
+                            <p className="text-amber-700">
+                              <strong>{getEscalationLabel(entry.from_level)}</strong> → <strong>{getEscalationLabel(entry.to_level)}</strong>
+                              {' by '}{entry.escalated_by_name} on {new Date(entry.escalated_at).toLocaleString()}
+                            </p>
+                          )}
+                          {entry.notes && <p className="text-slate-600 text-xs mt-0.5">"{entry.notes}"</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Report Sections */}
               <div className="space-y-3">
@@ -1602,8 +1702,21 @@ const MyFlightPage = () => {
                 })}
               </div>
 
-              {/* Review Info */}
-              {selectedReport.reviewed_by && (
+              {/* Resolution Info */}
+              {selectedReport.status === 'resolved' && selectedReport.reviewed_by && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-3">
+                  <p className="text-sm text-emerald-700">
+                    <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                    <strong>Resolved</strong> on {new Date(selectedReport.reviewed_at).toLocaleString()}
+                  </p>
+                  {selectedReport.review_notes && (
+                    <p className="text-sm text-emerald-600 mt-1">{selectedReport.review_notes}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Review Info (for non-escalated reports) */}
+              {selectedReport.status === 'reviewed' && selectedReport.reviewed_by && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-3">
                   <p className="text-sm text-emerald-700">
                     <CheckCircle className="w-4 h-4 inline mr-1" />
@@ -1616,17 +1729,59 @@ const MyFlightPage = () => {
               )}
 
               {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
                 <Button variant="outline" onClick={() => setIsViewReportModalOpen(false)}>
                   Close
                 </Button>
-                {canReviewReports() && selectedReport.status !== 'reviewed' && (
+                
+                {/* Regular review button for non-escalated reports */}
+                {canReviewReports() && selectedReport.status === 'submitted' && (
                   <Button 
                     className="bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => handleReviewReport(selectedReport.id)}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     Mark as Reviewed
+                  </Button>
+                )}
+
+                {/* Escalation buttons for reports with commander issues */}
+                {canEscalateReports() && selectedReport.commander_issues?.has_issues && 
+                 !['resolved', 'reviewed'].includes(selectedReport.status) && (
+                  <>
+                    {/* Escalate to Exec Cadre (if at squadron level or not escalated) */}
+                    {(!selectedReport.escalation_level || selectedReport.escalation_level === 'squadron_commander') && (
+                      <Button 
+                        className="bg-amber-600 hover:bg-amber-700"
+                        onClick={() => handleEscalateReport(selectedReport.id, 'exec_cadre')}
+                      >
+                        <ArrowUpCircle className="w-4 h-4 mr-2" />
+                        Escalate to Exec Cadre
+                      </Button>
+                    )}
+                    
+                    {/* Escalate to Encampment Commander (if at exec level) */}
+                    {selectedReport.escalation_level === 'exec_cadre' && canResolveReports() && (
+                      <Button 
+                        className="bg-red-600 hover:bg-red-700"
+                        onClick={() => handleEscalateReport(selectedReport.id, 'encampment_commander')}
+                      >
+                        <ArrowUpCircle className="w-4 h-4 mr-2" />
+                        Escalate to Encampment Cmdr
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {/* Resolve button for escalated reports */}
+                {canResolveReports() && 
+                 ['escalated_squadron', 'escalated_exec', 'escalated_commander', 'at_commander'].includes(selectedReport.status) && (
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => handleResolveReport(selectedReport.id)}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Mark as Resolved
                   </Button>
                 )}
               </div>

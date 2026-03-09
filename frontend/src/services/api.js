@@ -703,6 +703,20 @@ export const reviewFlightReport = async (reportId, reviewNotes = null) => {
   return response.data;
 };
 
+export const escalateFlightReport = async (reportId, escalateTo, notes = null) => {
+  const response = await axios.put(`${API}/reports/${reportId}/escalate`, 
+    { escalate_to: escalateTo, notes }, 
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const resolveFlightReport = async (reportId, resolutionNotes = null) => {
+  const params = resolutionNotes ? `?resolution_notes=${encodeURIComponent(resolutionNotes)}` : '';
+  const response = await axios.put(`${API}/reports/${reportId}/resolve${params}`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const getMySubmittedReports = async () => {
   const response = await axios.get(`${API}/reports/my/submitted`, { headers: getAuthHeaders() });
   return response.data;

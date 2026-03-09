@@ -460,12 +460,19 @@ class FlightReportResponse(FlightReportBase):
     id: str
     submitted_by: str
     submitted_by_name: str
-    status: str  # submitted, reviewed, escalated
+    status: str  # submitted, reviewed, escalated_squadron, escalated_exec, escalated_commander, resolved
+    escalation_level: Optional[str] = None  # squadron_commander, exec_cadre, encampment_commander
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[str] = None
     review_notes: Optional[str] = None
+    escalation_history: Optional[List[dict]] = []  # Track escalation chain
     created_at: str
     updated_at: str
+
+class EscalateReportRequest(BaseModel):
+    """Request to escalate a report up the chain"""
+    escalate_to: str  # exec_cadre, encampment_commander
+    notes: Optional[str] = None
 
 class ReportDeadlineSettings(BaseModel):
     """Settings for report submission deadlines"""
@@ -5164,7 +5171,9 @@ async def create_flight_report(
         "commander_issues": report.commander_issues.model_dump(),
         "submitted_by": user['id'],
         "submitted_by_name": user['name'],
-        "status": "escalated" if has_commander_issues else "submitted",
+        "status": "escalated_squadron" if has_commander_issues else "submitted",
+        "escalation_level": "squadron_commander" if has_commander_issues else None,
+        "escalation_history": [],
         "reviewed_by": None,
         "reviewed_at": None,
         "review_notes": None,
@@ -5183,13 +5192,13 @@ async def create_flight_report(
         }
         flight_label = flight_labels.get(report.flight, report.flight.title())
         
-        # Store notification for commanders
+        # Store notification for squadron commanders and up
         notification_id = str(uuid.uuid4())
         await db.notifications.insert_one({
             "id": notification_id,
             "title": f"Commander Issue - {flight_label} Flight",
             "body": f"A flight report from {flight_label} Flight contains items requiring command attention.",
-            "target_groups": ["commander", "exec_cadre"],
+            "target_groups": ["commander", "exec_cadre", "staff", "plans_programs"],
             "report_id": report_id,
             "sent_by": user["id"],
             "sent_at": now,
@@ -5217,8 +5226,16 @@ async def get_flight_reports(
     user_flight = user.get('flight', '').lower() if user.get('flight') else None
     user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
     
+    # Roles with full access to all reports
+    full_access_roles = [
+        UserRole.COMMANDER, 
+        UserRole.EXEC_CADRE, 
+        UserRole.STAFF,  # Includes Health Services
+        UserRole.PLANS_PROGRAMS
+    ]
+    
     # Access control based on role
-    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+    if user_role in full_access_roles:
         # Full access - can see all reports
         pass
     elif user_squadron and user_squadron in ['6th_cts', '21st_cts', '22nd_cts']:
@@ -5254,12 +5271,14 @@ async def get_flight_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     
-    # Access control
+    # Access control - same roles have full access
     user_role = user.get('role')
     user_flight = user.get('flight', '').lower() if user.get('flight') else None
     user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
     
-    if user_role not in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+    full_access_roles = [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
+    
+    if user_role not in full_access_roles:
         if user_squadron and user_squadron in ['6th_cts', '21st_cts', '22nd_cts']:
             if report['squadron'] != user_squadron:
                 raise HTTPException(status_code=403, detail="Access denied")
@@ -5309,6 +5328,158 @@ async def review_flight_report(
     )
     
     return {"message": "Report marked as reviewed"}
+
+@api_router.put("/reports/{report_id}/escalate")
+async def escalate_flight_report(
+    report_id: str,
+    request: EscalateReportRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Escalate a report up the chain of command"""
+    report = await db.flight_reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    user_role = user.get('role')
+    current_level = report.get('escalation_level', 'squadron_commander')
+    
+    # Define escalation chain and who can escalate
+    # Squadron Commander -> Exec Cadre -> Encampment Commander
+    escalation_chain = {
+        'squadron_commander': {
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
+            'next_level': 'exec_cadre',
+            'status': 'escalated_exec'
+        },
+        'exec_cadre': {
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE],
+            'next_level': 'encampment_commander',
+            'status': 'escalated_commander'
+        },
+        'encampment_commander': {
+            'can_escalate_roles': [UserRole.COMMANDER],
+            'next_level': None,  # Top of chain
+            'status': 'at_commander'
+        }
+    }
+    
+    # Check if user can escalate from current level
+    current_chain = escalation_chain.get(current_level, escalation_chain['squadron_commander'])
+    
+    if user_role not in current_chain['can_escalate_roles']:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"You don't have permission to escalate from {current_level.replace('_', ' ')}"
+        )
+    
+    # Determine target escalation level
+    target_level = request.escalate_to
+    if target_level not in ['exec_cadre', 'encampment_commander']:
+        raise HTTPException(status_code=400, detail="Invalid escalation target")
+    
+    # Validate escalation path
+    if current_level == 'encampment_commander':
+        raise HTTPException(status_code=400, detail="Report is already at the highest level")
+    
+    if current_level == 'exec_cadre' and target_level == 'exec_cadre':
+        raise HTTPException(status_code=400, detail="Report is already at Exec Cadre level")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Create escalation history entry
+    escalation_entry = {
+        "from_level": current_level,
+        "to_level": target_level,
+        "escalated_by": user['id'],
+        "escalated_by_name": user['name'],
+        "escalated_at": now,
+        "notes": request.notes or ""
+    }
+    
+    # Determine new status
+    new_status = 'escalated_exec' if target_level == 'exec_cadre' else 'escalated_commander'
+    
+    # Update the report
+    await db.flight_reports.update_one(
+        {"id": report_id},
+        {
+            "$set": {
+                "status": new_status,
+                "escalation_level": target_level,
+                "updated_at": now
+            },
+            "$push": {
+                "escalation_history": escalation_entry
+            }
+        }
+    )
+    
+    # Create notification for the target level
+    flight_labels = {
+        "alpha": "Alpha", "bravo": "Bravo", "charlie": "Charlie",
+        "delta": "Delta", "echo": "Echo", "foxtrot": "Foxtrot"
+    }
+    flight_label = flight_labels.get(report.get('flight', ''), report.get('flight', '').title())
+    
+    notification_targets = ['commander'] if target_level == 'encampment_commander' else ['exec_cadre', 'commander']
+    
+    notification_id = str(uuid.uuid4())
+    await db.notifications.insert_one({
+        "id": notification_id,
+        "title": f"Commander Issue Escalated - {flight_label} Flight",
+        "body": f"A commander issue has been escalated to {target_level.replace('_', ' ').title()} for review.",
+        "target_groups": notification_targets,
+        "report_id": report_id,
+        "sent_by": user["id"],
+        "sent_at": now,
+        "notification_type": "escalation"
+    })
+    
+    return {
+        "message": f"Report escalated to {target_level.replace('_', ' ').title()}",
+        "new_level": target_level,
+        "status": new_status
+    }
+
+@api_router.put("/reports/{report_id}/resolve")
+async def resolve_escalated_report(
+    report_id: str,
+    resolution_notes: Optional[str] = None,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXEC_CADRE]))
+):
+    """Mark an escalated report as resolved (Commander or Exec Cadre only)"""
+    report = await db.flight_reports.find_one({"id": report_id})
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Add resolution to escalation history
+    resolution_entry = {
+        "action": "resolved",
+        "resolved_by": user['id'],
+        "resolved_by_name": user['name'],
+        "resolved_at": now,
+        "notes": resolution_notes or ""
+    }
+    
+    await db.flight_reports.update_one(
+        {"id": report_id},
+        {
+            "$set": {
+                "status": "resolved",
+                "reviewed_by": user['id'],
+                "reviewed_at": now,
+                "review_notes": resolution_notes,
+                "updated_at": now
+            },
+            "$push": {
+                "escalation_history": resolution_entry
+            }
+        }
+    )
+    
+    return {"message": "Report marked as resolved"}
 
 @api_router.delete("/reports/{report_id}")
 async def delete_flight_report(

@@ -81,6 +81,25 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Can choose any reporter role when submitting
   - Can filter by specific flight or view all
 
+### Mar 9, 2026 - Commander Issue Escalation Chain
+- **Escalation Chain Implementation**:
+  - Squadron Commander → Exec Cadre → Encampment Commander
+  - Reports with "ESCALATE" checked start at Squadron Commander level
+  - Each level can escalate up or resolve the issue
+- **New Status Badges**: Sq. Commander, Exec Cadre, Encampment Cmdr, Resolved
+- **Escalation History**: Full audit trail of who escalated when with notes
+- **Escalation Actions**:
+  - "Escalate to Exec Cadre" button (from Squadron Commander level)
+  - "Escalate to Encampment Cmdr" button (from Exec Cadre level)
+  - "Mark as Resolved" button (available at any escalation level)
+- **Notifications**: Automatic notifications sent when reports are escalated
+- **Full Access for Staff Roles**:
+  - Staff, Exec Cadre, Plans & Programs can view ALL reports and My Flight data
+  - Commander has ultimate authority to resolve any escalated issue
+- **API Endpoints Added**:
+  - `PUT /api/reports/{id}/escalate` - Escalate report up the chain
+  - `PUT /api/reports/{id}/resolve` - Mark escalated report as resolved
+
 ### Mar 9, 2026 - Flight Reporting System
 - **Flight Reports Feature** under My Flight page:
   - **Submit Daily Report Modal**: Full form with all 7 required sections from the Encampment Reporting Guide
