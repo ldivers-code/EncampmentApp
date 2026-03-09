@@ -4997,6 +4997,346 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
         logger.error(f"Error syncing roster: {e}")
         return {"success": False, "message": str(e)}
 
+async def sync_orgchart_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
+    """Sync org chart data from Google Sheet"""
+    csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid)
+    if not csv_data:
+        return {"success": False, "message": "Failed to fetch org chart sheet data"}
+    
+    try:
+        # Parse CSV into rows
+        lines = csv_data.strip().split('\n')
+        rows = []
+        for line in lines:
+            # Simple CSV parsing (handles basic cases)
+            row = []
+            current = ''
+            in_quotes = False
+            for char in line:
+                if char == '"':
+                    in_quotes = not in_quotes
+                elif char == ',' and not in_quotes:
+                    row.append(current.strip())
+                    current = ''
+                else:
+                    current += char
+            row.append(current.strip())
+            rows.append(row)
+        
+        now = datetime.now(timezone.utc).isoformat()
+        roles_created = 0
+        roles_updated = 0
+        
+        # Define the org chart structure we're looking for
+        # Parse key positions from the spreadsheet layout
+        org_roles = []
+        
+        # Helper to parse name and find matching participant
+        async def parse_and_match_member(name_str, rank_str=None):
+            """Parse name string and try to find matching participant"""
+            if not name_str or name_str.strip() == '':
+                return None, None, None
+            
+            # Clean the name string - remove quotes and extra spaces
+            name_str = name_str.strip().strip('"').strip()
+            if not name_str:
+                return None, None, None
+                
+            # Parse "Last, First" or "Last, First M.I." format
+            parts = name_str.split(',')
+            if len(parts) >= 2:
+                last_name = parts[0].strip()
+                first_name = parts[1].strip().split()[0] if parts[1].strip() else ''
+            else:
+                # Try "First Last" format
+                name_parts = name_str.split()
+                if len(name_parts) >= 2:
+                    first_name = name_parts[0]
+                    last_name = name_parts[-1]
+                else:
+                    last_name = name_str
+                    first_name = ''
+            
+            # Try to find matching participant
+            participant = await db.participants.find_one({
+                '$or': [
+                    {'last_name': {'$regex': f'^{last_name}', '$options': 'i'}, 'first_name': {'$regex': f'^{first_name}', '$options': 'i'}},
+                    {'name': {'$regex': f'{last_name}.*{first_name}', '$options': 'i'}},
+                    {'name': {'$regex': f'{first_name}.*{last_name}', '$options': 'i'}}
+                ]
+            }, {'_id': 0, 'id': 1, 'capid': 1, 'name': 1, 'rank': 1})
+            
+            participant_id = participant.get('id') if participant else None
+            return last_name, first_name, participant_id
+        
+        # Parse specific positions from known cell locations
+        # Row 19 (index 18) has main command staff
+        if len(rows) > 19:
+            row = rows[18]  # 0-indexed, so row 19 is index 18
+            
+            # Commandant of Cadets - columns around index 6-10
+            if len(row) > 13:
+                commandant_rank = row[12] if len(row) > 12 else ''
+                commandant_name = row[13] if len(row) > 13 else ''
+                if commandant_name:
+                    last, first, pid = await parse_and_match_member(commandant_name, commandant_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'commandant',
+                            'title': 'Commandant of Cadets',
+                            'abbreviation': 'ENC/CW',
+                            'category': 'Command',
+                            'level': 1,
+                            'parent_role_id': 'commander',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': commandant_rank.strip() if commandant_rank else None,
+                            'assigned_participant_id': pid
+                        })
+            
+            # Encampment Commander - columns around index 18-22
+            if len(row) > 19:
+                enc_cc_rank = row[18] if len(row) > 18 else ''
+                enc_cc_name = row[19] if len(row) > 19 else ''
+                if enc_cc_name:
+                    last, first, pid = await parse_and_match_member(enc_cc_name, enc_cc_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'commander',
+                            'title': 'Encampment Commander',
+                            'abbreviation': 'ENC/CC',
+                            'category': 'Command',
+                            'level': 0,
+                            'parent_role_id': None,
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': enc_cc_rank.strip() if enc_cc_rank else None,
+                            'assigned_participant_id': pid
+                        })
+            
+            # Deputy CC for Support - columns around index 24-28
+            if len(row) > 25:
+                dep_rank = row[24] if len(row) > 24 else ''
+                dep_name = row[25] if len(row) > 25 else ''
+                if dep_name:
+                    last, first, pid = await parse_and_match_member(dep_name, dep_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'deputy_support',
+                            'title': 'Deputy CC for Support',
+                            'abbreviation': 'ENC/DCS',
+                            'category': 'Command',
+                            'level': 1,
+                            'parent_role_id': 'commander',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': dep_rank.strip() if dep_rank else None,
+                            'assigned_participant_id': pid
+                        })
+        
+        # Row 20 has more staff positions
+        if len(rows) > 20:
+            row = rows[19]
+            # 60th CTG/CD
+            if len(row) > 13:
+                cd_rank = row[12] if len(row) > 12 else ''
+                cd_name = row[13] if len(row) > 13 else ''
+                if cd_name:
+                    last, first, pid = await parse_and_match_member(cd_name, cd_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'ctg_cd',
+                            'title': '60th CTG Deputy Commander',
+                            'abbreviation': '60th CTG/CD',
+                            'category': 'Cadet Training',
+                            'level': 2,
+                            'parent_role_id': 'commandant',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': cd_rank.strip() if cd_rank else None,
+                            'assigned_participant_id': pid
+                        })
+        
+        # Row 21 - ENC Superintendent
+        if len(rows) > 21:
+            row = rows[20]
+            if len(row) > 19:
+                sup_rank = row[18] if len(row) > 18 else ''
+                sup_name = row[19] if len(row) > 19 else ''
+                if sup_name:
+                    last, first, pid = await parse_and_match_member(sup_name, sup_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'superintendent',
+                            'title': 'Encampment Superintendent',
+                            'abbreviation': 'ENC/CCEA',
+                            'category': 'Operations',
+                            'level': 2,
+                            'parent_role_id': 'commander',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': sup_rank.strip() if sup_rank else None,
+                            'assigned_participant_id': pid
+                        })
+        
+        # Row 22 - 60th CTG/DOA
+        if len(rows) > 22:
+            row = rows[21]
+            if len(row) > 13:
+                doa_rank = row[12] if len(row) > 12 else ''
+                doa_name = row[13] if len(row) > 13 else ''
+                if doa_name:
+                    last, first, pid = await parse_and_match_member(doa_name, doa_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'ctg_doa',
+                            'title': '60th CTG Director of Academics',
+                            'abbreviation': '60th CTG/DOA',
+                            'category': 'Cadet Training',
+                            'level': 2,
+                            'parent_role_id': 'commandant',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': doa_rank.strip() if doa_rank else None,
+                            'assigned_participant_id': pid
+                        })
+        
+        # Row 27 - Health Services Officer
+        if len(rows) > 27:
+            row = rows[26]
+            if len(row) > 19:
+                hso_rank = row[18] if len(row) > 18 else ''
+                hso_name = row[19] if len(row) > 19 else ''
+                if hso_name:
+                    last, first, pid = await parse_and_match_member(hso_name, hso_rank)
+                    if last:
+                        org_roles.append({
+                            'role_id': 'health_services',
+                            'title': 'Health Services Officer',
+                            'abbreviation': 'ENC/HS',
+                            'category': 'Support',
+                            'level': 2,
+                            'parent_role_id': 'deputy_support',
+                            'assigned_member_name': f"{last}, {first}" if first else last,
+                            'assigned_member_rank': hso_rank.strip() if hso_rank else None,
+                            'assigned_participant_id': pid
+                        })
+        
+        # Parse support staff from column around 24-28 (rows 21-28)
+        support_positions = [
+            (21, 'support_staff_1', 'Support Staff'),
+            (22, 'plans_programs', 'Plans and Programs Officer'),
+            (23, 'logistics_1', 'Logistics Officer'),
+            (24, 'logistics_2', 'Logistics Officer'),
+            (25, 'word_emeritus', 'WORD Officer / HS Emeritus'),
+            (26, 'communications', 'Communications Director'),
+            (27, 'public_affairs', 'Public Affairs Officer'),
+            (28, 'dining_facility', 'Dining Facility Officer'),
+            (29, 'finance', 'Finance Officer'),
+        ]
+        
+        for row_idx, role_id, title in support_positions:
+            if len(rows) > row_idx:
+                row = rows[row_idx - 1]  # Convert to 0-indexed
+                if len(row) > 28:
+                    supp_rank = row[24] if len(row) > 24 else ''
+                    supp_name = row[25] if len(row) > 25 else ''
+                    if supp_name and supp_name.strip():
+                        last, first, pid = await parse_and_match_member(supp_name, supp_rank)
+                        if last:
+                            org_roles.append({
+                                'role_id': role_id,
+                                'title': title,
+                                'abbreviation': role_id.upper().replace('_', '/'),
+                                'category': 'Support',
+                                'level': 3,
+                                'parent_role_id': 'deputy_support',
+                                'assigned_member_name': f"{last}, {first}" if first else last,
+                                'assigned_member_rank': supp_rank.strip() if supp_rank else None,
+                                'assigned_participant_id': pid
+                            })
+        
+        # Parse Squadron Commanders from row 35 area
+        squadrons = [
+            (35, 0, '6th_cts_cc', '6th CTS Commander', '6th CTS/CC', 'commandant'),
+            (35, 12, '21st_cts_cc', '21st CTS Commander', '21st CTS/CC', 'commandant'),
+            (35, 24, '22nd_cts_cc', '22nd CTS Commander', '22nd CTS/CC', 'commandant'),
+        ]
+        
+        # Parse Flight Sergeants and Commanders from flights row (around row 41)
+        flights_row_idx = None
+        for idx, row in enumerate(rows):
+            if len(row) > 0 and 'ALPHA' in str(row[0]).upper():
+                flights_row_idx = idx
+                break
+        
+        if flights_row_idx:
+            # Flight names are in this row
+            flight_cols = {
+                'ALPHA': (0, '6th_cts_cc'),
+                'BRAVO': (6, '6th_cts_cc'),
+                'CHARLIE': (12, '21st_cts_cc'),
+                'DELTA': (18, '21st_cts_cc'),
+                'ECHO': (24, '22nd_cts_cc'),
+                'FOXTROT': (30, '22nd_cts_cc')
+            }
+            
+            for flight_name, (col_offset, parent_id) in flight_cols.items():
+                org_roles.append({
+                    'role_id': f'flight_{flight_name.lower()}_commander',
+                    'title': f'{flight_name} Flight Commander',
+                    'abbreviation': f'{flight_name[:1]}FLT/CC',
+                    'category': 'Flight',
+                    'level': 4,
+                    'parent_role_id': parent_id,
+                    'assigned_member_name': None,
+                    'assigned_member_rank': None,
+                    'assigned_participant_id': None
+                })
+                org_roles.append({
+                    'role_id': f'flight_{flight_name.lower()}_sergeant',
+                    'title': f'{flight_name} Flight Sergeant',
+                    'abbreviation': f'{flight_name[:1]}FLT/FS',
+                    'category': 'Flight',
+                    'level': 4,
+                    'parent_role_id': f'flight_{flight_name.lower()}_commander',
+                    'assigned_member_name': None,
+                    'assigned_member_rank': None,
+                    'assigned_participant_id': None
+                })
+        
+        # Now upsert all roles to the database
+        for role_data in org_roles:
+            role_id = role_data['role_id']
+            existing = await db.org_chart_roles.find_one({'role_id': role_id})
+            
+            if existing:
+                await db.org_chart_roles.update_one(
+                    {'role_id': role_id},
+                    {'$set': {
+                        'assigned_member_name': role_data.get('assigned_member_name'),
+                        'assigned_member_rank': role_data.get('assigned_member_rank'),
+                        'assigned_participant_id': role_data.get('assigned_participant_id'),
+                        'updated_at': now
+                    }}
+                )
+                roles_updated += 1
+            else:
+                role_data['id'] = str(uuid.uuid4())
+                role_data['responsibilities'] = ''
+                role_data['created_at'] = now
+                role_data['updated_at'] = now
+                await db.org_chart_roles.insert_one(role_data)
+                roles_created += 1
+        
+        return {
+            "success": True,
+            "message": f"Org chart sync complete: {roles_created} new, {roles_updated} updated",
+            "created": roles_created,
+            "updated": roles_updated,
+            "total": roles_created + roles_updated
+        }
+    
+    except Exception as e:
+        logger.error(f"Error syncing org chart: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"success": False, "message": str(e)}
+
 async def perform_scheduled_sync():
     """Perform scheduled sync of all configured sheets"""
     logger.info("Starting scheduled Google Sheets sync...")
@@ -5027,6 +5367,16 @@ async def perform_scheduled_sync():
                 roster_config['gid']
             )
             results.append(f"Roster: {roster_result.get('message', 'unknown')}")
+        
+        # Sync org chart sheets
+        org_chart_sheets = settings.get('org_chart_sheets', [])
+        for org_config in org_chart_sheets:
+            if org_config and org_config.get('enabled'):
+                org_result = await sync_orgchart_from_gsheet(
+                    org_config['spreadsheet_id'],
+                    org_config['gid']
+                )
+                results.append(f"Org Chart: {org_result.get('message', 'unknown')}")
         
         # Update success status
         now = datetime.now(timezone.utc).isoformat()
