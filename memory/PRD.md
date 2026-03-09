@@ -50,8 +50,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **My Flight Points Tab (Flight-specific point tracking)**
 - [x] **Receipt Repository (Finance Page)**
 - [x] **Squadron Name Standardization (6th CTS, 21st CTS, 22nd CTS)**
+- [x] **Daily Schedule on Dashboard (Today's Schedule quick view)**
 
 ## What's Been Implemented
+
+### Mar 9, 2026 - Daily Schedule Dashboard Widget
+- **Today's Schedule Widget** on Dashboard page:
+  - **"Happening Now" highlight**: Shows currently active event with pulsing indicator
+  - **Event List**: All events for today with times, titles, locations, and uniform info
+  - **Event Type Color Coding**: Color-coded left borders (training=blue, meal=amber, pt=red, etc.)
+  - **Quick Stats Footer**: Shows total events count and current date
+  - **"View Full Schedule" Button**: Links to full schedule page
+- **Smart Date Handling**: Shows encampment Day 1 (July 17) when outside encampment dates
+- **Scrollable List**: Events list scrolls within fixed height container
 
 ### Mar 9, 2026 - Squadron Name Standardization
 - **Replaced all "Squadron 1/2/3" references** with proper designations:

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getDashboardStats, getDailySettings, updateUniformOfDay, updateWeatherFlag } from '../services/api';
+import { getDashboardStats, getDailySettings, updateUniformOfDay, updateWeatherFlag, getSchedule } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -23,7 +24,9 @@ import {
   AlertTriangle,
   Droplets,
   Clock,
-  Info
+  Info,
+  ChevronRight,
+  MapPin
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -38,9 +41,11 @@ const ROLE_LABELS = {
 
 const DashboardPage = () => {
   const { user, activeUsers } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dailySettings, setDailySettings] = useState(null);
+  const [todayEvents, setTodayEvents] = useState([]);
   
   // Admin edit dialogs
   const [uniformDialogOpen, setUniformDialogOpen] = useState(false);
@@ -52,9 +57,23 @@ const DashboardPage = () => {
   // Check if user can edit daily settings
   const canEditSettings = ['commander', 'plans_programs', 'staff', 'executive_cadre'].includes(user?.role);
 
+  // Event type colors
+  const eventTypeColors = {
+    general: { bg: 'bg-slate-500', light: 'bg-slate-100', text: 'text-slate-700', border: 'border-l-slate-500' },
+    training: { bg: 'bg-blue-600', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-l-blue-600' },
+    ceremony: { bg: 'bg-purple-600', light: 'bg-purple-50', text: 'text-purple-700', border: 'border-l-purple-600' },
+    meal: { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', border: 'border-l-amber-500' },
+    recreation: { bg: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-l-emerald-500' },
+    pt: { bg: 'bg-red-600', light: 'bg-red-50', text: 'text-red-700', border: 'border-l-red-600' },
+    admin: { bg: 'bg-slate-600', light: 'bg-slate-100', text: 'text-slate-700', border: 'border-l-slate-600' },
+    leadership: { bg: 'bg-indigo-600', light: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-l-indigo-600' },
+    academics: { bg: 'bg-teal-600', light: 'bg-teal-50', text: 'text-teal-700', border: 'border-l-teal-600' }
+  };
+
   useEffect(() => {
     loadStats();
     loadDailySettings();
+    loadTodaySchedule();
   }, []);
 
   const loadStats = async () => {
@@ -89,6 +108,72 @@ const DashboardPage = () => {
     } catch (error) {
       console.error('Failed to load daily settings:', error);
     }
+  };
+
+  const loadTodaySchedule = async () => {
+    try {
+      const allEvents = await getSchedule();
+      // Get today's date (using encampment date range: July 17-24, 2026)
+      // For demo purposes, we'll show day 1 events if current date is outside encampment
+      const today = new Date();
+      const encampmentStart = new Date('2026-07-17');
+      const encampmentEnd = new Date('2026-07-24');
+      
+      let targetDate;
+      if (today >= encampmentStart && today <= encampmentEnd) {
+        targetDate = today.toISOString().split('T')[0];
+      } else {
+        // Show first day of encampment for demo
+        targetDate = '2026-07-17';
+      }
+      
+      // Filter events for today and sort by start time
+      const todaysEvents = allEvents
+        .filter(event => {
+          const eventDate = event.date?.split('T')[0];
+          return eventDate === targetDate && event.is_published !== false;
+        })
+        .sort((a, b) => {
+          const timeA = a.start_time || '00:00';
+          const timeB = b.start_time || '00:00';
+          return timeA.localeCompare(timeB);
+        });
+      
+      setTodayEvents(todaysEvents);
+    } catch (error) {
+      console.error('Failed to load today\'s schedule:', error);
+    }
+  };
+
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  const getCurrentEvent = () => {
+    if (todayEvents.length === 0) return null;
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    return todayEvents.find(event => {
+      const start = event.start_time || '00:00';
+      const end = event.end_time || '23:59';
+      return currentTime >= start && currentTime <= end;
+    });
+  };
+
+  const getUpcomingEvents = () => {
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    return todayEvents.filter(event => {
+      const start = event.start_time || '00:00';
+      return start > currentTime;
+    }).slice(0, 5);
   };
 
   const handleSaveUniform = async () => {
@@ -614,26 +699,101 @@ const DashboardPage = () => {
         </div>
 
         {/* Schedule Info */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-sm">
-          <div className="border-b border-slate-100 p-4">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-sm" data-testid="todays-schedule">
+          <div className="border-b border-slate-100 p-4 flex items-center justify-between">
             <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Schedule Overview
+              Today's Schedule
             </h2>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => navigate('/schedule')}
+              className="text-[#00205B] hover:bg-[#00205B]/10"
+            >
+              View Full Schedule <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
           </div>
-          <div className="p-6">
-            <div className="flex items-center gap-8">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-8 h-8 text-[#00205B]" />
-                <div>
-                  <p className="text-2xl font-bold text-[#00205B] font-mono">{stats?.schedule?.total_events || 0}</p>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Total Events</p>
-                </div>
+          <div className="p-4">
+            {todayEvents.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">No events scheduled for today</p>
               </div>
-              <div className="w-px h-12 bg-slate-200"></div>
-              <div>
-                <p className="text-2xl font-bold text-emerald-600 font-mono">{stats?.schedule?.upcoming_events || 0}</p>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Upcoming Events</p>
+            ) : (
+              <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                {/* Current Event Highlight */}
+                {getCurrentEvent() && (
+                  <div className="mb-4 p-3 bg-[#00205B]/5 border border-[#00205B]/20 rounded-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 bg-[#BF0D3E] rounded-full animate-pulse" />
+                      <span className="text-xs font-bold uppercase text-[#BF0D3E]">Happening Now</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-1 self-stretch rounded ${eventTypeColors[getCurrentEvent().event_type]?.bg || 'bg-slate-500'}`} />
+                      <div className="flex-1">
+                        <p className="font-bold text-[#00205B]">{getCurrentEvent().title}</p>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatTime(getCurrentEvent().start_time)} - {formatTime(getCurrentEvent().end_time)}
+                          </span>
+                          {getCurrentEvent().location && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {getCurrentEvent().location}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Event List */}
+                {todayEvents.map((event, idx) => (
+                  <div 
+                    key={event.id || idx}
+                    className={`flex items-start gap-3 p-2 rounded-sm hover:bg-slate-50 transition-colors border-l-4 ${eventTypeColors[event.event_type]?.border || 'border-l-slate-500'}`}
+                  >
+                    <div className="text-center min-w-[60px]">
+                      <p className="text-sm font-bold text-[#00205B]">{formatTime(event.start_time)}</p>
+                      <p className="text-xs text-slate-400">{formatTime(event.end_time)}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 text-sm truncate">{event.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {event.location && (
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {event.location}
+                          </span>
+                        )}
+                        {event.uniform && event.uniform !== 'default' && (
+                          <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                            {event.uniform}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded capitalize ${eventTypeColors[event.event_type]?.light || 'bg-slate-100'} ${eventTypeColors[event.event_type]?.text || 'text-slate-600'}`}>
+                      {event.event_type}
+                    </span>
+                  </div>
+                ))}
               </div>
+            )}
+            
+            {/* Quick Stats Footer */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4 text-slate-500">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  <strong className="text-[#00205B]">{todayEvents.length}</strong> events today
+                </span>
+              </div>
+              <span className="text-xs text-slate-400">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </span>
             </div>
           </div>
         </div>
