@@ -87,18 +87,18 @@ const PointsPage = () => {
   const [isMeritModalOpen, setIsMeritModalOpen] = useState(false);
 
   const allFlights = [
-    { value: 'alpha', label: 'Alpha Flight', squadron: 'sq1' },
-    { value: 'bravo', label: 'Bravo Flight', squadron: 'sq1' },
-    { value: 'charlie', label: 'Charlie Flight', squadron: 'sq2' },
-    { value: 'delta', label: 'Delta Flight', squadron: 'sq2' },
-    { value: 'echo', label: 'Echo Flight', squadron: 'sq3' },
-    { value: 'foxtrot', label: 'Foxtrot Flight', squadron: 'sq3' }
+    { value: 'alpha', label: 'Alpha Flight', squadron: '6th_cts' },
+    { value: 'bravo', label: 'Bravo Flight', squadron: '6th_cts' },
+    { value: 'charlie', label: 'Charlie Flight', squadron: '21st_cts' },
+    { value: 'delta', label: 'Delta Flight', squadron: '21st_cts' },
+    { value: 'echo', label: 'Echo Flight', squadron: '22nd_cts' },
+    { value: 'foxtrot', label: 'Foxtrot Flight', squadron: '22nd_cts' }
   ];
 
   const allSquadrons = [
-    { value: 'sq1', label: 'Squadron 1' },
-    { value: 'sq2', label: 'Squadron 2' },
-    { value: 'sq3', label: 'Squadron 3' }
+    { value: '6th_cts', label: '6th CTS' },
+    { value: '21st_cts', label: '21st CTS' },
+    { value: '22nd_cts', label: '22nd CTS' }
   ];
 
   // Permission helpers - determines which flights/squadrons user can edit
@@ -130,7 +130,7 @@ const PointsPage = () => {
         return allSquadrons.filter(s => s.value === flight.squadron);
       }
     }
-    if (user?.squadron && ['sq1', 'sq2', 'sq3'].includes(user.squadron)) {
+    if (user?.squadron && ['6th_cts', '21st_cts', '22nd_cts'].includes(user.squadron)) {
       return allSquadrons.filter(s => s.value === user.squadron);
     }
     return [];
@@ -300,7 +300,7 @@ const PointsPage = () => {
         participant_name: participant ? `${participant.first_name} ${participant.last_name}` : '',
         points: parseFloat(meritForm.points)
       });
-      toast.success(`${meritForm.entry_type === 'merit' ? 'Merit' : 'Demerit'} recorded`);
+      toast.success('Merit awarded successfully');
       setIsMeritModalOpen(false);
       setMeritForm({
         participant_id: '',
@@ -605,37 +605,14 @@ const PointsPage = () => {
                 <DialogTrigger asChild>
                   <Button variant="outline" className="rounded-sm" data-testid="record-merit-btn">
                     <Zap className="w-4 h-4 mr-2" />
-                    Merit/Demerit
+                    Award Merit
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Record Merit or Demerit</DialogTitle>
+                    <DialogTitle>Award Merit Points</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleRecordMerit} className="space-y-4">
-                    <div>
-                      <Label>Type *</Label>
-                      <Select
-                        value={meritForm.entry_type}
-                        onValueChange={(v) => setMeritForm({...meritForm, entry_type: v})}
-                      >
-                        <SelectTrigger className="mt-1 rounded-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="merit">
-                            <span className="flex items-center gap-2 text-emerald-600">
-                              <Plus className="w-4 h-4" /> Merit (+)
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="demerit">
-                            <span className="flex items-center gap-2 text-red-600">
-                              <Minus className="w-4 h-4" /> Demerit (-)
-                            </span>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
                     <div>
                       <Label>Participant *</Label>
                       <Select
@@ -690,16 +667,16 @@ const PointsPage = () => {
                         onChange={(e) => setMeritForm({...meritForm, reason: e.target.value})}
                         className="mt-1 rounded-sm"
                         rows={2}
-                        placeholder="Describe why this merit/demerit is being awarded..."
+                        placeholder="Describe why this merit is being awarded..."
                       />
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <Button type="button" variant="outline" onClick={() => setIsMeritModalOpen(false)}>Cancel</Button>
                       <Button 
                         type="submit" 
-                        className={meritForm.entry_type === 'merit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}
+                        className="bg-emerald-600 hover:bg-emerald-700"
                       >
-                        Record {meritForm.entry_type === 'merit' ? 'Merit' : 'Demerit'}
+                        Award Merit
                       </Button>
                     </div>
                   </form>

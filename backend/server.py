@@ -135,7 +135,7 @@ class UserBase(BaseModel):
     name: str
     role: str = UserRole.STAFF  # Default to staff (can choose staff/cadre during registration)
     capid: Optional[str] = None
-    squadron: Optional[str] = None  # staff, support_cadre, exec_cadre, ops_cadre, sq1, sq2, sq3
+    squadron: Optional[str] = None  # staff, support_cadre, exec_cadre, ops_cadre, 6th_cts, 21st_cts, 22nd_cts
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
 
 class UserCreate(UserBase):
@@ -310,7 +310,7 @@ class ScheduleEventBase(BaseModel):
     end_time: str
     location: Optional[str] = None
     event_type: str = "general"  # general, training, ceremony, meal, recreation, pt, admin, leadership, academics
-    target_groups: List[str] = ["all"]  # all, staff, sq1, sq2, sq3, alpha, bravo, charlie, delta, echo, foxtrot
+    target_groups: List[str] = ["all"]  # all, staff, 6th_cts, 21st_cts, 22nd_cts, alpha, bravo, charlie, delta, echo, foxtrot
 
 class ScheduleEventCreate(ScheduleEventBase):
     pass
@@ -337,7 +337,7 @@ class PushSubscription(BaseModel):
 class PushNotificationRequest(BaseModel):
     title: str
     body: str
-    target_groups: List[str] = ["all"]  # all, staff, sq1, sq2, sq3, or specific flights
+    target_groups: List[str] = ["all"]  # all, staff, 6th_cts, 21st_cts, 22nd_cts, or specific flights
     url: Optional[str] = "/schedule"
 
 class BudgetItemBase(BaseModel):
@@ -447,7 +447,7 @@ class DocumentBase(BaseModel):
     file_url: Optional[str] = None
     # Flight/Squadron scope
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot, or None for all
-    squadron: Optional[str] = None  # sq1, sq2, sq3, or None for all
+    squadron: Optional[str] = None  # 6th_cts, 21st_cts, 22nd_cts, or None for all
     scope: str = "global"  # global, squadron, flight
 
 class DocumentCreate(DocumentBase):
@@ -775,8 +775,8 @@ async def assign_user_unit(
     user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Assign a user to a squadron and flight"""
-    # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and Squadrons 1-3
-    valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "sq1", "sq2", "sq3"]
+    # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and CTS Squadrons
+    valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "6th_cts", "21st_cts", "22nd_cts"]
     valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
     
     if assignment.squadron and assignment.squadron not in valid_squadrons:
@@ -793,9 +793,9 @@ async def assign_user_unit(
     
     # Validate flight belongs to squadron (only for sq1, sq2, sq3, ops_cadre)
     flight_squadron_map = {
-        "alpha": "sq1", "bravo": "sq1",
-        "charlie": "sq2", "delta": "sq2",
-        "echo": "sq3", "foxtrot": "sq3"
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
     }
     
     if assignment.flight and assignment.flight in flight_squadron_map:
@@ -2554,9 +2554,9 @@ async def get_squadron_leaderboard(
 ):
     """Get squadron standings (aggregated from flights)"""
     flight_to_squadron = {
-        "alpha": "sq1", "bravo": "sq1",
-        "charlie": "sq2", "delta": "sq2",
-        "echo": "sq3", "foxtrot": "sq3"
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
     }
     
     query = {"target_type": "flight"}
@@ -2567,9 +2567,9 @@ async def get_squadron_leaderboard(
     
     # Aggregate scores by squadron
     squadron_scores = {
-        "sq1": {"squadron": "Squadron 1", "total_points": 0, "flights": ["alpha", "bravo"]},
-        "sq2": {"squadron": "Squadron 2", "total_points": 0, "flights": ["charlie", "delta"]},
-        "sq3": {"squadron": "Squadron 3", "total_points": 0, "flights": ["echo", "foxtrot"]}
+        "6th_cts": {"squadron": "6th CTS", "total_points": 0, "flights": ["alpha", "bravo"]},
+        "21st_cts": {"squadron": "21st CTS", "total_points": 0, "flights": ["charlie", "delta"]},
+        "22nd_cts": {"squadron": "22nd CTS", "total_points": 0, "flights": ["echo", "foxtrot"]}
     }
     
     for score in scores:
@@ -3364,7 +3364,7 @@ async def send_notification(
             # Build OR conditions for squadrons and flights
             conditions = []
             for group in notification.target_groups:
-                if group in ["sq1", "sq2", "sq3"]:
+                if group in ["6th_cts", "21st_cts", "22nd_cts"]:
                     conditions.append({"squadron": group})
                 elif group in ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]:
                     conditions.append({"flight": group})
@@ -3972,9 +3972,9 @@ async def get_flight_documents(
     # Get flight-specific and global documents
     flight_lower = flight.lower()
     flight_to_squadron = {
-        "alpha": "sq1", "bravo": "sq1",
-        "charlie": "sq2", "delta": "sq2",
-        "echo": "sq3", "foxtrot": "sq3"
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
     }
     squadron = flight_to_squadron.get(flight_lower)
     
@@ -4247,9 +4247,9 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
     user_squadron = user.get("squadron")
     
     flight_to_squadron = {
-        "alpha": "sq1", "bravo": "sq1",
-        "charlie": "sq2", "delta": "sq2",
-        "echo": "sq3", "foxtrot": "sq3"
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
     }
     
     all_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
