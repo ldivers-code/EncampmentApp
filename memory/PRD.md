@@ -81,23 +81,28 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Can choose any reporter role when submitting
   - Can filter by specific flight or view all
 
-### Mar 9, 2026 - Commander Issue Escalation Chain
-- **Escalation Chain Implementation**:
-  - Squadron Commander → Exec Cadre → Encampment Commander
-  - Reports with "ESCALATE" checked start at Squadron Commander level
-  - Each level can escalate up or resolve the issue
-- **New Status Badges**: Sq. Commander, Exec Cadre, Encampment Cmdr, Resolved
-- **Escalation History**: Full audit trail of who escalated when with notes
-- **Escalation Actions**:
-  - "Escalate to Exec Cadre" button (from Squadron Commander level)
-  - "Escalate to Encampment Cmdr" button (from Exec Cadre level)
-  - "Mark as Resolved" button (available at any escalation level)
-- **Notifications**: Automatic notifications sent when reports are escalated
-- **Full Access for Staff Roles**:
-  - Staff, Exec Cadre, Plans & Programs can view ALL reports and My Flight data
-  - Commander has ultimate authority to resolve any escalated issue
-- **API Endpoints Added**:
-  - `PUT /api/reports/{id}/escalate` - Escalate report up the chain
+### Mar 9, 2026 - Commander Issue Escalation Chain (UPDATED)
+- **6-Level Escalation Chain Implementation**:
+  - Flight Sergeant → Flight Commander → Squadron Commander → Exec Cadre → DCS & Commandant → Encampment Commander
+  - Reports with commander issues now start at "flight_sergeant" level
+  - Each level can escalate to the next level only (cannot skip levels)
+  - Only "commander" role can escalate from DCS & Commandant to Encampment Commander
+- **New Status Badges**: 
+  - Flight Commander (yellow), Sq. Commander (amber), Exec Cadre (orange)
+  - DCS & Commandant (rose), Encampment Cmdr (red), At Cmdr Level (dark red)
+- **Escalation History**: Full audit trail showing all 5 escalation steps with timestamps
+- **Dynamic Escalation Actions**:
+  - Button text updates to show correct next level (e.g., "Escalate to Flight Commander")
+  - Color intensity increases as escalation level rises
+- **Permission Controls**:
+  - Cadre can escalate from flight_sergeant level
+  - Staff/Plans & Programs can escalate up to exec_cadre level
+  - Exec Cadre can escalate to dcs_commandant level
+  - Only Commander role can escalate to encampment_commander level
+- **Notifications**: Automatic notifications sent to appropriate groups at each level
+- **API Endpoints**:
+  - `PUT /api/reports/{id}/escalate` - Validates chain progression, enforces permissions
+  - `PUT /api/reports/{id}/resolve` - Mark any escalated report as resolved
   - `PUT /api/reports/{id}/resolve` - Mark escalated report as resolved
 
 ### Mar 9, 2026 - Flight Reporting System
