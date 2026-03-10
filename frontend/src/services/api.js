@@ -884,3 +884,30 @@ export const getHealthAuditLog = async (limit = 100, tableName = null, recordId 
   const response = await axios.get(`${API}/health/audit-log?${params}`, { headers: getAuthHeaders() });
   return response.data;
 };
+
+// Health Data Import
+export const importMedicalData = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/health/import/medical-data`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const getImportSummary = async () => {
+  const response = await axios.get(`${API}/health/import/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadet Allergies
+export const getCadetAllergies = async (capid) => {
+  const response = await axios.get(`${API}/health/cadet/${capid}/allergies`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadet OTC Approvals
+export const getCadetOtcApprovals = async (capid) => {
+  const response = await axios.get(`${API}/health/cadet/${capid}/otc-approvals`, { headers: getAuthHeaders() });
+  return response.data;
+};

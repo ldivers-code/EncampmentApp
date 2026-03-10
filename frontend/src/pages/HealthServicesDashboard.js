@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   getHealthDashboardSummary, getMedsDue, getOverdueMeds, getOpenIncidents,
   searchHealthCadets, getHealthReferenceLists, getHealthAuditLog, 
-  getHealthSettings, updateHealthSettings
+  getHealthSettings, updateHealthSettings, importMedicalData, getImportSummary
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { 
   Heart, Pill, AlertTriangle, Clock, Search, Users, Activity,
   CheckCircle, XCircle, AlertCircle, ChevronRight, RefreshCw,
-  Thermometer, Filter, Save
+  Thermometer, Filter, Save, Upload, FileSpreadsheet
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -52,6 +52,13 @@ const HealthServicesDashboard = () => {
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Import Modal
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importSummary, setImportSummary] = useState(null);
+
   // Check if user has full health access
   const hasFullAccess = () => {
     return ['commander', 'health_services'].includes(user?.role);
@@ -60,12 +67,13 @@ const HealthServicesDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [summaryData, dueData, overdueData, incidentsData, refData] = await Promise.all([
+      const [summaryData, dueData, overdueData, incidentsData, refData, impSummary] = await Promise.all([
         getHealthDashboardSummary(),
         hasFullAccess() ? getMedsDue(60) : Promise.resolve([]),
         hasFullAccess() ? getOverdueMeds() : Promise.resolve([]),
         getOpenIncidents(),
-        getHealthReferenceLists()
+        getHealthReferenceLists(),
+        hasFullAccess() ? getImportSummary().catch(() => null) : Promise.resolve(null)
       ]);
       
       setSummary(summaryData);
@@ -73,6 +81,7 @@ const HealthServicesDashboard = () => {
       setOverdueMeds(overdueData);
       setOpenIncidents(incidentsData);
       setReferenceLists(refData);
+      if (impSummary) setImportSummary(impSummary);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       toast.error('Failed to load health services data');
@@ -150,6 +159,24 @@ const HealthServicesDashboard = () => {
     }
   }, [showSettings]);
 
+  const handleImportFile = async () => {
+    if (!importFile) return;
+    try {
+      setImporting(true);
+      setImportResult(null);
+      const result = await importMedicalData(importFile);
+      setImportResult(result);
+      toast.success(`Imported ${result.imported || 0} records successfully`);
+      loadDashboardData();
+    } catch (error) {
+      const detail = error.response?.data?.detail || 'Import failed';
+      toast.error(detail);
+      setImportResult({ error: detail });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleSearch = async () => {
     try {
       const results = await searchHealthCadets(
@@ -208,6 +235,18 @@ const HealthServicesDashboard = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          {hasFullAccess() && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowImport(true); setImportFile(null); setImportResult(null); }}
+              className="rounded-sm"
+              data-testid="import-medical-data-btn"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Medical Data
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -301,6 +340,32 @@ const HealthServicesDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Import Data Summary */}
+      {importSummary && (importSummary.allergy_records > 0 || importSummary.otc_records > 0) && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Allergy Records</p>
+                <p className="text-2xl font-bold text-rose-600">{importSummary.allergy_records}</p>
+                <p className="text-xs text-slate-400">{importSummary.cadets_with_allergies} cadets</p>
+              </div>
+              <AlertTriangle className="w-5 h-5 text-rose-500" />
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">OTC Approvals</p>
+                <p className="text-2xl font-bold text-teal-600">{importSummary.otc_records}</p>
+                <p className="text-xs text-slate-400">{importSummary.otc_with_approvals} approved</p>
+              </div>
+              <FileSpreadsheet className="w-5 h-5 text-teal-500" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search Section */}
       <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
@@ -510,6 +575,18 @@ const HealthServicesDashboard = () => {
                 <Button 
                   variant="outline" 
                   className="w-full justify-between rounded-sm"
+                  onClick={() => { setShowImport(true); setImportFile(null); setImportResult(null); }}
+                  data-testid="quick-action-import"
+                >
+                  <span className="flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    Import Medical Data (Excel)
+                  </span>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-between rounded-sm"
                   onClick={() => setShowAuditLog(true)}
                 >
                   <span className="flex items-center gap-2">
@@ -688,6 +765,92 @@ const HealthServicesDashboard = () => {
                 {savingSettings ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Settings
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Medical Data Modal */}
+      <Dialog open={showImport} onOpenChange={(open) => { setShowImport(open); if (!open) { setImportFile(null); setImportResult(null); } }}>
+        <DialogContent className="max-w-lg" data-testid="import-medical-data-modal">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold">
+              <Upload className="w-5 h-5 inline mr-2" />
+              Import Medical Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-sm p-3 text-sm">
+              <p className="font-medium text-blue-800 mb-1">Supported CAP Reports:</p>
+              <ul className="text-blue-700 text-xs space-y-1 list-disc list-inside">
+                <li><strong>Allergies Report</strong> (.xlsx) - Imports allergy data per cadet</li>
+                <li><strong>OTC Medication Approvals Report</strong> (.xlsx) - Imports OTC approvals per cadet</li>
+              </ul>
+              <p className="text-blue-600 text-xs mt-2">Data is matched to roster participants by CAPID.</p>
+            </div>
+            
+            <div>
+              <Label className="text-xs mb-2 block">Select Excel File (.xlsx)</Label>
+              <div className="border-2 border-dashed border-slate-300 rounded-sm p-6 text-center hover:border-[#00205B] transition-colors">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => { setImportFile(e.target.files[0]); setImportResult(null); }}
+                  className="hidden"
+                  id="medical-file-input"
+                  data-testid="medical-file-input"
+                />
+                <label htmlFor="medical-file-input" className="cursor-pointer">
+                  <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 text-slate-400" />
+                  {importFile ? (
+                    <p className="text-sm font-medium text-[#00205B]">{importFile.name}</p>
+                  ) : (
+                    <p className="text-sm text-slate-500">Click to select a file</p>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            {importResult && !importResult.error && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-3" data-testid="import-result">
+                <p className="font-medium text-emerald-800 text-sm mb-1">
+                  <CheckCircle className="w-4 h-4 inline mr-1" />
+                  Import Complete - {importResult.type === 'allergies' ? 'Allergies Report' : 'OTC Approvals'}
+                </p>
+                <div className="text-xs text-emerald-700 space-y-0.5">
+                  <p>Total rows processed: {importResult.total_rows}</p>
+                  <p>Records imported: {importResult.imported}</p>
+                  {importResult.updated > 0 && <p>Records updated: {importResult.updated}</p>}
+                  <p>Skipped (duplicates/empty): {importResult.skipped}</p>
+                  {importResult.unique_cadets && <p>Unique cadets: {importResult.unique_cadets}</p>}
+                </div>
+              </div>
+            )}
+
+            {importResult?.error && (
+              <div className="bg-red-50 border border-red-200 rounded-sm p-3">
+                <p className="text-sm text-red-700">
+                  <XCircle className="w-4 h-4 inline mr-1" />
+                  {importResult.error}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowImport(false)}>
+                {importResult ? 'Close' : 'Cancel'}
+              </Button>
+              {!importResult && (
+                <Button 
+                  onClick={handleImportFile} 
+                  disabled={!importFile || importing}
+                  className="bg-[#00205B]"
+                  data-testid="import-submit-btn"
+                >
+                  {importing ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                  {importing ? 'Importing...' : 'Import Data'}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

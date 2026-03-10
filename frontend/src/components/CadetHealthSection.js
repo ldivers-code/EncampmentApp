@@ -5,7 +5,7 @@ import {
   getCadetIncidents, getCadetCustodyLog, createCadetMedication,
   logMedicationAdministration, logCadetIncident, logCustodyAction,
   updateIncidentStatus, updateCadetHealthStatus, deactivateMedication,
-  getHealthReferenceLists
+  getHealthReferenceLists, getCadetAllergies, getCadetOtcApprovals
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,6 +32,8 @@ const CadetHealthSection = ({ cadetId, capid, cadetName }) => {
   const [referenceLists, setReferenceLists] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
   const [expanded, setExpanded] = useState(true);
+  const [allergies, setAllergies] = useState([]);
+  const [otcApprovals, setOtcApprovals] = useState(null);
   
   // Form states
   const [showMedForm, setShowMedForm] = useState(false);
@@ -54,13 +56,17 @@ const CadetHealthSection = ({ cadetId, capid, cadetName }) => {
     
     try {
       setLoading(true);
-      const [summaryData, refData] = await Promise.all([
+      const [summaryData, refData, allergyData, otcData] = await Promise.all([
         getCadetHealthSummary(cadetId),
-        getHealthReferenceLists()
+        getHealthReferenceLists(),
+        getCadetAllergies(capid).catch(() => []),
+        getCadetOtcApprovals(capid).catch(() => null)
       ]);
       
       setSummary(summaryData);
       setReferenceLists(refData);
+      setAllergies(allergyData);
+      setOtcApprovals(otcData);
       
       if (hasFullAccess()) {
         const [medsData, logData, incData, custData] = await Promise.all([
@@ -240,6 +246,22 @@ const CadetHealthSection = ({ cadetId, capid, cadetName }) => {
               RESCUE MED
             </span>
           )}
+          {allergies.length > 0 && (
+            <span className="text-xs px-2 py-0.5 bg-rose-100 text-rose-700 rounded" data-testid="allergy-badge">
+              <AlertTriangle className="w-3 h-3 inline mr-1" />
+              {allergies.length} allerg{allergies.length === 1 ? 'y' : 'ies'}
+            </span>
+          )}
+          {allergies.some(a => a.is_anaphylaxis) && (
+            <span className="text-xs px-2 py-0.5 bg-red-200 text-red-800 rounded font-bold">
+              ANAPHYLAXIS
+            </span>
+          )}
+          {allergies.some(a => a.has_epipen) && (
+            <span className="text-xs px-2 py-0.5 bg-orange-200 text-orange-800 rounded font-bold">
+              EPIPEN
+            </span>
+          )}
           {summary?.open_incidents > 0 && (
             <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded">
               <AlertCircle className="w-3 h-3 inline mr-1" />
@@ -306,12 +328,97 @@ const CadetHealthSection = ({ cadetId, capid, cadetName }) => {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-4 w-full">
-              {hasFullAccess() && <TabsTrigger value="medications">Medications</TabsTrigger>}
-              {hasFullAccess() && <TabsTrigger value="administration">Administration</TabsTrigger>}
-              <TabsTrigger value="incidents">Incidents</TabsTrigger>
-              {hasFullAccess() && <TabsTrigger value="custody">Custody</TabsTrigger>}
+            <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${hasFullAccess() ? 6 : 2}, minmax(0, 1fr))` }}>
+              <TabsTrigger value="allergies" className="text-xs">Allergies</TabsTrigger>
+              <TabsTrigger value="otc" className="text-xs">OTC</TabsTrigger>
+              {hasFullAccess() && <TabsTrigger value="medications" className="text-xs">Medications</TabsTrigger>}
+              {hasFullAccess() && <TabsTrigger value="administration" className="text-xs">Admin Log</TabsTrigger>}
+              <TabsTrigger value="incidents" className="text-xs">Incidents</TabsTrigger>
+              {hasFullAccess() && <TabsTrigger value="custody" className="text-xs">Custody</TabsTrigger>}
             </TabsList>
+
+            {/* Allergies Tab */}
+            <TabsContent value="allergies" className="mt-4">
+              <h4 className="text-sm font-medium mb-3">Allergy Information</h4>
+              {allergies.length === 0 ? (
+                <p className="text-center text-slate-500 py-4">No allergy data on file</p>
+              ) : (
+                <div className="space-y-2">
+                  {allergies.map((allergy) => (
+                    <div key={allergy.allergy_id} className={`p-3 border rounded-sm ${allergy.is_anaphylaxis ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{allergy.allergy_name}</p>
+                          <p className="text-xs text-slate-500">{allergy.allergy_type}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {allergy.is_anaphylaxis && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-red-200 text-red-800 rounded font-bold">ANAPHYLAXIS</span>
+                          )}
+                          {allergy.has_epipen && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-orange-200 text-orange-800 rounded font-bold">EPIPEN</span>
+                          )}
+                          {allergy.has_albuterol_inhaler && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-200 text-blue-800 rounded font-bold">INHALER</span>
+                          )}
+                        </div>
+                      </div>
+                      {allergy.typical_reactions && (
+                        <p className="text-xs text-amber-700 mt-1">Reactions: {allergy.typical_reactions}</p>
+                      )}
+                      {allergy.other_reactions && (
+                        <p className="text-xs text-amber-700">Other reactions: {allergy.other_reactions}</p>
+                      )}
+                      {allergy.treatments && (
+                        <p className="text-xs text-emerald-700 mt-1">Treatment: {allergy.treatments}</p>
+                      )}
+                      {allergy.other_medications && (
+                        <p className="text-xs text-blue-700">Other medications: {allergy.other_medications}</p>
+                      )}
+                      {(allergy.contact_name || allergy.emergency_contact) && (
+                        <div className="text-xs text-slate-500 mt-1 pt-1 border-t border-slate-100">
+                          {allergy.contact_name && <span>Contact: {allergy.contact_name}</span>}
+                          {allergy.emergency_contact && <span className="ml-2">Emergency: {allergy.emergency_contact}</span>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* OTC Approvals Tab */}
+            <TabsContent value="otc" className="mt-4">
+              <h4 className="text-sm font-medium mb-3">OTC Medication Approvals</h4>
+              {!otcApprovals || Object.keys(otcApprovals).length === 0 ? (
+                <p className="text-center text-slate-500 py-4">No OTC approval data on file</p>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(otcApprovals.approvals || {}).map(([med, approved]) => (
+                      <div 
+                        key={med}
+                        className={`p-2 rounded-sm border text-sm flex items-center gap-2 ${
+                          approved 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                            : 'bg-slate-50 border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        {approved ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                        )}
+                        <span className="capitalize">{med}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {otcApprovals.organization && (
+                    <p className="text-xs text-slate-500 mt-3">Organization: {otcApprovals.organization}</p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
 
             {/* Medications Tab */}
             {hasFullAccess() && (

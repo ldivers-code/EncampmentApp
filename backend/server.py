@@ -6871,6 +6871,240 @@ async def get_audit_log(
     return logs
 
 
+# ================= HEALTH SERVICES - MEDICAL DATA IMPORT =================
+
+OTC_MEDICATIONS = [
+    "Acetaminophen", "Antifungal", "Antihistamine", "Bacitracin", "Calamine",
+    "Claritin", "Hydrocortisone", "Ibuprofen", "Orajel", "Robitussin",
+    "Sunscreen", "Tums", "Visine"
+]
+
+@api_router.post("/health/import/medical-data")
+async def import_medical_data(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_health_full())
+):
+    """Import medical data from CAP Excel reports (OTC Approvals or Allergies)"""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported")
+    
+    contents = await file.read()
+    try:
+        df = pd.read_excel(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
+    
+    columns = [c.strip() for c in df.columns.tolist()]
+    
+    # Detect file type
+    if "AllergyName" in columns or "AllergyType" in columns:
+        return await _import_allergies(df, user)
+    elif "Acetaminophen" in columns or "Ibuprofen" in columns:
+        return await _import_otc_approvals(df, user)
+    else:
+        raise HTTPException(status_code=400, detail="Unrecognized file format. Expected OTC Medication Approvals or Allergies Report.")
+
+async def _import_allergies(df: pd.DataFrame, user: dict) -> dict:
+    """Import allergies from CAP AllergiesReport Excel"""
+    from health_services import get_event_settings, generate_id, get_current_timestamp, log_audit
+    
+    settings = await get_event_settings(db)
+    event_id = settings["event_id"]
+    now = get_current_timestamp()
+    user_id = user.get("id", "system")
+    
+    imported = 0
+    skipped = 0
+    matched_cadets = set()
+    errors = []
+    
+    for _, row in df.iterrows():
+        capid = str(row.get("CAPID", "")).strip()
+        full_name = str(row.get("FullName", "")).strip()
+        allergy_name = str(row.get("AllergyName", "")).strip()
+        
+        if not capid or not full_name or not allergy_name or allergy_name == "nan":
+            skipped += 1
+            continue
+        
+        # Match to roster participant by CAPID
+        participant = await db.participants.find_one({"capid": capid}, {"_id": 0})
+        cadet_name = full_name
+        if participant:
+            cadet_name = f"{participant.get('last_name', '')}, {participant.get('first_name', '')}"
+        
+        # Check for duplicate
+        existing = await db.hs_allergies.find_one({
+            "event_id": event_id,
+            "capid": capid,
+            "allergy_name": allergy_name
+        })
+        if existing:
+            skipped += 1
+            continue
+        
+        allergy_doc = {
+            "allergy_id": generate_id("ALG"),
+            "event_id": event_id,
+            "capid": capid,
+            "cadet_name": cadet_name,
+            "allergy_name": allergy_name,
+            "allergy_type": str(row.get("AllergyType", "")).strip() if pd.notna(row.get("AllergyType")) else "",
+            "is_anaphylaxis": str(row.get("IsAnaphyaxis", "No")).strip().lower() == "yes",
+            "has_epipen": str(row.get("HasEpipen", "No")).strip().lower() == "yes",
+            "has_albuterol_inhaler": str(row.get("HasAlbuterolInhaler", "No")).strip().lower() == "yes",
+            "typical_reactions": str(row.get("TypicalReactions", "")).strip() if pd.notna(row.get("TypicalReactions")) else "",
+            "treatments": str(row.get("Treatments", "")).strip() if pd.notna(row.get("Treatments")) else "",
+            "other_reactions": str(row.get("OtherReactions", "")).strip() if pd.notna(row.get("OtherReactions")) else "",
+            "other_medications": str(row.get("OtherMedications", "")).strip() if pd.notna(row.get("OtherMedications")) else "",
+            "contact_name": str(row.get("ContactName", "")).strip() if pd.notna(row.get("ContactName")) else "",
+            "emergency_contact": str(row.get("EmergencyContact", "")).strip() if pd.notna(row.get("EmergencyContact")) else "",
+            "commander_name": str(row.get("CommanderName", "")).strip() if pd.notna(row.get("CommanderName")) else "",
+            "commander_contact": str(row.get("CommanderContact", "")).strip() if pd.notna(row.get("CommanderContact")) else "",
+            "imported_by": user_id,
+            "imported_at": now
+        }
+        
+        await db.hs_allergies.insert_one(allergy_doc)
+        imported += 1
+        matched_cadets.add(capid)
+    
+    # Audit log
+    await log_audit(db, event_id, "hs_allergies", "BULK_IMPORT", "CREATE",
+                   "import_count", None, str(imported), user_id)
+    
+    return {
+        "type": "allergies",
+        "total_rows": len(df),
+        "imported": imported,
+        "skipped": skipped,
+        "unique_cadets": len(matched_cadets),
+        "errors": errors[:10]
+    }
+
+async def _import_otc_approvals(df: pd.DataFrame, user: dict) -> dict:
+    """Import OTC medication approvals from CAP report"""
+    from health_services import get_event_settings, generate_id, get_current_timestamp, log_audit
+    
+    settings = await get_event_settings(db)
+    event_id = settings["event_id"]
+    now = get_current_timestamp()
+    user_id = user.get("id", "system")
+    
+    imported = 0
+    skipped = 0
+    updated = 0
+    
+    for _, row in df.iterrows():
+        capid = str(row.get("CAPID", "")).strip()
+        first_name = str(row.get("FirstName", "")).strip() if pd.notna(row.get("FirstName")) else ""
+        last_name = str(row.get("LastName", "")).strip() if pd.notna(row.get("LastName")) else ""
+        
+        if not capid or capid == "nan":
+            skipped += 1
+            continue
+        
+        # Build OTC approvals dict
+        otc_approvals = {}
+        for med in OTC_MEDICATIONS:
+            val = str(row.get(med, "Not Entered")).strip()
+            otc_approvals[med.lower()] = val.lower() == "yes"
+        
+        # Check if any approvals exist
+        has_any = any(otc_approvals.values())
+        
+        # Upsert
+        existing = await db.hs_otc_approvals.find_one({
+            "event_id": event_id,
+            "capid": capid
+        })
+        
+        doc = {
+            "event_id": event_id,
+            "capid": capid,
+            "first_name": first_name,
+            "last_name": last_name,
+            "middle_name": str(row.get("MiddleName", "")).strip() if pd.notna(row.get("MiddleName")) else "",
+            "organization": str(row.get("Organization", "")).strip() if pd.notna(row.get("Organization")) else "",
+            "email": str(row.get("CadetEmailString", "")).strip() if pd.notna(row.get("CadetEmailString")) else "",
+            "approvals": otc_approvals,
+            "has_any_approval": has_any,
+            "imported_by": user_id,
+            "imported_at": now
+        }
+        
+        if existing:
+            await db.hs_otc_approvals.update_one(
+                {"event_id": event_id, "capid": capid},
+                {"$set": doc}
+            )
+            updated += 1
+        else:
+            doc["otc_id"] = generate_id("OTC")
+            await db.hs_otc_approvals.insert_one(doc)
+            imported += 1
+    
+    await log_audit(db, event_id, "hs_otc_approvals", "BULK_IMPORT", "CREATE",
+                   "import_count", None, str(imported + updated), user_id)
+    
+    return {
+        "type": "otc_approvals",
+        "total_rows": len(df),
+        "imported": imported,
+        "updated": updated,
+        "skipped": skipped
+    }
+
+
+@api_router.get("/health/cadet/{cadet_id}/allergies")
+async def get_cadet_allergies(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get allergies for a cadet (by CAPID)"""
+    settings = await get_event_settings(db)
+    allergies = await db.hs_allergies.find(
+        {"event_id": settings["event_id"], "capid": cadet_id}
+    ).to_list(100)
+    for a in allergies:
+        a.pop("_id", None)
+    return allergies
+
+
+@api_router.get("/health/cadet/{cadet_id}/otc-approvals")
+async def get_cadet_otc_approvals(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get OTC medication approvals for a cadet (by CAPID)"""
+    settings = await get_event_settings(db)
+    approval = await db.hs_otc_approvals.find_one(
+        {"event_id": settings["event_id"], "capid": cadet_id}
+    )
+    if approval:
+        approval.pop("_id", None)
+    return approval or {}
+
+
+@api_router.get("/health/import/summary")
+async def get_import_summary(user: dict = Depends(require_health_view())):
+    """Get summary of imported health data"""
+    settings = await get_event_settings(db)
+    event_id = settings["event_id"]
+    
+    allergy_count = await db.hs_allergies.count_documents({"event_id": event_id})
+    allergy_cadets = len(await db.hs_allergies.distinct("capid", {"event_id": event_id}))
+    otc_count = await db.hs_otc_approvals.count_documents({"event_id": event_id})
+    otc_approved = await db.hs_otc_approvals.count_documents({"event_id": event_id, "has_any_approval": True})
+    
+    return {
+        "allergy_records": allergy_count,
+        "cadets_with_allergies": allergy_cadets,
+        "otc_records": otc_count,
+        "otc_with_approvals": otc_approved
+    }
+
+
 # Re-include router to pick up health services routes
 # (Note: FastAPI handles duplicate includes gracefully)
 app.include_router(api_router)
