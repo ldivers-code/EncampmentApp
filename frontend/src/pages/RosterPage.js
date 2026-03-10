@@ -33,7 +33,9 @@ import {
   Shield,
   UserX,
   RotateCcw,
-  Eye
+  Eye,
+  Edit3,
+  Check
 } from 'lucide-react';
 
 const RosterPage = () => {
@@ -53,8 +55,13 @@ const RosterPage = () => {
   const [rankFilter, setRankFilter] = useState('all');
   const [showRemoved, setShowRemoved] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [rosterView, setRosterView] = useState('master'); // 'master' or 'full'
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Inline editing state
+  const [inlineEditId, setInlineEditId] = useState(null);
+  const [inlineEditFlight, setInlineEditFlight] = useState('');
+  const [inlineEditSquadron, setInlineEditSquadron] = useState('');
   // Participant detail view
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -68,6 +75,14 @@ const RosterPage = () => {
   const canViewSensitiveData = () => {
     const privilegedRoles = ['commander', 'exec_cadre', 'plans_programs', 'finance', 'staff'];
     return privilegedRoles.includes(user?.role);
+  };
+
+  // Check if participant is "accepted" (on org chart or has flight/squadron assignment)
+  const isAccepted = (participant) => {
+    const hasFlight = participant.flight && participant.flight !== 'None' && participant.flight !== '';
+    const hasSquadron = participant.squadron && participant.squadron !== 'None' && participant.squadron !== '';
+    const isOnOrgChart = participant.is_on_org_chart === true;
+    return hasFlight || hasSquadron || isOnOrgChart;
   };
 
   const [formData, setFormData] = useState({
@@ -125,6 +140,9 @@ const RosterPage = () => {
       if (!showRemoved && p.is_removed) return false;
       if (showRemoved && !p.is_removed) return false;
       
+      // Master vs Full roster view
+      if (rosterView === 'master' && !isAccepted(p)) return false;
+      
       // Search across multiple fields
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || 
@@ -140,12 +158,12 @@ const RosterPage = () => {
       
       // Flight filter
       const matchesFlight = flightFilter === 'all' || 
-        (flightFilter === 'unassigned' && !p.flight) ||
+        (flightFilter === 'unassigned' && (!p.flight || p.flight === 'None')) ||
         (p.flight?.toLowerCase() === flightFilter.toLowerCase());
       
       // Squadron filter
       const matchesSquadron = squadronFilter === 'all' || 
-        (squadronFilter === 'unassigned' && !p.squadron) ||
+        (squadronFilter === 'unassigned' && (!p.squadron || p.squadron === 'None')) ||
         (p.squadron?.toLowerCase().replace(/\s+/g, '_') === squadronFilter.toLowerCase());
       
       // Gender filter
@@ -167,7 +185,12 @@ const RosterPage = () => {
       
       return matchesSearch && matchesType && matchesPaid && matchesFlight && matchesSquadron && matchesGender && matchesWing && matchesRank;
     });
-  }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved]);
+  }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved, rosterView]);
+
+  // Count accepted participants
+  const acceptedCount = useMemo(() => {
+    return participants.filter(p => !p.is_removed && isAccepted(p)).length;
+  }, [participants]);
 
   // Get unique values for filter dropdowns
   const uniqueWings = useMemo(() => {
@@ -212,6 +235,46 @@ const RosterPage = () => {
   const removedCount = useMemo(() => {
     return participants.filter(p => p.is_removed).length;
   }, [participants]);
+
+  // Start inline editing
+  const startInlineEdit = (participant) => {
+    setInlineEditId(participant.id);
+    setInlineEditFlight(participant.flight || '');
+    setInlineEditSquadron(participant.squadron || '');
+  };
+
+  // Cancel inline editing
+  const cancelInlineEdit = () => {
+    setInlineEditId(null);
+    setInlineEditFlight('');
+    setInlineEditSquadron('');
+  };
+
+  // Save inline edit
+  const saveInlineEdit = async (participantId) => {
+    try {
+      // Auto-set squadron based on flight
+      let squadron = inlineEditSquadron;
+      if (inlineEditFlight && inlineEditFlight !== 'None') {
+        const flightToSquadron = {
+          'Alpha': '6th CTS', 'Bravo': '6th CTS',
+          'Charlie': '21st CTS', 'Delta': '21st CTS',
+          'Echo': '22nd CTS', 'Foxtrot': '22nd CTS'
+        };
+        squadron = flightToSquadron[inlineEditFlight] || inlineEditSquadron;
+      }
+      
+      await updateParticipant(participantId, {
+        flight: inlineEditFlight || null,
+        squadron: squadron || null
+      });
+      toast.success('Assignment updated');
+      cancelInlineEdit();
+      loadParticipants();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update assignment');
+    }
+  };
 
   const handleViewParticipant = (participant) => {
     setSelectedParticipant(participant);
@@ -411,11 +474,39 @@ const RosterPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Master Roster
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              {rosterView === 'master' ? 'Master Roster' : 'Full Roster'}
+            </h1>
+            {/* Roster View Toggle */}
+            <div className="flex bg-slate-100 rounded-sm p-0.5">
+              <button
+                onClick={() => { setRosterView('master'); setCurrentPage(1); }}
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                  rosterView === 'master' 
+                    ? 'bg-[#00205B] text-white' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Accepted ({acceptedCount})
+              </button>
+              <button
+                onClick={() => { setRosterView('full'); setCurrentPage(1); }}
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                  rosterView === 'full' 
+                    ? 'bg-[#00205B] text-white' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({participants.filter(p => !p.is_removed).length})
+              </button>
+            </div>
+          </div>
           <p className="text-slate-500 text-sm mt-1">
-            {filteredParticipants.length} of {participants.length} participants
+            {rosterView === 'master' 
+              ? `${filteredParticipants.length} accepted participants with assignments`
+              : `${filteredParticipants.length} of ${participants.filter(p => !p.is_removed).length} total participants`
+            }
           </p>
         </div>
         
@@ -993,30 +1084,79 @@ const RosterPage = () => {
                 paginatedParticipants.map((p) => {
                   const flightColors = getFlightColors(p.flight);
                   const squadronInfo = getSquadronInfo(p.flight);
+                  const isEditing = inlineEditId === p.id;
                   return (
                   <tr 
                     key={p.id} 
-                    className={`hover:bg-slate-50 cursor-pointer transition-colors ${p.is_removed ? 'bg-red-50/50' : flightColors.bg} ${flightColors.border}`}
-                    onClick={() => handleViewParticipant(p)}
+                    className={`hover:bg-slate-50 transition-colors ${p.is_removed ? 'bg-red-50/50' : flightColors.bg} ${flightColors.border}`}
                     data-testid={`roster-row-${p.capid}`}
                   >
-                    <td className="font-mono text-[#00205B] font-medium">{p.capid}</td>
-                    <td>{p.rank}</td>
-                    <td className="font-medium">
+                    <td className="font-mono text-[#00205B] font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.capid}</td>
+                    <td className="cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.rank}</td>
+                    <td className="font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>
                       {p.last_name}, {p.first_name}
                       {p.is_removed && <span className="ml-2 text-xs text-red-500">(Removed)</span>}
                     </td>
-                    <td>
-                      {p.flight ? (
-                        <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm ${flightColors.badge}`}>
-                          {p.flight}
-                        </span>
+                    {/* Editable Flight Cell */}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {isEditing ? (
+                        <Select value={inlineEditFlight} onValueChange={setInlineEditFlight}>
+                          <SelectTrigger className="h-7 w-24 text-xs rounded-sm">
+                            <SelectValue placeholder="Flight" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="None">None</SelectItem>
+                            <SelectItem value="Alpha">Alpha</SelectItem>
+                            <SelectItem value="Bravo">Bravo</SelectItem>
+                            <SelectItem value="Charlie">Charlie</SelectItem>
+                            <SelectItem value="Delta">Delta</SelectItem>
+                            <SelectItem value="Echo">Echo</SelectItem>
+                            <SelectItem value="Foxtrot">Foxtrot</SelectItem>
+                          </SelectContent>
+                        </Select>
                       ) : (
-                        <span className="text-slate-300">-</span>
+                        <div 
+                          className="cursor-pointer group flex items-center gap-1"
+                          onClick={() => canEdit() && startInlineEdit(p)}
+                        >
+                          {p.flight && p.flight !== 'None' ? (
+                            <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm ${flightColors.badge}`}>
+                              {p.flight}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                          {canEdit() && (
+                            <Edit3 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </div>
                       )}
                     </td>
-                    <td className={`text-xs font-medium ${squadronInfo.color}`}>
-                      {squadronInfo.name}
+                    {/* Editable Squadron Cell */}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {isEditing ? (
+                        <Select value={inlineEditSquadron} onValueChange={setInlineEditSquadron}>
+                          <SelectTrigger className="h-7 w-24 text-xs rounded-sm">
+                            <SelectValue placeholder="Squadron" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="None">None</SelectItem>
+                            <SelectItem value="6th CTS">6th CTS</SelectItem>
+                            <SelectItem value="21st CTS">21st CTS</SelectItem>
+                            <SelectItem value="22nd CTS">22nd CTS</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div 
+                          className={`cursor-pointer group flex items-center gap-1 text-xs font-medium ${squadronInfo.color}`}
+                          onClick={() => canEdit() && startInlineEdit(p)}
+                        >
+                          <span>{squadronInfo.name}</span>
+                          {canEdit() && (
+                            <Edit3 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="text-sm">{p.gender === 'M' ? 'Male' : p.gender === 'F' ? 'Female' : p.gender || '-'}</td>
                     <td className="font-mono text-sm">{p.age || p.age_at_event || '-'}</td>
@@ -1057,57 +1197,97 @@ const RosterPage = () => {
                     )}
                     <td className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewParticipant(p);
-                          }}
-                          className="h-8 w-8 p-0 text-slate-500 hover:text-[#00205B]"
-                          data-testid={`view-participant-${p.capid}`}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {showRemoved ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleReinstateParticipant(p);
-                            }}
-                            className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                            data-testid={`reinstate-participant-${p.capid}`}
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </Button>
-                        ) : canEdit() && (
+                        {/* Inline edit save/cancel buttons */}
+                        {isEditing ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => saveInlineEdit(p.id)}
+                              className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              data-testid={`save-assignment-${p.capid}`}
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelInlineEdit}
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                              data-testid={`cancel-assignment-${p.capid}`}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </>
+                        ) : (
                           <>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleEdit(p);
+                                handleViewParticipant(p);
                               }}
-                              className="h-8 w-8 p-0"
-                              data-testid={`edit-participant-${p.capid}`}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-[#00205B]"
+                              data-testid={`view-participant-${p.capid}`}
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(p.id);
-                              }}
-                              className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
-                              data-testid={`delete-participant-${p.capid}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {showRemoved ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReinstateParticipant(p);
+                                }}
+                                className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                data-testid={`reinstate-participant-${p.capid}`}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </Button>
+                            ) : canEdit() && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startInlineEdit(p);
+                                  }}
+                                  className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                  title="Edit Assignment"
+                                  data-testid={`edit-assignment-${p.capid}`}
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(p);
+                                  }}
+                                  className="h-8 w-8 p-0"
+                                  title="Edit All Details"
+                                  data-testid={`edit-participant-${p.capid}`}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(p.id);
+                                  }}
+                                  className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
+                                  data-testid={`delete-participant-${p.capid}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
