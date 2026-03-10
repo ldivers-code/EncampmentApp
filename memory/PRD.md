@@ -624,10 +624,22 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 
 ### Still To Complete
 - [ ] Google Sheets export/sync for historical reporting
-- [ ] CadetHealthSection component integration into cadet detail page
 - [ ] Historical reports page (/health/reports)
 - [ ] Audit log viewer page (/health/audit)
 - [ ] Health settings page (/health/settings)
+
+### Completed (March 10, 2026)
+- [x] CadetHealthSection component integrated into cadet detail modal
+- [x] Medical Data Import feature (Import button on Health Services Dashboard)
+  - Supports AllergiesReport.xlsx (per-cadet allergy data)
+  - Supports OTCMedicationApprovalsReport.xlsx (per-cadet OTC medication approvals)
+  - Data matched to roster participants by CAPID
+  - Duplicate detection for allergies; upsert for OTC approvals
+- [x] Allergies tab in CadetHealthSection (displays allergy details, severity indicators)
+- [x] OTC Approvals tab in CadetHealthSection (13 medication approval grid)
+- [x] Import Summary cards on Health Services Dashboard
+- [x] MongoDB collections: hs_allergies, hs_otc_approvals
+- [x] Backend endpoints: POST /api/health/import/medical-data, GET /api/health/cadet/{capid}/allergies, GET /api/health/cadet/{capid}/otc-approvals, GET /api/health/import/summary
 
 ## Notes
 - First registered user automatically becomes Commander
