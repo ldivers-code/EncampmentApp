@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://flight-roster-mgmt.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cadet-med-hub.preview.emergentagent.com')
 
 class TestAwardsFeature:
     """Test suite for Honor Awards feature"""

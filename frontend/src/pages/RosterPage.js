@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
+import CadetHealthSection from '../components/CadetHealthSection';
 import { 
   Plus, 
   Search, 
@@ -1546,6 +1547,13 @@ const RosterPage = () => {
                   </div>
                 )}
               </div>
+
+              {/* Health Services Section */}
+              <CadetHealthSection 
+                cadetId={selectedParticipant.id}
+                capid={selectedParticipant.capid}
+                cadetName={`${selectedParticipant.first_name} ${selectedParticipant.last_name}`}
+              />
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200">

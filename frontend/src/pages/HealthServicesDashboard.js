@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   getHealthDashboardSummary, getMedsDue, getOverdueMeds, getOpenIncidents,
-  searchHealthCadets, getHealthReferenceLists
+  searchHealthCadets, getHealthReferenceLists, getHealthAuditLog, 
+  getHealthSettings, updateHealthSettings
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   Heart, Pill, AlertTriangle, Clock, Search, Users, Activity,
   CheckCircle, XCircle, AlertCircle, ChevronRight, RefreshCw,
-  Thermometer, Filter
+  Thermometer, Filter, Save
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -35,6 +37,20 @@ const HealthServicesDashboard = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [referenceLists, setReferenceLists] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  
+  // Audit Log Modal
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [auditLog, setAuditLog] = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  
+  // Settings Modal
+  const [showSettings, setShowSettings] = useState(false);
+  const [eventSettings, setEventSettings] = useState({
+    event_id: '',
+    event_year: new Date().getFullYear(),
+    event_name: ''
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // Check if user has full health access
   const hasFullAccess = () => {
@@ -78,6 +94,61 @@ const HealthServicesDashboard = () => {
       if (interval) clearInterval(interval);
     };
   }, [autoRefresh]);
+
+  // Load audit log
+  const loadAuditLog = async () => {
+    try {
+      setLoadingAudit(true);
+      const logs = await getHealthAuditLog(100);
+      setAuditLog(logs);
+    } catch (error) {
+      toast.error('Failed to load audit log');
+    } finally {
+      setLoadingAudit(false);
+    }
+  };
+
+  // Load and save settings
+  const loadSettings = async () => {
+    try {
+      const settings = await getHealthSettings();
+      setEventSettings({
+        event_id: settings.event_id || '',
+        event_year: settings.event_year || new Date().getFullYear(),
+        event_name: settings.event_name || ''
+      });
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      setSavingSettings(true);
+      await updateHealthSettings(eventSettings);
+      toast.success('Settings saved');
+      setShowSettings(false);
+      loadDashboardData();
+    } catch (error) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  // Load audit log when modal opens
+  useEffect(() => {
+    if (showAuditLog) {
+      loadAuditLog();
+    }
+  }, [showAuditLog]);
+
+  // Load settings when modal opens
+  useEffect(() => {
+    if (showSettings) {
+      loadSettings();
+    }
+  }, [showSettings]);
 
   const handleSearch = async () => {
     try {
@@ -426,11 +497,11 @@ const HealthServicesDashboard = () => {
             <Button 
               variant="outline" 
               className="w-full justify-between rounded-sm"
-              onClick={() => navigate('/health/reports')}
+              onClick={() => navigate('/roster')}
             >
               <span className="flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                Historical Reports
+                <Users className="w-4 h-4" />
+                View Roster / Add Health Data
               </span>
               <ChevronRight className="w-4 h-4" />
             </Button>
@@ -439,22 +510,22 @@ const HealthServicesDashboard = () => {
                 <Button 
                   variant="outline" 
                   className="w-full justify-between rounded-sm"
-                  onClick={() => navigate('/health/audit')}
+                  onClick={() => setShowAuditLog(true)}
                 >
                   <span className="flex items-center gap-2">
                     <Filter className="w-4 h-4" />
-                    Audit Log
+                    View Audit Log
                   </span>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
                 <Button 
                   variant="outline" 
                   className="w-full justify-between rounded-sm"
-                  onClick={() => navigate('/health/settings')}
+                  onClick={() => setShowSettings(true)}
                 >
                   <span className="flex items-center gap-2">
                     <Thermometer className="w-4 h-4" />
-                    Health Settings
+                    Event Settings
                   </span>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
@@ -515,6 +586,109 @@ const HealthServicesDashboard = () => {
                 </div>
               ))
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Audit Log Modal */}
+      <Dialog open={showAuditLog} onOpenChange={setShowAuditLog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold">
+              Health Services Audit Log
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {loadingAudit ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+              </div>
+            ) : auditLog.length === 0 ? (
+              <p className="text-center text-slate-500 py-8">No audit entries yet</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {auditLog.map((log, idx) => (
+                  <div key={idx} className="p-3 border border-slate-200 rounded-sm text-sm">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className={`text-xs px-2 py-0.5 rounded mr-2 ${
+                          log.action_type === 'CREATE' ? 'bg-emerald-100 text-emerald-700' :
+                          log.action_type === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                          log.action_type === 'DELETE' ? 'bg-red-100 text-red-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {log.action_type}
+                        </span>
+                        <span className="text-xs text-slate-500">{log.table_name}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        {new Date(log.changed_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {log.field_changed && (
+                      <p className="text-xs mt-1">
+                        <span className="text-slate-500">Field:</span> {log.field_changed}
+                        {log.old_value && <span className="text-red-500 ml-2">"{log.old_value}"</span>}
+                        {log.new_value && <span className="text-emerald-500 ml-1">→ "{log.new_value}"</span>}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-1">By: {log.changed_by || 'System'}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Modal */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold">
+              Health Services Event Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label className="text-xs">Event ID</Label>
+              <Input 
+                value={eventSettings.event_id}
+                onChange={(e) => setEventSettings({...eventSettings, event_id: e.target.value})}
+                placeholder="e.g., 2026_TN_ENCAMPMENT"
+                className="rounded-sm"
+              />
+              <p className="text-xs text-slate-500 mt-1">Unique identifier for this encampment</p>
+            </div>
+            <div>
+              <Label className="text-xs">Event Year</Label>
+              <Input 
+                type="number"
+                value={eventSettings.event_year}
+                onChange={(e) => setEventSettings({...eventSettings, event_year: parseInt(e.target.value)})}
+                className="rounded-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Event Name</Label>
+              <Input 
+                value={eventSettings.event_name}
+                onChange={(e) => setEventSettings({...eventSettings, event_name: e.target.value})}
+                placeholder="e.g., Tennessee Wing Encampment 2026"
+                className="rounded-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
+              <Button 
+                onClick={saveSettings} 
+                disabled={savingSettings}
+                className="bg-[#00205B]"
+              >
+                {savingSettings ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Settings
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
