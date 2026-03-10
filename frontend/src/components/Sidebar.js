@@ -20,7 +20,9 @@ import {
   UserCircle,
   Trophy,
   Shield,
-  Heart
+  Heart,
+  ClipboardCheck,
+  Package
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -82,6 +84,16 @@ const Sidebar = ({ children }) => {
   // Health Services visible to commander, executive_staff, health_services, and staff
   if (['commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
+  }
+
+  // Training Officer visible to commander, executive_staff, training_officer, and staff
+  if (['commander', 'executive_staff', 'training_officer', 'staff'].includes(user?.role)) {
+    navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
+  }
+
+  // Logistics visible to commander, executive_staff, logistics, and staff
+  if (['commander', 'executive_staff', 'logistics', 'staff'].includes(user?.role)) {
+    navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
   }
 
   if (['commander', 'executive_staff'].includes(user?.role)) {

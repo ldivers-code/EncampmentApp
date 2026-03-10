@@ -922,3 +922,175 @@ export const getCadetOtcApprovals = async (capid) => {
   const response = await axios.get(`${API}/health/cadet/${capid}/otc-approvals`, { headers: getAuthHeaders() });
   return response.data;
 };
+
+
+// ============ Training Officer ============
+
+export const getTrainingSummary = async () => {
+  const response = await axios.get(`${API}/training/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Blister Checks
+export const getBisterChecks = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/training/blister-checks?${qs}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createBlisterCheck = async (data) => {
+  const response = await axios.post(`${API}/training/blister-checks`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateBlisterCheck = async (id, data) => {
+  const response = await axios.put(`${API}/training/blister-checks/${id}`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Counseling Logs
+export const getCounselingLogs = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/training/counseling-logs?${qs}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createCounselingLog = async (data) => {
+  const response = await axios.post(`${API}/training/counseling-logs`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateCounselingLog = async (id, data) => {
+  const response = await axios.put(`${API}/training/counseling-logs/${id}`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadre Issues
+export const getCadreIssues = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const response = await axios.get(`${API}/training/cadre-issues?${qs}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createCadreIssue = async (data) => {
+  const response = await axios.post(`${API}/training/cadre-issues`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateCadreIssue = async (id, data) => {
+  const response = await axios.put(`${API}/training/cadre-issues/${id}`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
+// ============ Logistics Module ============
+const LOG = `${API}/logistics`;
+
+export const getLogisticsDashboard = async () => {
+  const r = await axios.get(`${LOG}/dashboard`, { headers: getAuthHeaders() }); return r.data;
+};
+// Inventory
+export const getInventory = async (p = {}) => {
+  const r = await axios.get(`${LOG}/inventory?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createInventoryItem = async (d) => {
+  const r = await axios.post(`${LOG}/inventory`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateInventoryItem = async (id, d) => {
+  const r = await axios.put(`${LOG}/inventory/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const deleteInventoryItem = async (id) => {
+  const r = await axios.delete(`${LOG}/inventory/${id}`, { headers: getAuthHeaders() }); return r.data;
+};
+// Lost & Found
+export const getLostFound = async (p = {}) => {
+  const r = await axios.get(`${LOG}/lost-found?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createLostFound = async (d) => {
+  const r = await axios.post(`${LOG}/lost-found`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateLostFound = async (id, d) => {
+  const r = await axios.put(`${LOG}/lost-found/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Radios
+export const getRadios = async (p = {}) => {
+  const r = await axios.get(`${LOG}/radios?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const checkoutRadio = async (d) => {
+  const r = await axios.post(`${LOG}/radios/checkout`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const checkinRadio = async (id, d) => {
+  const r = await axios.put(`${LOG}/radios/${id}/checkin`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateRadio = async (id, d) => {
+  const r = await axios.put(`${LOG}/radios/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const resetRadioAvailable = async (d) => {
+  const r = await axios.post(`${LOG}/radios/reset-available`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Comms Log
+export const getCommsLog = async (p = {}) => {
+  const r = await axios.get(`${LOG}/comms-log?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createCommsEntry = async (d) => {
+  const r = await axios.post(`${LOG}/comms-log`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Call Signs
+export const getCallSigns = async (p = {}) => {
+  const r = await axios.get(`${LOG}/callsigns?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createCallSign = async (d) => {
+  const r = await axios.post(`${LOG}/callsigns`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateCallSign = async (id, d) => {
+  const r = await axios.put(`${LOG}/callsigns/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const deleteCallSign = async (id) => {
+  const r = await axios.delete(`${LOG}/callsigns/${id}`, { headers: getAuthHeaders() }); return r.data;
+};
+// Vehicles
+export const getVehicles = async (p = {}) => {
+  const r = await axios.get(`${LOG}/vehicles?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createVehicleAssignment = async (d) => {
+  const r = await axios.post(`${LOG}/vehicles`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const returnVehicle = async (id, d) => {
+  const r = await axios.put(`${LOG}/vehicles/${id}/return`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateVehicle = async (id, d) => {
+  const r = await axios.put(`${LOG}/vehicles/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Vehicle Log
+export const getVehicleLog = async (p = {}) => {
+  const r = await axios.get(`${LOG}/vehicle-log?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createVehicleLogEntry = async (d) => {
+  const r = await axios.post(`${LOG}/vehicle-log`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Facilities
+export const getFacilities = async (p = {}) => {
+  const r = await axios.get(`${LOG}/facilities?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createFacility = async (d) => {
+  const r = await axios.post(`${LOG}/facilities`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateFacility = async (id, d) => {
+  const r = await axios.put(`${LOG}/facilities/${id}`, d, { headers: getAuthHeaders() }); return r.data;
+};
+// Supply Requests
+export const getSupplyRequests = async (p = {}) => {
+  const r = await axios.get(`${LOG}/supply-requests?${new URLSearchParams(p)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const createSupplyRequest = async (d) => {
+  const r = await axios.post(`${LOG}/supply-requests`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const approveSupplyRequest = async (id, d) => {
+  const r = await axios.put(`${LOG}/supply-requests/${id}/approve`, d, { headers: getAuthHeaders() }); return r.data;
+};
+export const issueSupplyRequest = async (id) => {
+  const r = await axios.put(`${LOG}/supply-requests/${id}/issue`, {}, { headers: getAuthHeaders() }); return r.data;
+};
+export const completeSupplyRequest = async (id) => {
+  const r = await axios.put(`${LOG}/supply-requests/${id}/complete`, {}, { headers: getAuthHeaders() }); return r.data;
+};

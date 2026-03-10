@@ -19,6 +19,8 @@ import ProfilePage from "./pages/ProfilePage";
 import PointsPage from "./pages/PointsPage";
 import MyFlightPage from "./pages/MyFlightPage";
 import HealthServicesDashboard from "./pages/HealthServicesDashboard";
+import TrainingOfficerPage from "./pages/TrainingOfficerPage";
+import LogisticsPage from "./pages/LogisticsPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -188,6 +190,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'health_services', 'staff']}>
             <HealthServicesDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training"
+        element={
+          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'training_officer', 'staff']}>
+            <TrainingOfficerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/logistics"
+        element={
+          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services']}>
+            <LogisticsPage />
           </ProtectedRoute>
         }
       />

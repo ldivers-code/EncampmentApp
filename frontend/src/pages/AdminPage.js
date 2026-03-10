@@ -66,6 +66,8 @@ const AdminPage = () => {
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
     { value: 'executive_staff', label: 'Executive Staff', color: 'bg-[#00205B] text-white' },
+    { value: 'training_officer', label: 'Training Officer', color: 'bg-teal-100 text-teal-800 border-teal-200' },
+    { value: 'logistics', label: 'Logistics', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
     { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
     { value: 'plans_programs', label: 'Plans & Programs', color: 'bg-blue-100 text-blue-800 border-blue-200' },
     { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200' },

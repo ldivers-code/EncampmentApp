@@ -58,6 +58,8 @@ security = HTTPBearer()
 class UserRole:
     COMMANDER = "commander"
     EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support — same perms as Commander
+    LOGISTICS = "logistics"  # Logistics operations
+    TRAINING_OFFICER = "training_officer"  # Assigned to squadron, blister checks, counseling, cadre issues
     FINANCE = "finance"
     PLANS_PROGRAMS = "plans_programs"  # Schedule/Admin
     EXEC_CADRE = "exec_cadre"  # Cadet Leadership
@@ -154,6 +156,22 @@ DEFAULT_PERMISSIONS = {
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=True
+    ),
+    UserRole.TRAINING_OFFICER: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=True, health_full=False
+    ),
+    UserRole.LOGISTICS: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
     )
 }
 
@@ -738,7 +756,8 @@ def require_role(allowed_roles: List[str]):
 
 @api_router.post("/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    existing = await db.users.find_one({"email": user_data.email})
+    email = user_data.email.strip().lower()
+    existing = await db.users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -797,7 +816,8 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    email = credentials.email.strip().lower()
+    user = await db.users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
@@ -841,7 +861,8 @@ async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER, UserR
 @api_router.put("/users/{user_id}/role")
 async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     valid_roles = [
-        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
+        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
+        UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
         UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES
     ]
     if role not in valid_roles:
@@ -1265,7 +1286,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://cadet-med-hub.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://cap-command.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),
@@ -6943,6 +6964,229 @@ async def get_audit_log(
     return logs
 
 
+
+# ================= TRAINING OFFICER =================
+
+TRAINING_ROLES = [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.TRAINING_OFFICER, UserRole.STAFF]
+
+# --- Blister Checks ---
+
+@api_router.get("/training/blister-checks")
+async def get_blister_checks(
+    date: Optional[str] = None,
+    flight: Optional[str] = None,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    query = {}
+    if date:
+        query["date"] = date
+    if flight:
+        query["flight"] = flight.lower()
+    # Training officers see only their squadron's data
+    if user["role"] == UserRole.TRAINING_OFFICER and user.get("squadron"):
+        query["squadron"] = user["squadron"]
+    
+    checks = await db.training_blister_checks.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return checks
+
+@api_router.post("/training/blister-checks")
+async def create_blister_check(
+    check: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "cadet_name": check.get("cadet_name", ""),
+        "capid": check.get("capid", ""),
+        "flight": check.get("flight", "").lower(),
+        "squadron": check.get("squadron", "").lower(),
+        "date": check.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "severity": check.get("severity", "none"),  # none, mild, moderate, severe
+        "location": check.get("location", ""),  # feet, heels, toes, etc.
+        "description": check.get("description", ""),
+        "treatment_given": check.get("treatment_given", ""),
+        "follow_up_needed": check.get("follow_up_needed", False),
+        "status": check.get("status", "checked"),  # checked, monitoring, resolved
+        "created_by": user.get("id"),
+        "created_by_name": user.get("name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_blister_checks.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/training/blister-checks/{check_id}")
+async def update_blister_check(
+    check_id: str,
+    update: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    allowed = {"severity", "location", "description", "treatment_given", "follow_up_needed", "status"}
+    update_fields = {k: v for k, v in update.items() if k in allowed}
+    update_fields["updated_by"] = user.get("id")
+    update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.training_blister_checks.update_one(
+        {"id": check_id}, {"$set": update_fields}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Check not found")
+    return {"message": "Updated"}
+
+# --- Counseling Logs ---
+
+@api_router.get("/training/counseling-logs")
+async def get_counseling_logs(
+    date: Optional[str] = None,
+    flight: Optional[str] = None,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    query = {}
+    if date:
+        query["date"] = date
+    if flight:
+        query["flight"] = flight.lower()
+    if user["role"] == UserRole.TRAINING_OFFICER and user.get("squadron"):
+        query["squadron"] = user["squadron"]
+    
+    logs = await db.training_counseling_logs.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return logs
+
+@api_router.post("/training/counseling-logs")
+async def create_counseling_log(
+    log: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "cadet_name": log.get("cadet_name", ""),
+        "capid": log.get("capid", ""),
+        "flight": log.get("flight", "").lower(),
+        "squadron": log.get("squadron", "").lower(),
+        "date": log.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "category": log.get("category", "general"),  # general, behavioral, performance, homesickness, conflict, other
+        "reason": log.get("reason", ""),
+        "outcome": log.get("outcome", ""),
+        "follow_up_needed": log.get("follow_up_needed", False),
+        "follow_up_date": log.get("follow_up_date"),
+        "created_by": user.get("id"),
+        "created_by_name": user.get("name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_counseling_logs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/training/counseling-logs/{log_id}")
+async def update_counseling_log(
+    log_id: str,
+    update: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    allowed = {"category", "reason", "outcome", "follow_up_needed", "follow_up_date", "status"}
+    update_fields = {k: v for k, v in update.items() if k in allowed}
+    update_fields["updated_by"] = user.get("id")
+    update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.training_counseling_logs.update_one(
+        {"id": log_id}, {"$set": update_fields}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Log not found")
+    return {"message": "Updated"}
+
+# --- Cadre Issues ---
+
+@api_router.get("/training/cadre-issues")
+async def get_cadre_issues(
+    date: Optional[str] = None,
+    status: Optional[str] = None,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    query = {}
+    if date:
+        query["date"] = date
+    if status:
+        query["status"] = status
+    if user["role"] == UserRole.TRAINING_OFFICER and user.get("squadron"):
+        query["squadron"] = user["squadron"]
+    
+    issues = await db.training_cadre_issues.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return issues
+
+@api_router.post("/training/cadre-issues")
+async def create_cadre_issue(
+    issue: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "cadre_name": issue.get("cadre_name", ""),
+        "cadre_capid": issue.get("cadre_capid", ""),
+        "flight": issue.get("flight", "").lower(),
+        "squadron": issue.get("squadron", "").lower(),
+        "date": issue.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+        "category": issue.get("category", "general"),  # behavioral, performance, safety, protocol, leadership, other
+        "severity": issue.get("severity", "low"),  # low, medium, high, critical
+        "description": issue.get("description", ""),
+        "action_taken": issue.get("action_taken", ""),
+        "resolution_status": issue.get("resolution_status", "open"),  # open, in_progress, resolved, escalated
+        "created_by": user.get("id"),
+        "created_by_name": user.get("name"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_cadre_issues.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/training/cadre-issues/{issue_id}")
+async def update_cadre_issue(
+    issue_id: str,
+    update: dict,
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    allowed = {"category", "severity", "description", "action_taken", "resolution_status"}
+    update_fields = {k: v for k, v in update.items() if k in allowed}
+    update_fields["updated_by"] = user.get("id")
+    update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.training_cadre_issues.update_one(
+        {"id": issue_id}, {"$set": update_fields}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return {"message": "Updated"}
+
+# --- Training Dashboard Summary ---
+
+@api_router.get("/training/summary")
+async def get_training_summary(
+    user: dict = Depends(require_role(TRAINING_ROLES))
+):
+    query = {}
+    if user["role"] == UserRole.TRAINING_OFFICER and user.get("squadron"):
+        query["squadron"] = user["squadron"]
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_query = {**query, "date": today}
+    
+    blister_today = await db.training_blister_checks.count_documents(today_query)
+    blisters_monitoring = await db.training_blister_checks.count_documents({**query, "status": "monitoring"})
+    counseling_today = await db.training_counseling_logs.count_documents(today_query)
+    counseling_followup = await db.training_counseling_logs.count_documents({**query, "follow_up_needed": True})
+    issues_open = await db.training_cadre_issues.count_documents({**query, "resolution_status": {"$in": ["open", "in_progress"]}})
+    issues_critical = await db.training_cadre_issues.count_documents({**query, "severity": "critical", "resolution_status": {"$ne": "resolved"}})
+    
+    return {
+        "blister_checks_today": blister_today,
+        "blisters_monitoring": blisters_monitoring,
+        "counseling_today": counseling_today,
+        "counseling_followup": counseling_followup,
+        "cadre_issues_open": issues_open,
+        "cadre_issues_critical": issues_critical
+    }
+
+
 # ================= HEALTH SERVICES - MEDICAL DATA IMPORT =================
 
 OTC_MEDICATIONS = [
@@ -7180,6 +7424,11 @@ async def get_import_summary(user: dict = Depends(require_health_view())):
 # Re-include router to pick up health services routes
 # (Note: FastAPI handles duplicate includes gracefully)
 app.include_router(api_router)
+
+# Include logistics router using factory pattern
+from logistics import create_logistics_router
+logistics_router = create_logistics_router(db, get_current_user)
+app.include_router(logistics_router)
 
 
 # ================= APP STARTUP/SHUTDOWN =================

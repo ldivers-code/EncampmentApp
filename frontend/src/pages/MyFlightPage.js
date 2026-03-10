@@ -404,7 +404,7 @@ const MyFlightPage = () => {
 
   // Check if user can view all flights (Exec Cadre, Commander, Staff, Plans & Programs)
   const canViewAllFlights = () => {
-    return ['commander', 'executive_staff', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
   };
 
   // Check if user can only submit reports for their assigned flight
@@ -414,7 +414,7 @@ const MyFlightPage = () => {
 
   // Check if user can escalate reports
   const canEscalateReports = () => {
-    return ['commander', 'executive_staff', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
   };
 
   // Check if user can resolve escalated reports
