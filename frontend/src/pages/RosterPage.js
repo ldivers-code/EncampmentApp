@@ -46,7 +46,13 @@ const RosterPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [paidFilter, setPaidFilter] = useState('all');
+  const [flightFilter, setFlightFilter] = useState('all');
+  const [squadronFilter, setSquadronFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [wingFilter, setWingFilter] = useState('all');
+  const [rankFilter, setRankFilter] = useState('all');
   const [showRemoved, setShowRemoved] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Participant detail view
@@ -119,15 +125,81 @@ const RosterPage = () => {
       if (!showRemoved && p.is_removed) return false;
       if (showRemoved && !p.is_removed) return false;
       
-      const matchesSearch = 
-        `${p.first_name} ${p.last_name} ${p.capid} ${p.unit}`.toLowerCase().includes(searchTerm.toLowerCase());
+      // Search across multiple fields
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' || 
+        `${p.first_name} ${p.last_name} ${p.capid} ${p.unit} ${p.wing} ${p.rank} ${p.email || ''}`.toLowerCase().includes(searchLower);
+      
+      // Type filter
       const matchesType = typeFilter === 'all' || p.participant_type === typeFilter;
+      
+      // Paid filter
       const matchesPaid = paidFilter === 'all' || 
         (paidFilter === 'paid' && (p.paid || p.paid_in_full)) ||
         (paidFilter === 'unpaid' && !p.paid && !p.paid_in_full);
-      return matchesSearch && matchesType && matchesPaid;
+      
+      // Flight filter
+      const matchesFlight = flightFilter === 'all' || 
+        (flightFilter === 'unassigned' && !p.flight) ||
+        (p.flight?.toLowerCase() === flightFilter.toLowerCase());
+      
+      // Squadron filter
+      const matchesSquadron = squadronFilter === 'all' || 
+        (squadronFilter === 'unassigned' && !p.squadron) ||
+        (p.squadron?.toLowerCase().replace(/\s+/g, '_') === squadronFilter.toLowerCase());
+      
+      // Gender filter
+      const matchesGender = genderFilter === 'all' || 
+        (p.gender?.toLowerCase() === genderFilter.toLowerCase()) ||
+        (genderFilter === 'male' && p.gender?.toUpperCase() === 'MALE') ||
+        (genderFilter === 'female' && p.gender?.toUpperCase() === 'FEMALE');
+      
+      // Wing filter
+      const matchesWing = wingFilter === 'all' || 
+        (p.wing?.toUpperCase() === wingFilter.toUpperCase());
+      
+      // Rank filter (category-based)
+      const matchesRank = rankFilter === 'all' || 
+        (rankFilter === 'officer' && (p.rank?.includes('Lt') || p.rank?.includes('Capt') || p.rank?.includes('Maj') || p.rank?.includes('Col'))) ||
+        (rankFilter === 'nco' && (p.rank?.includes('Sgt') || p.rank?.includes('MSgt') || p.rank?.includes('SMSgt') || p.rank?.includes('CMSgt'))) ||
+        (rankFilter === 'airman' && (p.rank?.includes('Amn') || p.rank?.includes('A1C') || p.rank?.includes('SrA'))) ||
+        (rankFilter === 'senior' && !p.rank?.startsWith('C/'));
+      
+      return matchesSearch && matchesType && matchesPaid && matchesFlight && matchesSquadron && matchesGender && matchesWing && matchesRank;
     });
-  }, [participants, searchTerm, typeFilter, paidFilter, showRemoved]);
+  }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved]);
+
+  // Get unique values for filter dropdowns
+  const uniqueWings = useMemo(() => {
+    const wings = [...new Set(participants.map(p => p.wing).filter(Boolean))];
+    return wings.sort();
+  }, [participants]);
+
+  // Count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (typeFilter !== 'all') count++;
+    if (paidFilter !== 'all') count++;
+    if (flightFilter !== 'all') count++;
+    if (squadronFilter !== 'all') count++;
+    if (genderFilter !== 'all') count++;
+    if (wingFilter !== 'all') count++;
+    if (rankFilter !== 'all') count++;
+    return count;
+  }, [typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter]);
+
+  // Reset all filters
+  const resetFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('all');
+    setPaidFilter('all');
+    setFlightFilter('all');
+    setSquadronFilter('all');
+    setGenderFilter('all');
+    setWingFilter('all');
+    setRankFilter('all');
+    setCurrentPage(1);
+  };
 
   const paginatedParticipants = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -698,11 +770,12 @@ const RosterPage = () => {
 
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
+        {/* Main filter row */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
-              placeholder="Search by name, CAPID, or unit..."
+              placeholder="Search by name, CAPID, unit, wing, rank, or email..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -712,14 +785,14 @@ const RosterPage = () => {
               data-testid="roster-search-input"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Type Filter */}
             <Select value={typeFilter} onValueChange={(value) => {
               setTypeFilter(value);
               setCurrentPage(1);
             }}>
-              <SelectTrigger className="w-40 rounded-sm" data-testid="roster-type-filter">
-                <SelectValue placeholder="Filter by type" />
+              <SelectTrigger className="w-36 rounded-sm" data-testid="roster-type-filter">
+                <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
@@ -728,21 +801,68 @@ const RosterPage = () => {
                 ))}
               </SelectContent>
             </Select>
-            {canViewSensitiveData() && (
-            <Select value={paidFilter} onValueChange={(value) => {
-              setPaidFilter(value);
+
+            {/* Flight Filter */}
+            <Select value={flightFilter} onValueChange={(value) => {
+              setFlightFilter(value);
               setCurrentPage(1);
             }}>
-              <SelectTrigger className="w-32 rounded-sm" data-testid="roster-paid-filter">
-                <SelectValue placeholder="Payment" />
+              <SelectTrigger className="w-32 rounded-sm" data-testid="roster-flight-filter">
+                <SelectValue placeholder="Flight" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
+                <SelectItem value="all">All Flights</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value="alpha">Alpha</SelectItem>
+                <SelectItem value="bravo">Bravo</SelectItem>
+                <SelectItem value="charlie">Charlie</SelectItem>
+                <SelectItem value="delta">Delta</SelectItem>
+                <SelectItem value="echo">Echo</SelectItem>
+                <SelectItem value="foxtrot">Foxtrot</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Squadron Filter */}
+            <Select value={squadronFilter} onValueChange={(value) => {
+              setSquadronFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-32 rounded-sm" data-testid="roster-squadron-filter">
+                <SelectValue placeholder="Squadron" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Squadrons</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value="6th_cts">6th CTS</SelectItem>
+                <SelectItem value="21st_cts">21st CTS</SelectItem>
+                <SelectItem value="22nd_cts">22nd CTS</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Advanced Filters Toggle */}
+            <Button
+              variant={showAdvancedFilters ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`rounded-sm text-xs ${showAdvancedFilters ? 'bg-[#00205B]' : ''}`}
+            >
+              <Filter className="w-3 h-3 mr-1" />
+              More {activeFilterCount > 0 && `(${activeFilterCount})`}
+            </Button>
+
+            {/* Clear Filters */}
+            {(activeFilterCount > 0 || searchTerm) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="rounded-sm text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <X className="w-3 h-3 mr-1" />
+                Clear
+              </Button>
             )}
+
             {/* Show Removed Toggle */}
             <Button
               variant={showRemoved ? "default" : "outline"}
@@ -759,6 +879,81 @@ const RosterPage = () => {
             </Button>
           </div>
         </div>
+
+        {/* Advanced Filters Row */}
+        {showAdvancedFilters && (
+          <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-200">
+            {/* Gender Filter */}
+            <Select value={genderFilter} onValueChange={(value) => {
+              setGenderFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-28 rounded-sm" data-testid="roster-gender-filter">
+                <SelectValue placeholder="Gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Genders</SelectItem>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Wing Filter */}
+            <Select value={wingFilter} onValueChange={(value) => {
+              setWingFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-28 rounded-sm" data-testid="roster-wing-filter">
+                <SelectValue placeholder="Wing" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Wings</SelectItem>
+                {uniqueWings.map(wing => (
+                  <SelectItem key={wing} value={wing}>{wing}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Rank Category Filter */}
+            <Select value={rankFilter} onValueChange={(value) => {
+              setRankFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-32 rounded-sm" data-testid="roster-rank-filter">
+                <SelectValue placeholder="Rank" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Ranks</SelectItem>
+                <SelectItem value="officer">Officers (Lt-Col)</SelectItem>
+                <SelectItem value="nco">NCOs (Sgt+)</SelectItem>
+                <SelectItem value="airman">Airmen (Amn-SrA)</SelectItem>
+                <SelectItem value="senior">Senior Members</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Paid Filter (if privileged) */}
+            {canViewSensitiveData() && (
+              <Select value={paidFilter} onValueChange={(value) => {
+                setPaidFilter(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-28 rounded-sm" data-testid="roster-paid-filter">
+                  <SelectValue placeholder="Payment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Payment</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="unpaid">Unpaid</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {/* Filter summary */}
+            <div className="flex items-center text-xs text-slate-500 ml-auto">
+              Showing {filteredParticipants.length} of {participants.filter(p => showRemoved ? p.is_removed : !p.is_removed).length} participants
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Table */}
