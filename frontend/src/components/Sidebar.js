@@ -19,7 +19,8 @@ import {
   BarChart3,
   UserCircle,
   Trophy,
-  Shield
+  Shield,
+  Heart
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -76,6 +77,11 @@ const Sidebar = ({ children }) => {
   // Analytics visible to commander, staff, and finance
   if (['commander', 'staff', 'finance'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
+  }
+
+  // Health Services visible to commander, health_services, and staff
+  if (['commander', 'health_services', 'staff'].includes(user?.role)) {
+    navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
 
   if (user?.role === 'commander') {

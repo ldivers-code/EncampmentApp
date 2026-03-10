@@ -62,6 +62,7 @@ class UserRole:
     EXEC_CADRE = "exec_cadre"  # Cadet Leadership
     STAFF = "staff"
     CADRE = "cadre"
+    HEALTH_SERVICES = "health_services"  # Full access to health data
 
 class UserUnit:
     STAFF = "staff"
@@ -83,6 +84,9 @@ class AccessPermissions(BaseModel):
     handbooks: bool = True
     documents: bool = True
     admin_panel: bool = False
+    # Health Services permissions
+    health_view: bool = False  # View health summaries (basic info)
+    health_full: bool = False  # Full health services access (medications, incidents)
 
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
@@ -91,42 +95,56 @@ DEFAULT_PERMISSIONS = {
         schedule_view=True, schedule_edit=True,
         budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True
+        documents=True, admin_panel=True,
+        health_view=True, health_full=True
     ),
     UserRole.FINANCE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
     ),
     UserRole.PLANS_PROGRAMS: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True
+        documents=True, admin_panel=True,
+        health_view=False, health_full=False
     ),
     UserRole.EXEC_CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
     ),
     UserRole.STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False
+        documents=True, admin_panel=False,
+        health_view=True, health_full=False  # Staff can see basic health info but not medications
     ),
     UserRole.CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.HEALTH_SERVICES: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=True, health_full=True
     )
 }
 
@@ -814,7 +832,7 @@ async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
 async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
     valid_roles = [
         UserRole.COMMANDER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
-        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE
+        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -6366,6 +6384,496 @@ async def perform_scheduled_sync():
                 'last_sync_message': str(e)
             }}
         )
+
+
+# ================= HEALTH SERVICES API =================
+
+from health_services import (
+    get_cadet_health_summary, create_medication_profile, log_medication_administration,
+    log_incident, log_custody_action, update_incident_status, update_cadet_hs_status,
+    get_meds_due_dashboard, get_overdue_meds, get_open_incidents, get_historical_report,
+    get_reference_lists, get_event_settings, generate_id, get_current_timestamp,
+    RESULT_TYPES, INCIDENT_TYPES, RESOLUTION_STATUSES, CUSTODY_ACTIONS, ROUTES, HS_STATUSES
+)
+
+def require_health_view():
+    """Dependency to check health view permission"""
+    async def check_permission(user: dict = Depends(get_current_user)):
+        perms = get_user_permissions(user)
+        # Handle both dict and AccessPermissions object
+        health_view = perms.get('health_view', False) if isinstance(perms, dict) else getattr(perms, 'health_view', False)
+        health_full = perms.get('health_full', False) if isinstance(perms, dict) else getattr(perms, 'health_full', False)
+        if not health_view and not health_full:
+            raise HTTPException(status_code=403, detail="Health Services access required")
+        return user
+    return check_permission
+
+def require_health_full():
+    """Dependency to check full health services permission"""
+    async def check_permission(user: dict = Depends(get_current_user)):
+        perms = get_user_permissions(user)
+        # Handle both dict and AccessPermissions object
+        health_full = perms.get('health_full', False) if isinstance(perms, dict) else getattr(perms, 'health_full', False)
+        if not health_full:
+            raise HTTPException(status_code=403, detail="Full Health Services access required")
+        return user
+    return check_permission
+
+# Health Services Settings
+@api_router.get("/health/settings")
+async def get_health_settings(user: dict = Depends(require_health_view())):
+    """Get current event settings for health services"""
+    settings = await get_event_settings(db)
+    settings.pop("_id", None)
+    return settings
+
+@api_router.post("/health/settings")
+async def update_health_settings(
+    settings_data: dict,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.HEALTH_SERVICES]))
+):
+    """Update health services event settings"""
+    await db.hs_settings.update_one(
+        {"type": "event_config"},
+        {"$set": {
+            "event_id": settings_data.get("event_id"),
+            "event_year": settings_data.get("event_year"),
+            "event_name": settings_data.get("event_name")
+        }},
+        upsert=True
+    )
+    return {"message": "Settings updated"}
+
+# Reference Data
+@api_router.get("/health/reference-lists")
+async def get_health_reference_lists(user: dict = Depends(require_health_view())):
+    """Get reference lists for dropdowns"""
+    return get_reference_lists()
+
+# Cadet Health Summary
+@api_router.get("/health/cadet/{cadet_id}/summary")
+async def get_cadet_health_summary_endpoint(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get health summary for a specific cadet"""
+    summary = await get_cadet_health_summary(db, cadet_id)
+    
+    # If user doesn't have full access, hide medication details
+    perms = get_user_permissions(user)
+    health_full = perms.get('health_full', False) if isinstance(perms, dict) else getattr(perms, 'health_full', False)
+    if not health_full:
+        # Staff can see basic info but not medication details
+        summary["medications"] = []
+        summary["medication_on_file"] = summary.get("active_med_count", 0) > 0
+    
+    return summary
+
+@api_router.get("/health/cadet/by-capid/{capid}/summary")
+async def get_cadet_health_summary_by_capid(
+    capid: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get health summary for a cadet by CAPID"""
+    summary = await get_cadet_health_summary(db, None, capid)
+    
+    perms = get_user_permissions(user)
+    health_full = perms.get('health_full', False) if isinstance(perms, dict) else getattr(perms, 'health_full', False)
+    if not health_full:
+        summary["medications"] = []
+        summary["medication_on_file"] = summary.get("active_med_count", 0) > 0
+    
+    return summary
+
+# Medication Profiles
+@api_router.get("/health/cadet/{cadet_id}/medications")
+async def get_cadet_medications(
+    cadet_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Get all medication profiles for a cadet"""
+    settings = await get_event_settings(db)
+    profiles = await db.hs_medication_profiles.find({
+        "event_id": settings["event_id"],
+        "cadet_id_internal": cadet_id
+    }).to_list(100)
+    
+    for p in profiles:
+        p.pop("_id", None)
+    
+    return profiles
+
+@api_router.post("/health/cadet/{cadet_id}/medications")
+async def create_cadet_medication(
+    cadet_id: str,
+    medication: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Create a new medication profile for a cadet"""
+    medication["cadet_id_internal"] = cadet_id
+    result = await create_medication_profile(db, medication, user["id"])
+    result.pop("_id", None)
+    return result
+
+@api_router.put("/health/medications/{med_profile_id}")
+async def update_medication_profile(
+    med_profile_id: str,
+    updates: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update a medication profile"""
+    # Don't allow changing certain fields
+    updates.pop("med_profile_id", None)
+    updates.pop("event_id", None)
+    updates.pop("cadet_id_internal", None)
+    updates.pop("capid", None)
+    updates.pop("entered_by", None)
+    updates.pop("entered_at", None)
+    
+    result = await db.hs_medication_profiles.update_one(
+        {"med_profile_id": med_profile_id},
+        {"$set": updates}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Medication profile not found")
+    
+    return {"message": "Medication profile updated"}
+
+@api_router.put("/health/medications/{med_profile_id}/deactivate")
+async def deactivate_medication(
+    med_profile_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Deactivate a medication profile (soft delete)"""
+    settings = await get_event_settings(db)
+    
+    result = await db.hs_medication_profiles.update_one(
+        {"med_profile_id": med_profile_id},
+        {"$set": {"is_active": False, "end_date": get_current_timestamp()[:10]}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Medication profile not found")
+    
+    # Log audit
+    from health_services import log_audit
+    await log_audit(db, settings["event_id"], "medication_profile", med_profile_id,
+                   "DEACTIVATE", changed_by=user["id"])
+    
+    return {"message": "Medication deactivated"}
+
+# Medication Administration Log
+@api_router.get("/health/cadet/{cadet_id}/medication-log")
+async def get_cadet_medication_log(
+    cadet_id: str,
+    limit: int = 100,
+    user: dict = Depends(require_health_full())
+):
+    """Get medication administration history for a cadet"""
+    settings = await get_event_settings(db)
+    logs = await db.hs_medication_log.find({
+        "event_id": settings["event_id"],
+        "cadet_id_internal": cadet_id
+    }).sort("entered_at_timestamp", -1).limit(limit).to_list(limit)
+    
+    for log in logs:
+        log.pop("_id", None)
+    
+    return logs
+
+@api_router.post("/health/cadet/{cadet_id}/medication-log")
+async def log_medication_admin(
+    cadet_id: str,
+    entry: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Log a medication administration event"""
+    entry["cadet_id_internal"] = cadet_id
+    result = await log_medication_administration(db, entry, user["id"])
+    result.pop("_id", None)
+    return result
+
+# Incident Log
+@api_router.get("/health/cadet/{cadet_id}/incidents")
+async def get_cadet_incidents(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get incident history for a cadet"""
+    settings = await get_event_settings(db)
+    incidents = await db.hs_incident_log.find({
+        "event_id": settings["event_id"],
+        "cadet_id_internal": cadet_id
+    }).sort("entered_at_timestamp", -1).to_list(100)
+    
+    for inc in incidents:
+        inc.pop("_id", None)
+    
+    return incidents
+
+@api_router.post("/health/cadet/{cadet_id}/incidents")
+async def log_cadet_incident(
+    cadet_id: str,
+    entry: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Log a health incident for a cadet"""
+    entry["cadet_id_internal"] = cadet_id
+    result = await log_incident(db, entry, user["id"])
+    result.pop("_id", None)
+    return result
+
+@api_router.put("/health/incidents/{incident_id}/status")
+async def update_incident_status_endpoint(
+    incident_id: str,
+    status_data: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update incident resolution status"""
+    new_status = status_data.get("status")
+    notes = status_data.get("notes")
+    
+    if new_status not in RESOLUTION_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    result = await update_incident_status(db, incident_id, new_status, user["id"], notes)
+    return result
+
+# Custody Log
+@api_router.get("/health/cadet/{cadet_id}/custody-log")
+async def get_cadet_custody_log(
+    cadet_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Get medication custody history for a cadet"""
+    settings = await get_event_settings(db)
+    logs = await db.hs_custody_log.find({
+        "event_id": settings["event_id"],
+        "cadet_id_internal": cadet_id
+    }).sort("performed_at", -1).to_list(100)
+    
+    for log in logs:
+        log.pop("_id", None)
+    
+    return logs
+
+@api_router.post("/health/cadet/{cadet_id}/custody-log")
+async def log_custody(
+    cadet_id: str,
+    entry: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Log a medication custody action"""
+    entry["cadet_id_internal"] = cadet_id
+    result = await log_custody_action(db, entry, user["id"])
+    result.pop("_id", None)
+    return result
+
+# Cadet Health Status
+@api_router.put("/health/cadet/{cadet_id}/status")
+async def update_cadet_status(
+    cadet_id: str,
+    status_data: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update cadet's final health services status"""
+    new_status = status_data.get("status")
+    capid = status_data.get("capid", "")
+    
+    if new_status not in HS_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    result = await update_cadet_hs_status(db, cadet_id, capid, new_status, user["id"])
+    return result
+
+# Dashboard Endpoints
+@api_router.get("/health/dashboard/meds-due")
+async def get_meds_due(
+    window_minutes: int = 30,
+    user: dict = Depends(require_health_full())
+):
+    """Get medications due within the specified time window"""
+    # Enrich with cadet names
+    meds = await get_meds_due_dashboard(db, window_minutes)
+    
+    for med in meds:
+        participant = await db.participants.find_one(
+            {"id": med["cadet_id_internal"]},
+            {"_id": 0, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1}
+        )
+        if participant:
+            med["cadet_name"] = f"{participant.get('last_name', '')}, {participant.get('first_name', '')}"
+            med["flight"] = participant.get("flight")
+            med["squadron"] = participant.get("squadron")
+    
+    return meds
+
+@api_router.get("/health/dashboard/overdue")
+async def get_overdue(user: dict = Depends(require_health_full())):
+    """Get overdue medications"""
+    meds = await get_overdue_meds(db)
+    
+    for med in meds:
+        participant = await db.participants.find_one(
+            {"id": med["cadet_id_internal"]},
+            {"_id": 0, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1}
+        )
+        if participant:
+            med["cadet_name"] = f"{participant.get('last_name', '')}, {participant.get('first_name', '')}"
+            med["flight"] = participant.get("flight")
+            med["squadron"] = participant.get("squadron")
+    
+    return meds
+
+@api_router.get("/health/dashboard/open-incidents")
+async def get_open_incidents_endpoint(user: dict = Depends(require_health_view())):
+    """Get all open incidents"""
+    incidents = await get_open_incidents(db)
+    
+    for inc in incidents:
+        participant = await db.participants.find_one(
+            {"id": inc["cadet_id_internal"]},
+            {"_id": 0, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1}
+        )
+        if participant:
+            inc["cadet_name"] = f"{participant.get('last_name', '')}, {participant.get('first_name', '')}"
+            inc["flight"] = participant.get("flight")
+            inc["squadron"] = participant.get("squadron")
+    
+    return incidents
+
+@api_router.get("/health/dashboard/summary")
+async def get_health_dashboard_summary(user: dict = Depends(require_health_view())):
+    """Get overall health services dashboard summary"""
+    settings = await get_event_settings(db)
+    event_id = settings["event_id"]
+    
+    # Count cadets with health records
+    total_cadets = await db.hs_cadet_master.count_documents({"event_id": event_id})
+    with_meds = await db.hs_cadet_master.count_documents({"event_id": event_id, "medication_flag": True})
+    rescue_meds = await db.hs_cadet_master.count_documents({"event_id": event_id, "rescue_med_flag": True})
+    open_incidents = await db.hs_incident_log.count_documents({
+        "event_id": event_id,
+        "resolution_status": {"$in": ["open", "monitoring"]}
+    })
+    
+    # Get meds due now
+    meds_due = await get_meds_due_dashboard(db, 30)
+    overdue = await get_overdue_meds(db)
+    
+    return {
+        "event_id": event_id,
+        "event_name": settings["event_name"],
+        "total_cadets_tracked": total_cadets,
+        "cadets_with_medications": with_meds,
+        "cadets_with_rescue_meds": rescue_meds,
+        "open_incidents": open_incidents,
+        "meds_due_now": len(meds_due),
+        "overdue_meds": len(overdue)
+    }
+
+@api_router.get("/health/reports/historical")
+async def get_historical_report_endpoint(
+    event_year: int = None,
+    squadron: str = None,
+    cadet_id: str = None,
+    user: dict = Depends(require_health_full())
+):
+    """Get historical reporting data"""
+    return await get_historical_report(db, event_year, squadron, cadet_id)
+
+# Search Endpoints
+@api_router.get("/health/search/cadets")
+async def search_health_cadets(
+    q: str = None,
+    squadron: str = None,
+    flight: str = None,
+    has_medication: bool = None,
+    has_incident: bool = None,
+    user: dict = Depends(require_health_view())
+):
+    """Search cadets with health data"""
+    settings = await get_event_settings(db)
+    event_id = settings["event_id"]
+    
+    # Build query for participants
+    participant_query = {}
+    if squadron:
+        participant_query["squadron"] = squadron
+    if flight:
+        participant_query["flight"] = flight
+    
+    participants = await db.participants.find(
+        participant_query,
+        {"_id": 0, "id": 1, "capid": 1, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1}
+    ).to_list(500)
+    
+    # Filter by search term
+    if q:
+        q_lower = q.lower()
+        participants = [p for p in participants if 
+                       q_lower in f"{p.get('first_name', '')} {p.get('last_name', '')}".lower() or
+                       q_lower in str(p.get('capid', ''))]
+    
+    # Enrich with health data
+    results = []
+    for p in participants:
+        health_record = await db.hs_cadet_master.find_one({
+            "event_id": event_id,
+            "cadet_id_internal": p["id"]
+        })
+        
+        has_med = health_record.get("medication_flag", False) if health_record else False
+        has_inc = health_record.get("incident_open_flag", False) if health_record else False
+        
+        # Apply health filters
+        if has_medication is not None and has_med != has_medication:
+            continue
+        if has_incident is not None and has_inc != has_incident:
+            continue
+        
+        results.append({
+            "cadet_id": p["id"],
+            "capid": p.get("capid"),
+            "name": f"{p.get('last_name', '')}, {p.get('first_name', '')}",
+            "flight": p.get("flight"),
+            "squadron": p.get("squadron"),
+            "has_medication": has_med,
+            "has_open_incident": has_inc,
+            "hs_status": health_record.get("final_hs_status", "cleared") if health_record else "cleared"
+        })
+    
+    return results
+
+# Audit Log
+@api_router.get("/health/audit-log")
+async def get_audit_log(
+    limit: int = 100,
+    table_name: str = None,
+    record_id: str = None,
+    user: dict = Depends(require_health_full())
+):
+    """Get health services audit log"""
+    settings = await get_event_settings(db)
+    
+    query = {"event_id": settings["event_id"]}
+    if table_name:
+        query["table_name"] = table_name
+    if record_id:
+        query["record_id"] = record_id
+    
+    logs = await db.hs_audit_log.find(query).sort("changed_at", -1).limit(limit).to_list(limit)
+    
+    for log in logs:
+        log.pop("_id", None)
+    
+    return logs
+
+
+# Re-include router to pick up health services routes
+# (Note: FastAPI handles duplicate includes gracefully)
+app.include_router(api_router)
 
 
 # ================= APP STARTUP/SHUTDOWN =================

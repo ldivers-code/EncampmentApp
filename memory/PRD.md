@@ -8,6 +8,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 2. **Staff** - Can edit roster, schedule, documents; assign users to units
 3. **Finance** - Full budget access, manage expenses/income, upload receipts, food expense planning
 4. **Cadet** - View-only access, sees only their unit's schedule, no budget access
+5. **Health Services** - Full access to medication tracking, incident logging, custody management
 
 ## Core Requirements
 - [x] Master Roster management with participant CRUD
@@ -16,7 +17,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Financial budget tracker with estimated vs actual
 - [x] Handbooks document repository (placeholder)
 - [x] Official documents section (placeholder)
-- [x] Role-based access control (Commander/Staff/Finance/Cadet)
+- [x] Role-based access control (Commander/Staff/Finance/Cadet/Health Services)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
 - [x] Schedule import from Excel with date correction (July 17-24, 2026)
@@ -36,9 +37,9 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Profile photo upload**
 - [x] **User approval workflow for new accounts**
 - [x] **Link users to roster participants by CAPID**
-- [x] **Expanded role system (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre)**
+- [x] **Expanded role system (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre, Health Services)**
 - [x] **Updated unit structure (Staff, Support/Exec/Ops Cadre, Squadrons 1-3)**
-- [x] **Granular permissions system (12 access types per user)**
+- [x] **Granular permissions system (14 access types per user including health_view/health_full)**
 - [x] **Admin inline permissions editor**
 - [x] **SendGrid email notifications for account approval**
 - [x] **Point Tracking System with flight-based permissions**
@@ -579,6 +580,55 @@ Staff/Cadre
 - **Finance**: finance_test@test.com / financepass123
 - New users can register and will be assigned Cadet role by default
 
+## Health Services Module (Added Mar 10, 2026)
+
+### Overview
+Comprehensive health tracking system for managing cadet medications, incidents, and custody logs during encampment.
+
+### User Roles & Permissions
+- **Health Services**: Full read/write access to all health data (medications, incidents, custody)
+- **Commander**: Full read/write access to all health data
+- **Staff**: View-only access to basic health info (incidents, restrictions) - NO medication details
+
+### Features Implemented
+- [x] Health Services Dashboard with summary cards
+- [x] Real-time medication due tracking (next hour / overdue)
+- [x] Open incidents tracking and status management
+- [x] Cadet search by name, CAPID, squadron, flight
+- [x] Quick Actions for reports, audit log, settings
+- [x] Auto-refresh capability (2-minute intervals)
+
+### API Endpoints Created
+- `/api/health/settings` - Event configuration
+- `/api/health/reference-lists` - Dropdown values
+- `/api/health/cadet/{id}/summary` - Health summary for cadet
+- `/api/health/cadet/{id}/medications` - Medication profiles CRUD
+- `/api/health/cadet/{id}/medication-log` - Administration history (append-only)
+- `/api/health/cadet/{id}/incidents` - Incident history (append-only)
+- `/api/health/cadet/{id}/custody-log` - Custody actions (append-only)
+- `/api/health/dashboard/summary` - Dashboard metrics
+- `/api/health/dashboard/meds-due` - Medications due now
+- `/api/health/dashboard/overdue` - Overdue medications
+- `/api/health/dashboard/open-incidents` - Active incidents
+- `/api/health/search/cadets` - Search with filters
+- `/api/health/audit-log` - Audit trail
+
+### Database Collections (MongoDB)
+- `hs_cadet_master` - Cadet health summary records
+- `hs_medication_profiles` - Medication profiles per cadet
+- `hs_medication_log` - Append-only administration log
+- `hs_incident_log` - Append-only incident log
+- `hs_custody_log` - Append-only custody actions
+- `hs_audit_log` - All changes tracked
+- `hs_settings` - Event configuration
+
+### Still To Complete
+- [ ] Google Sheets export/sync for historical reporting
+- [ ] CadetHealthSection component integration into cadet detail page
+- [ ] Historical reports page (/health/reports)
+- [ ] Audit log viewer page (/health/audit)
+- [ ] Health settings page (/health/settings)
+
 ## Notes
 - First registered user automatically becomes Commander
 - Schedule dates: July 17-24, 2026
@@ -590,3 +640,4 @@ Staff/Cadre
 - Cadets without unit assignment see all events
 - Budget access restricted to Commander and Finance roles only
 - Food expense calculation: cost × participants × days
+- Health Services permissions: health_view (basic info) and health_full (all data)

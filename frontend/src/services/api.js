@@ -737,3 +737,150 @@ export const deleteFlightReport = async (reportId) => {
   const response = await axios.delete(`${API}/reports/${reportId}`, { headers: getAuthHeaders() });
   return response.data;
 };
+
+// ================= HEALTH SERVICES API =================
+
+// Health Settings
+export const getHealthSettings = async () => {
+  const response = await axios.get(`${API}/health/settings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateHealthSettings = async (settings) => {
+  const response = await axios.post(`${API}/health/settings`, settings, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Reference Lists
+export const getHealthReferenceLists = async () => {
+  const response = await axios.get(`${API}/health/reference-lists`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadet Health Summary
+export const getCadetHealthSummary = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getCadetHealthSummaryByCapid = async (capid) => {
+  const response = await axios.get(`${API}/health/cadet/by-capid/${capid}/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Medication Profiles
+export const getCadetMedications = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/medications`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createCadetMedication = async (cadetId, medication) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/medications`, medication, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateMedicationProfile = async (medProfileId, updates) => {
+  const response = await axios.put(`${API}/health/medications/${medProfileId}`, updates, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deactivateMedication = async (medProfileId) => {
+  const response = await axios.put(`${API}/health/medications/${medProfileId}/deactivate`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Medication Administration Log
+export const getCadetMedicationLog = async (cadetId, limit = 100) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/medication-log?limit=${limit}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const logMedicationAdministration = async (cadetId, entry) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/medication-log`, entry, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Incident Log
+export const getCadetIncidents = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/incidents`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const logCadetIncident = async (cadetId, entry) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/incidents`, entry, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateIncidentStatus = async (incidentId, status, notes = null) => {
+  const response = await axios.put(`${API}/health/incidents/${incidentId}/status`, { status, notes }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Custody Log
+export const getCadetCustodyLog = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/custody-log`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const logCustodyAction = async (cadetId, entry) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/custody-log`, entry, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadet Health Status
+export const updateCadetHealthStatus = async (cadetId, status, capid) => {
+  const response = await axios.put(`${API}/health/cadet/${cadetId}/status`, { status, capid }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Dashboard Endpoints
+export const getMedsDue = async (windowMinutes = 30) => {
+  const response = await axios.get(`${API}/health/dashboard/meds-due?window_minutes=${windowMinutes}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getOverdueMeds = async () => {
+  const response = await axios.get(`${API}/health/dashboard/overdue`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getOpenIncidents = async () => {
+  const response = await axios.get(`${API}/health/dashboard/open-incidents`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getHealthDashboardSummary = async () => {
+  const response = await axios.get(`${API}/health/dashboard/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getHealthHistoricalReport = async (eventYear = null, squadron = null, cadetId = null) => {
+  const params = new URLSearchParams();
+  if (eventYear) params.append('event_year', eventYear);
+  if (squadron) params.append('squadron', squadron);
+  if (cadetId) params.append('cadet_id', cadetId);
+  const response = await axios.get(`${API}/health/reports/historical?${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Search
+export const searchHealthCadets = async (query = null, squadron = null, flight = null, hasMedication = null, hasIncident = null) => {
+  const params = new URLSearchParams();
+  if (query) params.append('q', query);
+  if (squadron) params.append('squadron', squadron);
+  if (flight) params.append('flight', flight);
+  if (hasMedication !== null) params.append('has_medication', hasMedication);
+  if (hasIncident !== null) params.append('has_incident', hasIncident);
+  const response = await axios.get(`${API}/health/search/cadets?${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Audit Log
+export const getHealthAuditLog = async (limit = 100, tableName = null, recordId = null) => {
+  const params = new URLSearchParams();
+  params.append('limit', limit);
+  if (tableName) params.append('table_name', tableName);
+  if (recordId) params.append('record_id', recordId);
+  const response = await axios.get(`${API}/health/audit-log?${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
