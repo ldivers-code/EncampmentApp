@@ -44,11 +44,11 @@ const CadetHealthSection = ({ cadetId, capid, cadetName }) => {
 
   // Check permissions
   const hasFullAccess = () => {
-    return ['commander', 'health_services'].includes(user?.role);
+    return ['commander', 'executive_staff', 'health_services'].includes(user?.role);
   };
 
   const hasViewAccess = () => {
-    return ['commander', 'health_services', 'staff'].includes(user?.role);
+    return ['commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role);
   };
 
   const loadHealthData = async () => {

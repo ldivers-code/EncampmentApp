@@ -65,11 +65,13 @@ const AdminPage = () => {
 
   const roles = [
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
+    { value: 'executive_staff', label: 'Executive Staff', color: 'bg-[#00205B] text-white' },
     { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
     { value: 'plans_programs', label: 'Plans & Programs', color: 'bg-blue-100 text-blue-800 border-blue-200' },
     { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200' },
     { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-    { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' }
+    { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' },
+    { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200' }
   ];
 
   const squadrons = [

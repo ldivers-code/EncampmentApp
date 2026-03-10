@@ -61,7 +61,7 @@ const HealthServicesDashboard = () => {
 
   // Check if user has full health access
   const hasFullAccess = () => {
-    return ['commander', 'health_services'].includes(user?.role);
+    return ['commander', 'executive_staff', 'health_services'].includes(user?.role);
   };
 
   const loadDashboardData = async () => {

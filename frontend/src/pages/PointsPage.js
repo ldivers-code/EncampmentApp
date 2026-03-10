@@ -104,7 +104,7 @@ const PointsPage = () => {
   // Permission helpers - determines which flights/squadrons user can edit
   const hasFullAccess = () => {
     // Commanders and Executive Cadre have full access to all flights
-    return ['commander', 'exec_cadre'].includes(user?.role);
+    return ['commander', 'executive_staff', 'exec_cadre'].includes(user?.role);
   };
 
   const getUserAssignedFlights = () => {
@@ -433,7 +433,7 @@ const PointsPage = () => {
   };
 
   const canEnterScores = () => {
-    const allowedRoles = ['commander', 'staff', 'plans_programs', 'exec_cadre'];
+    const allowedRoles = ['commander', 'executive_staff', 'staff', 'plans_programs', 'exec_cadre'];
     if (!allowedRoles.includes(user?.role)) return false;
     // Full access roles can always enter scores
     if (hasFullAccess()) return true;
@@ -1100,7 +1100,7 @@ const PointsPage = () => {
                         key={award.id} 
                         className={`p-4 rounded-sm border ${getAwardColor(award.award_type)} relative group`}
                       >
-                        {canEnterScores() && user?.role === 'commander' && (
+                        {canEnterScores() && ['commander', 'executive_staff'].includes(user?.role) && (
                           <button
                             onClick={() => handleDeleteAward(award.id)}
                             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/50 transition-opacity"

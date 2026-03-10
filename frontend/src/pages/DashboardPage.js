@@ -55,7 +55,7 @@ const DashboardPage = () => {
   const [saving, setSaving] = useState(false);
 
   // Check if user can edit daily settings
-  const canEditSettings = ['commander', 'plans_programs', 'staff', 'executive_cadre'].includes(user?.role);
+  const canEditSettings = ['commander', 'executive_staff', 'plans_programs', 'staff', 'executive_cadre'].includes(user?.role);
 
   // Event type colors
   const eventTypeColors = {

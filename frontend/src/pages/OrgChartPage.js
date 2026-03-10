@@ -464,7 +464,7 @@ const OrgChartPage = () => {
 
         {canEdit() && (
           <div className="flex items-center gap-2">
-            {roles.length === 0 && user?.role === 'commander' && (
+            {roles.length === 0 && ['commander', 'executive_staff'].includes(user?.role) && (
               <Button 
                 variant="outline" 
                 className="rounded-sm border-[#00205B] text-[#00205B]"
@@ -573,7 +573,7 @@ const OrgChartPage = () => {
               ? "Create roles to build your encampment's organizational structure."
               : "The org chart has not been set up yet."}
           </p>
-          {canEdit() && user?.role === 'commander' && (
+          {canEdit() && ['commander', 'executive_staff'].includes(user?.role) && (
             <Button onClick={handleSeedDefaults} className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
               <Layers className="w-4 h-4 mr-2" />
               Load Default Encampment Structure

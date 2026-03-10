@@ -57,6 +57,7 @@ security = HTTPBearer()
 
 class UserRole:
     COMMANDER = "commander"
+    EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support — same perms as Commander
     FINANCE = "finance"
     PLANS_PROGRAMS = "plans_programs"  # Schedule/Admin
     EXEC_CADRE = "exec_cadre"  # Cadet Leadership
@@ -91,6 +92,14 @@ class AccessPermissions(BaseModel):
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
     UserRole.COMMANDER: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        budget_view=True, budget_edit=True,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=True,
+        health_view=True, health_full=True
+    ),
+    UserRole.EXECUTIVE_STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         budget_view=True, budget_edit=True,
@@ -818,26 +827,30 @@ async def get_me(user: dict = Depends(get_current_user)):
         capid=user.get("capid"),
         squadron=user.get("squadron"),
         flight=user.get("flight"),
-        created_at=user["created_at"]
+        created_at=user["created_at"],
+        permissions=user.get("permissions")
     )
 
 # ================= USER MANAGEMENT =================
 
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
+async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return [UserResponse(**u) for u in users]
 
 @api_router.put("/users/{user_id}/role")
-async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
+async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     valid_roles = [
-        UserRole.COMMANDER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
+        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
         UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
     
-    result = await db.users.update_one({"id": user_id}, {"$set": {"role": role}})
+    result = await db.users.update_one(
+        {"id": user_id}, 
+        {"$set": {"role": role, "permissions": get_default_permissions(role)}}
+    )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Role updated successfully"}
@@ -846,7 +859,7 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
 async def assign_user_unit(
     user_id: str, 
     assignment: UserUnitAssignment,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Assign a user to a squadron and flight"""
     # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and CTS Squadrons
@@ -897,7 +910,7 @@ async def assign_user_unit(
     return UserResponse(**updated_user)
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.COMMANDER]))):
+async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     result = await db.users.delete_one({"id": user_id})
@@ -1067,7 +1080,7 @@ async def verify_reset_token(token: str):
 async def admin_reset_password(
     user_id: str,
     new_password: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Admin/Commander reset password for a user"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1221,7 +1234,7 @@ async def delete_profile_photo(user: dict = Depends(get_current_user)):
 # ================= USER APPROVAL ROUTES =================
 
 @api_router.get("/users/pending")
-async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDER]))):
+async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     """Get users pending approval"""
     pending_users = await db.users.find(
         {"$or": [{"is_approved": False}, {"is_approved": None}]},
@@ -1234,7 +1247,7 @@ async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDE
 async def approve_user(
     user_id: str,
     background_tasks: BackgroundTasks,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Approve a user account and send email notification"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1268,7 +1281,7 @@ async def approve_user(
 async def update_user_permissions(
     user_id: str,
     permissions: AccessPermissions,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Update a user's granular permissions"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1292,7 +1305,7 @@ async def update_user_permissions(
 @api_router.post("/users/{user_id}/reset-permissions")
 async def reset_user_permissions(
     user_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Reset a user's permissions to role defaults"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1320,7 +1333,7 @@ async def link_user_to_participant(
     user_id: str,
     participant_id: str,
     auto_populate: bool = True,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Link a user account to a roster participant by CAPID or participant ID"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1383,7 +1396,7 @@ async def link_user_to_participant(
 @api_router.get("/users/{user_id}/match-participants")
 async def find_matching_participants(
     user_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Find potential participant matches for a user based on CAPID, name, or email"""
     target_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
@@ -1438,6 +1451,7 @@ async def get_participants(user: dict = Depends(get_current_user)):
     # Define roles that can see all data
     privileged_roles = [
         UserRole.COMMANDER,
+        UserRole.EXECUTIVE_STAFF,
         UserRole.EXEC_CADRE,
         UserRole.PLANS_PROGRAMS,
         UserRole.FINANCE,
@@ -1962,6 +1976,7 @@ async def get_participant(participant_id: str, user: dict = Depends(get_current_
     # Define roles that can see all data
     privileged_roles = [
         UserRole.COMMANDER,
+        UserRole.EXECUTIVE_STAFF,
         UserRole.EXEC_CADRE,
         UserRole.PLANS_PROGRAMS,
         UserRole.FINANCE,
@@ -1996,7 +2011,7 @@ async def get_participant(participant_id: str, user: dict = Depends(get_current_
 @api_router.post("/participants", response_model=ParticipantResponse)
 async def create_participant(
     data: ParticipantCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     participant_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -2015,7 +2030,7 @@ async def create_participant(
 async def update_participant(
     participant_id: str,
     data: ParticipantCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
@@ -2033,7 +2048,7 @@ async def update_participant(
 @api_router.delete("/participants/{participant_id}")
 async def delete_participant(
     participant_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     result = await db.participants.delete_one({"id": participant_id})
     if result.deleted_count == 0:
@@ -2045,7 +2060,7 @@ async def delete_participant(
 async def remove_participant_from_encampment(
     participant_id: str,
     removal_data: ParticipantRemoval,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Mark a participant as removed from encampment (soft delete) with reason"""
     participant = await db.participants.find_one({"id": participant_id})
@@ -2072,7 +2087,7 @@ async def remove_participant_from_encampment(
 @api_router.post("/participants/{participant_id}/reinstate")
 async def reinstate_participant(
     participant_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Reinstate a previously removed participant"""
     participant = await db.participants.find_one({"id": participant_id})
@@ -2099,7 +2114,7 @@ async def reinstate_participant(
 @api_router.post("/participants/import")
 async def import_participants(
     file: UploadFile = File(...),
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Import participants from CAP Event Admin Report Excel file"""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -2453,7 +2468,7 @@ async def sync_roster_to_budget():
 
 @api_router.post("/participants/sync-to-budget")
 async def trigger_roster_budget_sync(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.FINANCE]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE]))
 ):
     """Manually trigger sync of roster payment data to budget"""
     result = await sync_roster_to_budget()
@@ -2463,7 +2478,7 @@ async def trigger_roster_budget_sync(
 # ================= POINT TRACKING ROUTES =================
 
 # Roles that can enter scores
-SCORE_ENTRY_ROLES = [UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.EXEC_CADRE]
+SCORE_ENTRY_ROLES = [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.EXEC_CADRE]
 
 @api_router.get("/points/categories")
 async def get_score_categories(user: dict = Depends(get_current_user)):
@@ -2474,7 +2489,7 @@ async def get_score_categories(user: dict = Depends(get_current_user)):
 @api_router.post("/points/categories")
 async def create_score_category(
     category: ScoreCategoryCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Create a new score category"""
     category_id = str(uuid.uuid4())
@@ -2493,7 +2508,7 @@ async def create_score_category(
 async def update_score_category(
     category_id: str,
     category: ScoreCategoryCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Update a score category"""
     result = await db.score_categories.update_one(
@@ -2509,7 +2524,7 @@ async def update_score_category(
 @api_router.delete("/points/categories/{category_id}")
 async def delete_score_category(
     category_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Delete (deactivate) a score category"""
     await db.score_categories.update_one(
@@ -2520,7 +2535,7 @@ async def delete_score_category(
 
 @api_router.post("/points/categories/seed-defaults")
 async def seed_default_categories(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Seed default score categories"""
     now = datetime.now(timezone.utc).isoformat()
@@ -2910,7 +2925,7 @@ async def create_honor_award(
     user: dict = Depends(get_current_user)
 ):
     """Create a new honor award record"""
-    if user["role"] not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.EXEC_CADRE]:
+    if user["role"] not in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.EXEC_CADRE]:
         raise HTTPException(status_code=403, detail="Not authorized to assign awards")
     
     # Get recipient info
@@ -2999,7 +3014,7 @@ async def get_awards_by_date(date: str, user: dict = Depends(get_current_user)):
 @api_router.delete("/points/awards/{award_id}")
 async def delete_honor_award(award_id: str, user: dict = Depends(get_current_user)):
     """Delete an honor award"""
-    if user["role"] not in [UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]:
+    if user["role"] not in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]:
         raise HTTPException(status_code=403, detail="Not authorized to delete awards")
     
     result = await db.honor_awards.delete_one({"id": award_id})
@@ -3011,7 +3026,7 @@ async def delete_honor_award(award_id: str, user: dict = Depends(get_current_use
 @api_router.post("/points/awards/auto-assign/{date}")
 async def auto_assign_daily_awards(date: str, user: dict = Depends(get_current_user)):
     """Automatically assign daily awards based on highest points for a date"""
-    if user["role"] not in [UserRole.COMMANDER, UserRole.STAFF, UserRole.PLANS_PROGRAMS]:
+    if user["role"] not in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]:
         raise HTTPException(status_code=403, detail="Not authorized to auto-assign awards")
     
     assigned = []
@@ -3082,7 +3097,7 @@ async def get_schedule(
     user: dict = Depends(get_current_user)
 ):
     """Get schedule events. Filters by user's unit unless show_all=true (editors only)."""
-    is_editor = user["role"] in [UserRole.COMMANDER, UserRole.STAFF]
+    is_editor = user["role"] in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]
     
     # Get schedule settings
     settings = await db.schedule_settings.find_one({"_id": "settings"})
@@ -3105,7 +3120,7 @@ async def get_schedule(
                 (user_squadron and user_squadron in target_groups) or
                 (user_flight and user_flight in target_groups) or
                 # Staff members see staff events
-                (user["role"] in [UserRole.COMMANDER, UserRole.STAFF] and "staff" in target_groups)
+                (user["role"] in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF] and "staff" in target_groups)
             )
             
             # If user has no assignment, show all events (they're not filtered yet)
@@ -3141,7 +3156,7 @@ async def get_schedule_settings(user: dict = Depends(get_current_user)):
 
 @api_router.post("/schedule/publish")
 async def publish_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Publish the schedule so all users can see it"""
     now = datetime.now(timezone.utc).isoformat()
@@ -3162,7 +3177,7 @@ async def publish_schedule(
 
 @api_router.post("/schedule/unpublish")
 async def unpublish_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Unpublish the schedule (make it draft)"""
     await db.schedule_settings.update_one(
@@ -3175,7 +3190,7 @@ async def unpublish_schedule(
 @api_router.post("/schedule", response_model=ScheduleEventResponse)
 async def create_schedule_event(
     data: ScheduleEventCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     event_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -3200,7 +3215,7 @@ async def create_schedule_event(
 async def update_schedule_event(
     event_id: str,
     data: ScheduleEventCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
@@ -3220,7 +3235,7 @@ async def update_schedule_event(
 @api_router.delete("/schedule/{event_id}")
 async def delete_schedule_event(
     event_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     result = await db.schedule.delete_one({"id": event_id})
     if result.deleted_count == 0:
@@ -3234,7 +3249,7 @@ async def delete_schedule_event(
 @api_router.post("/schedule/import")
 async def import_schedule(
     file: UploadFile = File(...),
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Import schedule from Excel file. Dates are shifted to July 17-24."""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -3440,7 +3455,7 @@ async def import_schedule(
 
 @api_router.delete("/schedule/clear")
 async def clear_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Clear all schedule events - commander only"""
     result = await db.schedule.delete_many({})
@@ -3501,7 +3516,7 @@ async def get_notification_status(user: dict = Depends(get_current_user)):
 @api_router.post("/notifications/send")
 async def send_notification(
     notification: PushNotificationRequest,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Send push notification to users (filtered by target groups)"""
     try:
@@ -3561,7 +3576,7 @@ async def send_notification(
 
 @api_router.get("/notifications/history")
 async def get_notification_history(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Get history of sent notifications"""
     notifications = await db.notifications.find({}, {"_id": 0}).sort("sent_at", -1).to_list(50)
@@ -3580,7 +3595,7 @@ async def send_schedule_update_notification():
 def require_finance_access():
     """Require Commander or Finance role for budget access"""
     async def checker(user: dict = Depends(get_current_user)):
-        if user["role"] not in [UserRole.COMMANDER, UserRole.FINANCE]:
+        if user["role"] not in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE]:
             raise HTTPException(status_code=403, detail="Access restricted to Commander and Finance roles")
         return user
     return checker
@@ -4047,7 +4062,7 @@ DOCUMENT_CATEGORIES = [
 def can_access_document(user: dict, doc: dict) -> bool:
     """Check if user can access a document based on scope"""
     # Commanders and Exec Cadre can access everything
-    if user["role"] in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+    if user["role"] in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]:
         return True
     
     # Global documents are accessible to everyone
@@ -4194,7 +4209,7 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
 @api_router.post("/documents", response_model=DocumentResponse)
 async def create_document(
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Create a new document (Commander only)"""
     doc_id = str(uuid.uuid4())
@@ -4217,7 +4232,7 @@ async def create_document(
 async def update_document(
     doc_id: str,
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Update a document with version tracking"""
     existing = await db.documents.find_one({"id": doc_id})
@@ -4254,7 +4269,7 @@ async def update_document(
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     result = await db.documents.delete_one({"id": doc_id})
     if result.deleted_count == 0:
@@ -4403,7 +4418,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
     all_squadrons = ["6th_cts", "21st_cts", "22nd_cts"]
     
     # Determine accessible flights
-    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]:
         accessible_flights = all_flights
         accessible_squadrons = all_squadrons
     elif user_squadron:
@@ -4428,7 +4443,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
         "user_role": user_role,
         "accessible_flights": accessible_flights,
         "accessible_squadrons": accessible_squadrons,
-        "has_full_access": user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]
+        "has_full_access": user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]
     }
 
 
@@ -4483,7 +4498,7 @@ async def get_org_chart_role(role_id: str, user: dict = Depends(get_current_user
 @api_router.post("/org-chart/roles", response_model=OrgChartRoleResponse)
 async def create_org_chart_role(
     data: OrgChartRoleCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Create new org chart role - editors only"""
     # Check if role_id already exists
@@ -4510,7 +4525,7 @@ async def create_org_chart_role(
 async def update_org_chart_role(
     role_id: str,
     data: OrgChartRoleUpdate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Update org chart role - editors only"""
     now = datetime.now(timezone.utc).isoformat()
@@ -4534,7 +4549,7 @@ async def update_org_chart_role(
 async def assign_org_chart_role(
     role_id: str,
     participant_id: Optional[str] = None,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Assign or unassign a participant to a role - editors only"""
     now = datetime.now(timezone.utc).isoformat()
@@ -4559,7 +4574,7 @@ async def assign_org_chart_role(
 @api_router.delete("/org-chart/roles/{role_id}")
 async def delete_org_chart_role(
     role_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Delete org chart role - editors only"""
     # Check if any roles report to this one
@@ -4577,7 +4592,7 @@ async def delete_org_chart_role(
 
 @api_router.post("/org-chart/seed-defaults")
 async def seed_default_org_chart(
-    user: dict = Depends(require_role([UserRole.COMMANDER]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Seed default encampment org chart structure - commander only"""
     # Check if roles already exist
@@ -4933,7 +4948,7 @@ async def update_uniform_of_day(
     user: dict = Depends(get_current_user)
 ):
     """Update the Uniform of the Day (Admin only)"""
-    if user.get('role') not in ['commander', 'plans_programs', 'staff', 'executive_cadre']:
+    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs', 'staff', 'executive_cadre']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     now = datetime.now(timezone.utc).isoformat()
@@ -4960,7 +4975,7 @@ async def update_weather_flag(
     user: dict = Depends(get_current_user)
 ):
     """Update the Weather Flag status (Admin only)"""
-    if user.get('role') not in ['commander', 'plans_programs', 'staff', 'executive_cadre']:
+    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs', 'staff', 'executive_cadre']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if weather.flag_color not in ['green', 'yellow', 'red', 'black']:
@@ -5002,7 +5017,7 @@ async def get_weather_guidelines():
 @api_router.get("/google-sheets/settings")
 async def get_google_sheets_settings(user: dict = Depends(get_current_user)):
     """Get Google Sheets sync settings"""
-    if user.get('role') not in ['commander', 'plans_programs']:
+    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
@@ -5027,7 +5042,7 @@ async def update_google_sheets_settings(
     user: dict = Depends(get_current_user)
 ):
     """Update Google Sheets sync settings"""
-    if user.get('role') not in ['commander', 'plans_programs']:
+    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     settings = {
@@ -5071,7 +5086,7 @@ async def trigger_manual_sync(
     user: dict = Depends(get_current_user)
 ):
     """Manually trigger a Google Sheets sync"""
-    if user.get('role') not in ['commander', 'plans_programs', 'staff']:
+    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs', 'staff']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
@@ -5117,7 +5132,7 @@ async def get_notification_badges(user: dict = Depends(get_current_user)):
     badges = {}
     
     # Reports needing attention (for authorized roles)
-    full_access_roles = [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
+    full_access_roles = [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
     
     if user_role in full_access_roles:
         # Count escalated reports needing attention (all levels in the chain)
@@ -5154,7 +5169,7 @@ async def get_notification_badges(user: dict = Depends(get_current_user)):
             }
     
     # Admin badges (for commanders)
-    if user_role == UserRole.COMMANDER:
+    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]:
         # Pending user approvals
         pending_users = await db.users.count_documents({"is_approved": False})
         if pending_users > 0:
@@ -5192,7 +5207,7 @@ async def get_notification_badges(user: dict = Depends(get_current_user)):
         }
     
     # Financial tracker - pending receipts (for finance role)
-    if user_role in [UserRole.COMMANDER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS]:
+    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE, UserRole.PLANS_PROGRAMS]:
         pending_receipts = await db.receipts.count_documents({
             "status": {"$in": ["pending", "submitted"]}
         })
@@ -5227,7 +5242,7 @@ async def get_report_settings(user: dict = Depends(get_current_user)):
 @api_router.post("/reports/settings")
 async def update_report_settings(
     settings: ReportDeadlineSettings,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Update report deadline settings (admin only)"""
     await db.report_settings.update_one(
@@ -5256,7 +5271,7 @@ async def get_my_submitted_reports(
 
 @api_router.get("/reports/commander-issues")
 async def get_commander_issues(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXEC_CADRE]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
 ):
     """Get all reports with commander issues (escalated status)"""
     reports = await db.flight_reports.find(
@@ -5351,6 +5366,7 @@ async def get_flight_reports(
     # Roles with full access to all reports
     full_access_roles = [
         UserRole.COMMANDER, 
+        UserRole.EXECUTIVE_STAFF,
         UserRole.EXEC_CADRE, 
         UserRole.STAFF,  # Includes Health Services
         UserRole.PLANS_PROGRAMS
@@ -5398,7 +5414,7 @@ async def get_flight_report(
     user_flight = user.get('flight', '').lower() if user.get('flight') else None
     user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
     
-    full_access_roles = [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
+    full_access_roles = [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS]
     
     if user_role not in full_access_roles:
         if user_squadron and user_squadron in ['6th_cts', '21st_cts', '22nd_cts']:
@@ -5428,7 +5444,7 @@ async def review_flight_report(
     user_squadron = user.get('squadron', '').lower() if user.get('squadron') else None
     
     can_review = False
-    if user_role in [UserRole.COMMANDER, UserRole.EXEC_CADRE]:
+    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]:
         can_review = True
     elif user_squadron and user_squadron == report['squadron']:
         # Squadron commander can review their squadron's reports
@@ -5473,27 +5489,27 @@ async def escalate_flight_report(
     # Each level defines: who can escalate FROM this level, the next level, and the status name
     escalation_chain = {
         'flight_sergeant': {
-            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.CADRE],
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.CADRE],
             'next_level': 'flight_commander',
             'status': 'escalated_flight_commander'
         },
         'flight_commander': {
-            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
             'next_level': 'squadron_commander',
             'status': 'escalated_squadron'
         },
         'squadron_commander': {
-            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.PLANS_PROGRAMS],
             'next_level': 'exec_cadre',
             'status': 'escalated_exec'
         },
         'exec_cadre': {
-            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXEC_CADRE],
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE],
             'next_level': 'dcs_commandant',
             'status': 'escalated_dcs'
         },
         'dcs_commandant': {
-            'can_escalate_roles': [UserRole.COMMANDER],
+            'can_escalate_roles': [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF],
             'next_level': 'encampment_commander',
             'status': 'escalated_commander'
         },
@@ -5582,13 +5598,13 @@ async def escalate_flight_report(
     
     # Notify relevant groups based on target level
     if target_level == 'encampment_commander':
-        notification_targets = ['commander']
+        notification_targets = ['commander', 'executive_staff']
     elif target_level == 'dcs_commandant':
-        notification_targets = ['commander']  # DCS and Commandant level
+        notification_targets = ['commander', 'executive_staff']  # DCS and Commandant level
     elif target_level == 'exec_cadre':
-        notification_targets = ['exec_cadre', 'commander']
+        notification_targets = ['exec_cadre', 'commander', 'executive_staff']
     else:
-        notification_targets = ['staff', 'exec_cadre', 'commander']
+        notification_targets = ['staff', 'exec_cadre', 'commander', 'executive_staff']
     
     notification_id = str(uuid.uuid4())
     await db.notifications.insert_one({
@@ -5612,7 +5628,7 @@ async def escalate_flight_report(
 async def resolve_escalated_report(
     report_id: str,
     resolution_notes: Optional[str] = None,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXEC_CADRE]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
 ):
     """Mark an escalated report as resolved (Commander or Exec Cadre only)"""
     report = await db.flight_reports.find_one({"id": report_id})
@@ -5659,7 +5675,7 @@ async def delete_flight_report(
         raise HTTPException(status_code=404, detail="Report not found")
     
     # Only the author or a commander can delete
-    if report['submitted_by'] != user['id'] and user.get('role') != UserRole.COMMANDER:
+    if report['submitted_by'] != user['id'] and user.get('role') not in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]:
         raise HTTPException(status_code=403, detail="You don't have permission to delete this report")
     
     await db.flight_reports.delete_one({"id": report_id})
@@ -6430,7 +6446,7 @@ async def get_health_settings(user: dict = Depends(require_health_view())):
 @api_router.post("/health/settings")
 async def update_health_settings(
     settings_data: dict,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.HEALTH_SERVICES]))
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.HEALTH_SERVICES]))
 ):
     """Update health services event settings"""
     await db.hs_settings.update_one(

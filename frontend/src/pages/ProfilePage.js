@@ -166,12 +166,12 @@ const ProfilePage = () => {
             </h1>
             <div className="flex items-center gap-2 mt-1">
               <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
-                profile?.role === 'commander' ? 'bg-[#00205B] text-white' :
+                profile?.role === 'commander' || profile?.role === 'executive_staff' ? 'bg-[#00205B] text-white' :
                 profile?.role === 'staff' ? 'bg-amber-100 text-amber-800' :
                 profile?.role === 'finance' ? 'bg-emerald-100 text-emerald-800' :
                 'bg-slate-100 text-slate-800'
               }`}>
-                {profile?.role}
+                {profile?.role === 'executive_staff' ? 'Executive Staff' : profile?.role}
               </span>
               {profile?.is_approved ? (
                 <span className="text-xs text-emerald-600 flex items-center gap-1">

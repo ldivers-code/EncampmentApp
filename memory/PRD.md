@@ -5,10 +5,11 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## User Personas
 1. **Commander** - Full access to all features, user management, CRUD on all entities
-2. **Staff** - Can edit roster, schedule, documents; assign users to units
-3. **Finance** - Full budget access, manage expenses/income, upload receipts, food expense planning
-4. **Cadet** - View-only access, sees only their unit's schedule, no budget access
-5. **Health Services** - Full access to medication tracking, incident logging, custody management
+2. **Executive Staff** - Same permissions as Commander; for Commandant and Deputy Commander for Support positions (falls under Commander's authority)
+3. **Staff** - Can edit roster, schedule, documents; assign users to units
+4. **Finance** - Full budget access, manage expenses/income, upload receipts, food expense planning
+5. **Cadet** - View-only access, sees only their unit's schedule, no budget access
+6. **Health Services** - Full access to medication tracking, incident logging, custody management
 
 ## Core Requirements
 - [x] Master Roster management with participant CRUD
@@ -17,7 +18,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Financial budget tracker with estimated vs actual
 - [x] Handbooks document repository (placeholder)
 - [x] Official documents section (placeholder)
-- [x] Role-based access control (Commander/Staff/Finance/Cadet/Health Services)
+- [x] Role-based access control (Commander/Executive Staff/Staff/Finance/Cadet/Health Services)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
 - [x] Schedule import from Excel with date correction (July 17-24, 2026)

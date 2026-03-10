@@ -74,17 +74,17 @@ const Sidebar = ({ children }) => {
     { path: '/documents', icon: FileText, label: 'Official Documents' },
   ];
 
-  // Analytics visible to commander, staff, and finance
-  if (['commander', 'staff', 'finance'].includes(user?.role)) {
+  // Analytics visible to commander, executive_staff, staff, and finance
+  if (['commander', 'executive_staff', 'staff', 'finance'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
-  // Health Services visible to commander, health_services, and staff
-  if (['commander', 'health_services', 'staff'].includes(user?.role)) {
+  // Health Services visible to commander, executive_staff, health_services, and staff
+  if (['commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
 
-  if (user?.role === 'commander') {
+  if (['commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }
 

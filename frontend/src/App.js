@@ -154,7 +154,7 @@ function AppRoutes() {
       <Route
         path="/analytics"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'staff', 'finance']}>
+          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'staff', 'finance']}>
             <AnalyticsPage />
           </ProtectedRoute>
         }
@@ -178,7 +178,7 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={['commander']}>
+          <ProtectedRoute allowedRoles={['commander', 'executive_staff']}>
             <AdminPage />
           </ProtectedRoute>
         }
@@ -186,7 +186,7 @@ function AppRoutes() {
       <Route
         path="/health"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'health_services', 'staff']}>
+          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'health_services', 'staff']}>
             <HealthServicesDashboard />
           </ProtectedRoute>
         }
