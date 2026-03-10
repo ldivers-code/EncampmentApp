@@ -32,13 +32,18 @@ const ProfilePage = () => {
   const [formData, setFormData] = useState({});
   const fileInputRef = useRef(null);
 
-  const ranks = [
-    // Cadet ranks
+  const cadetRanks = [
     'C/AB', 'C/Amn', 'C/A1C', 'C/SrA', 'C/SSgt', 'C/TSgt', 'C/MSgt', 'C/SMSgt', 'C/CMSgt',
-    'C/2dLt', 'C/1stLt', 'C/Capt', 'C/Maj', 'C/LtCol', 'C/Col',
-    // Senior ranks
-    'SM', '2d Lt', '1st Lt', 'Capt', 'Maj', 'Lt Col', 'Col', 'Brig Gen', 'Maj Gen'
+    'C/2d Lt', 'C/1st Lt', 'C/Capt', 'C/Maj', 'C/Lt Col', 'C/Col'
   ];
+
+  const seniorRanks = [
+    'SSgt', 'TSgt', 'MSgt', 'SMSgt', 'CMSgt',
+    '2d Lt', '1st Lt', 'Capt', 'Maj', 'Lt Col', 'Col'
+  ];
+
+  const isCadetRole = ['cadre', 'exec_cadre'].includes(user?.role);
+  const ranks = isCadetRole ? cadetRanks : seniorRanks;
 
   const shirtSizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
 
