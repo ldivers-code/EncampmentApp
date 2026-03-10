@@ -6,7 +6,8 @@ import {
   getScoreCategories, recordMeritDemerit, getMeritDemerits, getIndividualLeaderboard,
   getFlightLeaderboard, getCumulativeStandings,
   getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings,
-  escalateFlightReport, resolveFlightReport
+  escalateFlightReport, resolveFlightReport,
+  getFlightLeadership, updateFlightLeadership
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -44,7 +45,8 @@ import {
   Settings,
   ArrowUpCircle,
   History,
-  CheckCircle2
+  CheckCircle2,
+  Edit2
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
@@ -70,7 +72,7 @@ const CATEGORY_ICONS = {
 };
 
 const MyFlightPage = () => {
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const [loading, setLoading] = useState(true);
   const [flightInfo, setFlightInfo] = useState(null);
   const [selectedFlight, setSelectedFlight] = useState('');
@@ -114,6 +116,15 @@ const MyFlightPage = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [reportSettings, setReportSettings] = useState({ deadline_time: '21:00', is_enabled: true });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Leadership state
+  const [leadership, setLeadership] = useState(null);
+  const [editingLeadership, setEditingLeadership] = useState(false);
+  const [leadershipForm, setLeadershipForm] = useState({
+    flight_sergeant: { name: '', rank: '' },
+    flight_commander: { name: '', rank: '' },
+    squadron_commander: { name: '', rank: '' }
+  });
   const [reportForm, setReportForm] = useState({
     report_date: new Date().toISOString().split('T')[0],
     reporter_role: 'flight_sergeant',
@@ -150,6 +161,7 @@ const MyFlightPage = () => {
       loadRoster();
       loadDocuments();
       loadFlightPoints();
+      loadLeadership();
     }
   }, [selectedFlight, viewMode]);
 
@@ -542,6 +554,35 @@ const MyFlightPage = () => {
     }
   };
 
+  const loadLeadership = async () => {
+    try {
+      const data = await getFlightLeadership(selectedFlight);
+      setLeadership(data);
+    } catch (error) {
+      console.error('Failed to load leadership:', error);
+    }
+  };
+
+  const startEditLeadership = () => {
+    setLeadershipForm({
+      flight_sergeant: { ...leadership?.flight_sergeant || { name: '', rank: '' } },
+      flight_commander: { ...leadership?.flight_commander || { name: '', rank: '' } },
+      squadron_commander: { ...leadership?.squadron_commander || { name: '', rank: '' } }
+    });
+    setEditingLeadership(true);
+  };
+
+  const saveLeadership = async () => {
+    try {
+      const data = await updateFlightLeadership(selectedFlight, leadershipForm);
+      setLeadership(data);
+      setEditingLeadership(false);
+      toast.success('Leadership updated');
+    } catch (error) {
+      toast.error('Failed to update leadership');
+    }
+  };
+
   const handleUploadDocument = async (e) => {
     e.preventDefault();
     if (!uploadForm.title) {
@@ -695,6 +736,69 @@ const MyFlightPage = () => {
           </Button>
         </div>
       </div>
+
+      {/* Flight Leadership */}
+      {leadership && (
+        <div className="bg-white border border-slate-200 rounded-sm mb-6" data-testid="flight-leadership">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-[#00205B] flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Chain of Command
+            </h3>
+            {canEdit() && !editingLeadership && (
+              <Button variant="ghost" size="sm" onClick={startEditLeadership} className="h-7 text-xs" data-testid="edit-leadership-btn">
+                <Edit2 className="w-3 h-3 mr-1" /> Edit
+              </Button>
+            )}
+            {editingLeadership && (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setEditingLeadership(false)} className="h-7 text-xs">Cancel</Button>
+                <Button size="sm" onClick={saveLeadership} className="h-7 text-xs bg-[#00205B]" data-testid="save-leadership-btn">Save</Button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            {[
+              { key: 'flight_sergeant', label: 'Flight Sergeant' },
+              { key: 'flight_commander', label: 'Flight Commander' },
+              { key: 'squadron_commander', label: 'Squadron Commander' }
+            ].map(({ key, label }) => (
+              <div key={key} className="px-4 py-3" data-testid={`leadership-${key}`}>
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">{label}</p>
+                {editingLeadership ? (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Rank"
+                      value={leadershipForm[key]?.rank || ''}
+                      onChange={(e) => setLeadershipForm(prev => ({
+                        ...prev, [key]: { ...prev[key], rank: e.target.value }
+                      }))}
+                      className="w-24 h-8 text-sm rounded-sm"
+                      data-testid={`leadership-${key}-rank-input`}
+                    />
+                    <Input
+                      placeholder="Name"
+                      value={leadershipForm[key]?.name || ''}
+                      onChange={(e) => setLeadershipForm(prev => ({
+                        ...prev, [key]: { ...prev[key], name: e.target.value }
+                      }))}
+                      className="flex-1 h-8 text-sm rounded-sm"
+                      data-testid={`leadership-${key}-name-input`}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium text-slate-800">
+                    {leadership[key]?.rank && leadership[key]?.name
+                      ? `${leadership[key].rank} ${leadership[key].name}`
+                      : <span className="text-slate-300 italic">Not assigned</span>
+                    }
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">

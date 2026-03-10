@@ -614,6 +614,17 @@ export const getMyFlightInfo = async () => {
   return response.data;
 };
 
+export const getFlightLeadership = async (flight) => {
+  const response = await axios.get(`${API}/flights/${flight}/leadership`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateFlightLeadership = async (flight, leadership) => {
+  const response = await axios.put(`${API}/flights/${flight}/leadership`, leadership, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
 export const getFlightDocuments = async (flight) => {
   const response = await axios.get(`${API}/documents/by-flight/${flight}`, { headers: getAuthHeaders() });
   return response.data;

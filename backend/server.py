@@ -4401,6 +4401,62 @@ async def get_squadron_roster(
         "total_count": len(participants)
     }
 
+# ================= FLIGHT LEADERSHIP =================
+
+@api_router.get("/flights/{flight}/leadership")
+async def get_flight_leadership(flight: str, user: dict = Depends(get_current_user)):
+    """Get leadership assignments for a flight"""
+    doc = await db.flight_leadership.find_one(
+        {"flight": flight.lower()}, {"_id": 0}
+    )
+    if not doc:
+        return {
+            "flight": flight.lower(),
+            "flight_sergeant": {"name": "", "rank": ""},
+            "flight_commander": {"name": "", "rank": ""},
+            "squadron_commander": {"name": "", "rank": ""}
+        }
+    return doc
+
+@api_router.put("/flights/{flight}/leadership")
+async def update_flight_leadership(
+    flight: str,
+    leadership: dict,
+    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.EXEC_CADRE]))
+):
+    """Update leadership assignments for a flight"""
+    flight_lower = flight.lower()
+    valid_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    if flight_lower not in valid_flights:
+        raise HTTPException(status_code=400, detail="Invalid flight")
+    
+    doc = {
+        "flight": flight_lower,
+        "flight_sergeant": {
+            "name": leadership.get("flight_sergeant", {}).get("name", ""),
+            "rank": leadership.get("flight_sergeant", {}).get("rank", "")
+        },
+        "flight_commander": {
+            "name": leadership.get("flight_commander", {}).get("name", ""),
+            "rank": leadership.get("flight_commander", {}).get("rank", "")
+        },
+        "squadron_commander": {
+            "name": leadership.get("squadron_commander", {}).get("name", ""),
+            "rank": leadership.get("squadron_commander", {}).get("rank", "")
+        },
+        "updated_by": user.get("id"),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.flight_leadership.update_one(
+        {"flight": flight_lower},
+        {"$set": doc},
+        upsert=True
+    )
+    return doc
+
+
+
 @api_router.get("/my-flight")
 async def get_my_flight_info(user: dict = Depends(get_current_user)):
     """Get current user's flight information and accessible flights"""
