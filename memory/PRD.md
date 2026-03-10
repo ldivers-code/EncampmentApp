@@ -55,6 +55,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Daily Schedule on Dashboard (Today's Schedule quick view)**
 - [x] **Flight Reporting System (Daily reports with 7 sections)**
 - [x] **Role-Based Roster Visibility (Sensitive data restricted)**
+- [x] **Logistics Module (10 sub-pages: Dashboard, Inventory, Lost & Found, Radios, Comms Log, Call Signs, Vehicles, Vehicle Log, Facilities, Supply Requests)**
+- [x] **Training Officer Module (Blister checks, counseling logs, cadre issues)**
 
 ## What's Been Implemented
 
@@ -628,6 +630,26 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - [ ] Historical reports page (/health/reports)
 - [ ] Audit log viewer page (/health/audit)
 - [ ] Health settings page (/health/settings)
+
+### Completed (March 10, 2026) - Logistics Module & Fixes
+- [x] **Logistics Module - Full Implementation (10 sub-pages)**
+  - Dashboard: Real-time stats (11 metric cards), overdue alerts, quick actions
+  - Inventory Management: CRUD with categories, quantity tracking, low stock alerts, search
+  - Lost & Found: Item logging with claim workflow (unclaimed → claimed)
+  - Radio Check Out/Check In: Full checkout/checkin lifecycle, overdue auto-detection, extend/reset
+  - Communications Log: Time-stamped entries with call signs, operators, priority levels
+  - Call Sign Directory: Assignment tracking with staff categories, alternates, status management
+  - Vehicle Assignments: Assign/return workflow with fuel tracking, overdue detection
+  - Vehicle Log: Trip logging with mileage calculation, fuel purchase tracking
+  - Facilities & Equipment: Status management (ready/in_use/needs_attention/out_of_service)
+  - Supply Requests: Full workflow (pending → approved → issued → completed), priority levels
+  - Role-based access: commander, executive_staff, logistics can create/edit/delete; others view-only
+  - Backend: Factory pattern router in /app/backend/logistics.py with 25+ API endpoints
+  - Frontend: Tabbed UI with modals, status badges, search/filter in /app/frontend/src/pages/LogisticsPage.js
+  - MongoDB collections: log_inventory, log_lost_found, log_radios, log_comms, log_callsigns, log_vehicles, log_vehicle_log, log_facilities, log_supply_requests
+- [x] **Backend Dependency Injection Fix**: Resolved FastAPI module loading error using factory pattern (create_logistics_router)
+- [x] **Login Case-Insensitivity Fix**: Email matching now case-insensitive with whitespace trimming
+- [x] Comprehensive testing: 20 backend tests pass (100%), 14 frontend features verified (100%)
 
 ### Completed (March 10, 2026)
 - [x] CadetHealthSection component integrated into cadet detail modal
