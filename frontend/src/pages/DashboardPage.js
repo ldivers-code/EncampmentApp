@@ -301,7 +301,9 @@ const DashboardPage = () => {
                         <SelectTrigger><SelectValue placeholder="Select uniform" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
+                          <SelectItem value="Polo Combo">Polo Combo</SelectItem>
                           <SelectItem value="Blues">Service Dress Blues</SelectItem>
+                          <SelectItem value="Corporate Gray">Corporate Gray</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
                           <SelectItem value="Flight Suit">Flight Suit</SelectItem>
                           <SelectItem value="Civilian">Civilian Attire</SelectItem>
