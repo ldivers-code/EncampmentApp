@@ -982,6 +982,21 @@ export const updateCadreIssue = async (id, data) => {
   return response.data;
 };
 
+// ============ Schedule Change Requests ============
+export const getScheduleChangeRequests = async (params = {}) => {
+  const r = await axios.get(`${API}/schedule-changes?${new URLSearchParams(params)}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const submitScheduleChange = async (data) => {
+  const r = await axios.post(`${API}/schedule-changes`, data, { headers: getAuthHeaders() }); return r.data;
+};
+export const reviewScheduleChange = async (id, data) => {
+  const r = await axios.put(`${API}/schedule-changes/${id}/review`, data, { headers: getAuthHeaders() }); return r.data;
+};
+export const getPendingScheduleChangesCount = async () => {
+  const r = await axios.get(`${API}/schedule-changes/pending-count`, { headers: getAuthHeaders() }); return r.data;
+};
+
+
 
 // ============ Logistics Module ============
 const LOG = `${API}/logistics`;

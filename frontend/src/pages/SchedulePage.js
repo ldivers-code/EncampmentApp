@@ -7,7 +7,11 @@ import {
   deleteScheduleEvent,
   importSchedule,
   publishSchedule,
-  unpublishSchedule
+  unpublishSchedule,
+  submitScheduleChange,
+  getScheduleChangeRequests,
+  reviewScheduleChange,
+  getPendingScheduleChangesCount
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -37,7 +41,11 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  Shirt
+  Shirt,
+  MessageSquarePlus,
+  CheckCircle,
+  XCircle,
+  FileEdit
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 
@@ -60,6 +68,14 @@ const SchedulePage = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileDatePicker, setShowMobileDatePicker] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeReviewOpen, setChangeReviewOpen] = useState(false);
+  const [changeRequests, setChangeRequests] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [changeForm, setChangeForm] = useState({
+    change_type: 'modify', event_title: '', event_date: '', current_time: '',
+    requested_time: '', requested_location: '', reason: '', details: ''
+  });
   const fileInputRef = useRef(null);
   const refreshIntervalRef = useRef(null);
   const touchStartX = useRef(null);
@@ -469,6 +485,52 @@ const SchedulePage = () => {
     });
   };
 
+  // Schedule Change Request handlers
+  const loadPendingCount = useCallback(async () => {
+    try {
+      const data = await getPendingScheduleChangesCount();
+      setPendingCount(data.count);
+    } catch {}
+  }, []);
+
+  const loadChangeRequests = useCallback(async () => {
+    try {
+      const data = await getScheduleChangeRequests();
+      setChangeRequests(data);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadPendingCount(); }, [loadPendingCount]);
+
+  const handleSubmitChangeRequest = async () => {
+    if (!changeForm.event_title || !changeForm.reason) {
+      toast.error('Event/activity name and reason are required');
+      return;
+    }
+    try {
+      await submitScheduleChange(changeForm);
+      toast.success('Change request submitted');
+      setChangeRequestOpen(false);
+      setChangeForm({ change_type: 'modify', event_title: '', event_date: '', current_time: '', requested_time: '', requested_location: '', reason: '', details: '' });
+      loadPendingCount();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to submit');
+    }
+  };
+
+  const handleReviewChange = async (id, status, notes = '') => {
+    try {
+      await reviewScheduleChange(id, { status, notes });
+      toast.success(`Request ${status}`);
+      loadChangeRequests();
+      loadPendingCount();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
+  };
+
+
+
   const getEventTypeColor = (type) => {
     return eventTypes.find(t => t.value === type)?.color || 'bg-slate-500';
   };
@@ -830,6 +892,22 @@ const SchedulePage = () => {
                 </DialogContent>
               </Dialog>
             )}
+            {!canEdit() && (
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => setChangeRequestOpen(true)} data-testid="mobile-request-change-btn">
+                <MessageSquarePlus className="w-3 h-3 mr-1" />
+                Request
+              </Button>
+            )}
+            {canEdit() && (
+              <Button size="sm" variant="outline" className="text-xs relative" onClick={() => { setChangeReviewOpen(true); loadChangeRequests(); }} data-testid="mobile-review-changes-btn">
+                <FileEdit className="w-3 h-3" />
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold rounded-full bg-red-500 text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -1138,6 +1216,37 @@ const SchedulePage = () => {
                   </DialogContent>
                 </Dialog>
               </>
+            )}
+
+            {/* Submit Change Request - visible to non-editors */}
+            {!canEdit() && (
+              <Button
+                variant="outline"
+                className="rounded-sm"
+                onClick={() => setChangeRequestOpen(true)}
+                data-testid="submit-change-request-btn"
+              >
+                <MessageSquarePlus className="w-4 h-4 mr-2" />
+                Request Change
+              </Button>
+            )}
+
+            {/* Review Change Requests - visible to editors */}
+            {canEdit() && (
+              <Button
+                variant="outline"
+                className="rounded-sm relative"
+                onClick={() => { setChangeReviewOpen(true); loadChangeRequests(); }}
+                data-testid="review-changes-btn"
+              >
+                <FileEdit className="w-4 h-4 mr-2" />
+                Requests
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </Button>
             )}
           </div>
         </div>
@@ -1475,6 +1584,137 @@ const SchedulePage = () => {
           Day {currentDayIndex + 1} of {encampmentDates.length}
         </div>
       )}
+
+      {/* ===== SUBMIT CHANGE REQUEST MODAL ===== */}
+      <Dialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold text-sm">Request Schedule Change</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label className="text-xs">Change Type</Label>
+              <Select value={changeForm.change_type} onValueChange={(v) => setChangeForm(p => ({ ...p, change_type: v }))}>
+                <SelectTrigger className="h-8 text-sm rounded-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="modify">Modify Existing Event</SelectItem>
+                  <SelectItem value="add">Add New Event</SelectItem>
+                  <SelectItem value="remove">Remove Event</SelectItem>
+                  <SelectItem value="reschedule">Reschedule Event</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Event / Activity Name *</Label>
+              <Input value={changeForm.event_title} onChange={(e) => setChangeForm(p => ({ ...p, event_title: e.target.value }))}
+                className="h-8 text-sm rounded-sm" placeholder="e.g., Morning PT" data-testid="change-event-title" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Date</Label>
+                <Input type="date" value={changeForm.event_date} onChange={(e) => setChangeForm(p => ({ ...p, event_date: e.target.value }))}
+                  className="h-8 text-sm rounded-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Current Time</Label>
+                <Input value={changeForm.current_time} onChange={(e) => setChangeForm(p => ({ ...p, current_time: e.target.value }))}
+                  className="h-8 text-sm rounded-sm" placeholder="e.g., 0600-0700" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Requested Time</Label>
+                <Input value={changeForm.requested_time} onChange={(e) => setChangeForm(p => ({ ...p, requested_time: e.target.value }))}
+                  className="h-8 text-sm rounded-sm" placeholder="e.g., 0700-0800" />
+              </div>
+              <div>
+                <Label className="text-xs">Requested Location</Label>
+                <Input value={changeForm.requested_location} onChange={(e) => setChangeForm(p => ({ ...p, requested_location: e.target.value }))}
+                  className="h-8 text-sm rounded-sm" placeholder="e.g., Field House" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Reason for Change *</Label>
+              <Textarea value={changeForm.reason} onChange={(e) => setChangeForm(p => ({ ...p, reason: e.target.value }))}
+                rows={2} className="text-sm rounded-sm" placeholder="Why is this change needed?" data-testid="change-reason" />
+            </div>
+            <div>
+              <Label className="text-xs">Additional Details</Label>
+              <Textarea value={changeForm.details} onChange={(e) => setChangeForm(p => ({ ...p, details: e.target.value }))}
+                rows={2} className="text-sm rounded-sm" placeholder="Any other info..." />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setChangeRequestOpen(false)} className="rounded-sm">Cancel</Button>
+              <Button onClick={handleSubmitChangeRequest} className="bg-[#00205B] rounded-sm" data-testid="submit-change-btn">Submit Request</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== REVIEW CHANGE REQUESTS MODAL (Editors) ===== */}
+      <Dialog open={changeReviewOpen} onOpenChange={setChangeReviewOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[#00205B] uppercase font-bold text-sm">Schedule Change Requests</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            {changeRequests.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-6">No change requests</p>
+            ) : (
+              changeRequests.map(req => (
+                <div key={req.id} className={`border rounded-sm p-3 ${
+                  req.status === 'pending' ? 'border-amber-300 bg-amber-50' :
+                  req.status === 'approved' ? 'border-emerald-200 bg-emerald-50' :
+                  'border-slate-200 bg-slate-50'
+                }`} data-testid={`change-request-${req.id}`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${
+                          req.change_type === 'add' ? 'bg-blue-100 text-blue-700' :
+                          req.change_type === 'remove' ? 'bg-red-100 text-red-700' :
+                          req.change_type === 'reschedule' ? 'bg-purple-100 text-purple-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>{req.change_type}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${
+                          req.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                          req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{req.status}</span>
+                      </div>
+                      <p className="font-medium text-sm mt-1">{req.event_title}</p>
+                      <p className="text-xs text-slate-500">
+                        {req.submitted_by_name} ({req.submitted_by_role}) &middot; {new Date(req.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  {req.event_date && <p className="text-xs text-slate-600">Date: {req.event_date}</p>}
+                  {req.current_time && <p className="text-xs text-slate-600">Current: {req.current_time}</p>}
+                  {req.requested_time && <p className="text-xs text-slate-600">Requested time: {req.requested_time}</p>}
+                  {req.requested_location && <p className="text-xs text-slate-600">Requested location: {req.requested_location}</p>}
+                  <p className="text-xs text-slate-700 mt-1"><span className="font-medium">Reason:</span> {req.reason}</p>
+                  {req.details && <p className="text-xs text-slate-500 mt-0.5">{req.details}</p>}
+                  {req.review_notes && <p className="text-xs text-slate-600 mt-1 italic">Review note: {req.review_notes}</p>}
+                  {req.reviewed_by_name && <p className="text-xs text-slate-400">Reviewed by {req.reviewed_by_name} &middot; {new Date(req.reviewed_at).toLocaleString()}</p>}
+                  {canEdit() && req.status === 'pending' && (
+                    <div className="flex gap-2 mt-2">
+                      <Button size="sm" className="h-7 text-xs bg-emerald-600 rounded-sm" onClick={() => handleReviewChange(req.id, 'approved')} data-testid={`approve-${req.id}`}>
+                        <CheckCircle className="w-3 h-3 mr-1" /> Approve
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200 rounded-sm" onClick={() => {
+                        const notes = prompt('Denial reason (optional):');
+                        handleReviewChange(req.id, 'denied', notes || '');
+                      }} data-testid={`deny-${req.id}`}>
+                        <XCircle className="w-3 h-3 mr-1" /> Deny
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
