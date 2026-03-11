@@ -611,8 +611,10 @@ class GoogleSheetConfig(BaseModel):
 
 class UniformOfTheDay(BaseModel):
     uniform_code: str  # Senior Member uniform e.g., "ABU", "Blues", "PT Gear"
+    uniform_code_2: Optional[str] = None  # Second SM uniform option
     cadet_uniform_code: Optional[str] = None  # Cadet uniform (if different)
     description: Optional[str] = None
+    description_2: Optional[str] = None
     cadet_description: Optional[str] = None
     special_instructions: Optional[str] = None
 
@@ -4996,6 +4998,8 @@ async def get_daily_settings(user: dict = Depends(get_current_user)):
             'uniform': {
                 'uniform_code': 'ABU',
                 'description': 'Airman Battle Uniform',
+                'uniform_code_2': None,
+                'description_2': None,
                 'cadet_uniform_code': 'BDU',
                 'cadet_description': 'Battle Dress Uniform',
                 'special_instructions': None,
@@ -5040,6 +5044,8 @@ async def update_uniform_of_day(
             'uniform': {
                 'uniform_code': uniform.uniform_code,
                 'description': uniform.description,
+                'uniform_code_2': uniform.uniform_code_2,
+                'description_2': uniform.description_2,
                 'cadet_uniform_code': uniform.cadet_uniform_code or uniform.uniform_code,
                 'cadet_description': uniform.cadet_description or uniform.description,
                 'special_instructions': uniform.special_instructions,

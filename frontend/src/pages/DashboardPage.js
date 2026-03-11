@@ -95,6 +95,8 @@ const DashboardPage = () => {
         setUniformForm({
           uniform_code: data.uniform.uniform_code || '',
           description: data.uniform.description || '',
+          uniform_code_2: data.uniform.uniform_code_2 || '',
+          description_2: data.uniform.description_2 || '',
           cadet_uniform_code: data.uniform.cadet_uniform_code || '',
           cadet_description: data.uniform.cadet_description || '',
           special_instructions: data.uniform.special_instructions || ''
@@ -294,21 +296,19 @@ const DashboardPage = () => {
                     <DialogTitle>Update Uniform for the Activity</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
-                    <p className="text-xs font-bold uppercase text-slate-400 tracking-wide">Senior Member</p>
+                    <p className="text-xs font-bold uppercase text-slate-400 tracking-wide">Senior Member — Option 1</p>
                     <div>
-                      <Label>Senior Member Uniform</Label>
+                      <Label>Uniform</Label>
                       <Select value={uniformForm.uniform_code} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code: v }))}>
                         <SelectTrigger><SelectValue placeholder="Select uniform" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
                           <SelectItem value="Polo Combo">Polo Combo</SelectItem>
-                          <SelectItem value="Blues">Service Dress Blues</SelectItem>
+                          <SelectItem value="Blues">Blues</SelectItem>
                           <SelectItem value="Corporate Gray">Corporate Gray</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
                           <SelectItem value="Flight Suit">Flight Suit</SelectItem>
                           <SelectItem value="Civilian">Civilian Attire</SelectItem>
-                          <SelectItem value="Class A">Class A</SelectItem>
-                          <SelectItem value="Class B">Class B</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -321,6 +321,35 @@ const DashboardPage = () => {
                       />
                     </div>
                     <div className="border-t border-slate-200 pt-4">
+                      <p className="text-xs font-bold uppercase text-slate-400 tracking-wide mb-3">Senior Member — Option 2 (optional)</p>
+                    </div>
+                    <div>
+                      <Label>Uniform</Label>
+                      <Select value={uniformForm.uniform_code_2 || 'none'} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code_2: v === 'none' ? '' : v }))}>
+                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
+                          <SelectItem value="Polo Combo">Polo Combo</SelectItem>
+                          <SelectItem value="Blues">Blues</SelectItem>
+                          <SelectItem value="Corporate Gray">Corporate Gray</SelectItem>
+                          <SelectItem value="PT">PT Gear</SelectItem>
+                          <SelectItem value="Flight Suit">Flight Suit</SelectItem>
+                          <SelectItem value="Civilian">Civilian Attire</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {uniformForm.uniform_code_2 && uniformForm.uniform_code_2 !== 'none' && (
+                      <div>
+                        <Label>Description (optional)</Label>
+                        <Input
+                          value={uniformForm.description_2 || ''}
+                          onChange={(e) => setUniformForm(prev => ({ ...prev, description_2: e.target.value }))}
+                          placeholder="e.g., Alternate option"
+                        />
+                      </div>
+                    )}
+                    <div className="border-t border-slate-200 pt-4">
                       <p className="text-xs font-bold uppercase text-slate-400 tracking-wide mb-3">Cadet</p>
                     </div>
                     <div>
@@ -330,11 +359,9 @@ const DashboardPage = () => {
                         <SelectContent>
                           <SelectItem value="BDU">BDU (Battle Dress Uniform)</SelectItem>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
-                          <SelectItem value="Blues">Service Dress Blues</SelectItem>
+                          <SelectItem value="Blues">Blues</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
                           <SelectItem value="Civilian">Civilian Attire</SelectItem>
-                          <SelectItem value="Class A">Class A</SelectItem>
-                          <SelectItem value="Class B">Class B</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -368,9 +395,18 @@ const DashboardPage = () => {
                 <p className="text-[10px] uppercase tracking-wide text-slate-400 font-medium mb-1">Senior Member</p>
                 <div className="text-2xl font-black text-[#00205B]">
                   {dailySettings?.uniform?.uniform_code || 'ABU'}
+                  {dailySettings?.uniform?.uniform_code_2 && (
+                    <span className="text-slate-400 font-normal text-lg mx-1">/</span>
+                  )}
+                  {dailySettings?.uniform?.uniform_code_2 && (
+                    <span>{dailySettings.uniform.uniform_code_2}</span>
+                  )}
                 </div>
                 <p className="text-slate-600 text-sm">
                   {dailySettings?.uniform?.description || 'Airman Battle Uniform'}
+                  {dailySettings?.uniform?.uniform_code_2 && dailySettings?.uniform?.description_2 && (
+                    <span> / {dailySettings.uniform.description_2}</span>
+                  )}
                 </p>
               </div>
               <div>
