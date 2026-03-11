@@ -610,8 +610,10 @@ class GoogleSheetConfig(BaseModel):
 # ================= DAILY SETTINGS MODELS =================
 
 class UniformOfTheDay(BaseModel):
-    uniform_code: str  # e.g., "ABU", "Blues", "PT Gear"
-    description: Optional[str] = None  # Additional notes
+    uniform_code: str  # Senior Member uniform e.g., "ABU", "Blues", "PT Gear"
+    cadet_uniform_code: Optional[str] = None  # Cadet uniform (if different)
+    description: Optional[str] = None
+    cadet_description: Optional[str] = None
     special_instructions: Optional[str] = None
 
 class WeatherFlagUpdate(BaseModel):
@@ -4994,6 +4996,8 @@ async def get_daily_settings(user: dict = Depends(get_current_user)):
             'uniform': {
                 'uniform_code': 'ABU',
                 'description': 'Airman Battle Uniform',
+                'cadet_uniform_code': 'BDU',
+                'cadet_description': 'Battle Dress Uniform',
                 'special_instructions': None,
                 'updated_at': None,
                 'updated_by': None
@@ -5036,6 +5040,8 @@ async def update_uniform_of_day(
             'uniform': {
                 'uniform_code': uniform.uniform_code,
                 'description': uniform.description,
+                'cadet_uniform_code': uniform.cadet_uniform_code or uniform.uniform_code,
+                'cadet_description': uniform.cadet_description or uniform.description,
                 'special_instructions': uniform.special_instructions,
                 'updated_at': now,
                 'updated_by': user.get('name', user.get('email'))
@@ -5044,7 +5050,7 @@ async def update_uniform_of_day(
         upsert=True
     )
     
-    return {"message": "Uniform of the Day updated", "uniform_code": uniform.uniform_code}
+    return {"message": "Uniform updated", "uniform_code": uniform.uniform_code}
 
 @api_router.post("/daily-settings/weather-flag")
 async def update_weather_flag(

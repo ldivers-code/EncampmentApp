@@ -95,6 +95,8 @@ const DashboardPage = () => {
         setUniformForm({
           uniform_code: data.uniform.uniform_code || '',
           description: data.uniform.description || '',
+          cadet_uniform_code: data.uniform.cadet_uniform_code || '',
+          cadet_description: data.uniform.cadet_description || '',
           special_instructions: data.uniform.special_instructions || ''
         });
       }
@@ -180,7 +182,7 @@ const DashboardPage = () => {
     setSaving(true);
     try {
       await updateUniformOfDay(uniformForm);
-      toast.success('Uniform of the Day updated');
+      toast.success('Uniform updated');
       setUniformDialogOpen(false);
       loadDailySettings();
     } catch (error) {
@@ -273,12 +275,12 @@ const DashboardPage = () => {
 
       {/* Daily Info Cards - Uniform & Weather */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        {/* Uniform of the Day */}
+        {/* Uniform for the Activity */}
         <div className="bg-white border border-slate-200 rounded-sm overflow-hidden" data-testid="uniform-of-day">
           <div className="bg-[#00205B] px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Shirt className="w-4 h-4 text-white" />
-              <h2 className="text-white font-bold text-sm uppercase tracking-wide">Uniform of the Day</h2>
+              <h2 className="text-white font-bold text-sm uppercase tracking-wide">Uniform for the Activity</h2>
             </div>
             {canEditSettings && (
               <Dialog open={uniformDialogOpen} onOpenChange={setUniformDialogOpen}>
@@ -289,11 +291,12 @@ const DashboardPage = () => {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Update Uniform of the Day</DialogTitle>
+                    <DialogTitle>Update Uniform for the Activity</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
+                    <p className="text-xs font-bold uppercase text-slate-400 tracking-wide">Senior Member</p>
                     <div>
-                      <Label>Uniform</Label>
+                      <Label>Senior Member Uniform</Label>
                       <Select value={uniformForm.uniform_code} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code: v }))}>
                         <SelectTrigger><SelectValue placeholder="Select uniform" /></SelectTrigger>
                         <SelectContent>
@@ -315,7 +318,33 @@ const DashboardPage = () => {
                         placeholder="e.g., With boots"
                       />
                     </div>
+                    <div className="border-t border-slate-200 pt-4">
+                      <p className="text-xs font-bold uppercase text-slate-400 tracking-wide mb-3">Cadet</p>
+                    </div>
                     <div>
+                      <Label>Cadet Uniform</Label>
+                      <Select value={uniformForm.cadet_uniform_code || ''} onValueChange={(v) => setUniformForm(prev => ({ ...prev, cadet_uniform_code: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select cadet uniform" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BDU">BDU (Battle Dress Uniform)</SelectItem>
+                          <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
+                          <SelectItem value="Blues">Service Dress Blues</SelectItem>
+                          <SelectItem value="PT">PT Gear</SelectItem>
+                          <SelectItem value="Civilian">Civilian Attire</SelectItem>
+                          <SelectItem value="Class A">Class A</SelectItem>
+                          <SelectItem value="Class B">Class B</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Cadet Description (optional)</Label>
+                      <Input
+                        value={uniformForm.cadet_description || ''}
+                        onChange={(e) => setUniformForm(prev => ({ ...prev, cadet_description: e.target.value }))}
+                        placeholder="e.g., With patrol cap"
+                      />
+                    </div>
+                    <div className="border-t border-slate-200 pt-4">
                       <Label>Special Instructions (optional)</Label>
                       <Input
                         value={uniformForm.special_instructions}
@@ -332,14 +361,28 @@ const DashboardPage = () => {
             )}
           </div>
           <div className="p-4">
-            <div className="text-3xl font-black text-[#00205B] mb-1">
-              {dailySettings?.uniform?.uniform_code || 'ABU'}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-medium mb-1">Senior Member</p>
+                <div className="text-2xl font-black text-[#00205B]">
+                  {dailySettings?.uniform?.uniform_code || 'ABU'}
+                </div>
+                <p className="text-slate-600 text-sm">
+                  {dailySettings?.uniform?.description || 'Airman Battle Uniform'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-medium mb-1">Cadet</p>
+                <div className="text-2xl font-black text-[#00205B]">
+                  {dailySettings?.uniform?.cadet_uniform_code || dailySettings?.uniform?.uniform_code || 'BDU'}
+                </div>
+                <p className="text-slate-600 text-sm">
+                  {dailySettings?.uniform?.cadet_description || dailySettings?.uniform?.description || 'Battle Dress Uniform'}
+                </p>
+              </div>
             </div>
-            <p className="text-slate-600 text-sm">
-              {dailySettings?.uniform?.description || 'Airman Battle Uniform'}
-            </p>
             {dailySettings?.uniform?.special_instructions && (
-              <p className="text-amber-600 text-sm mt-2 flex items-center gap-1">
+              <p className="text-amber-600 text-sm mt-3 flex items-center gap-1">
                 <Info className="w-3 h-3" />
                 {dailySettings.uniform.special_instructions}
               </p>
