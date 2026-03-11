@@ -71,13 +71,20 @@ const Sidebar = ({ children }) => {
     { path: '/org-chart', icon: Network, label: 'Org Chart' },
     { path: '/schedule', icon: Calendar, label: 'Schedule' },
     { path: '/points', icon: Trophy, label: 'Point Tracking' },
-    { path: '/budget', icon: DollarSign, label: 'Financial Tracker' },
-    { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
-    { path: '/documents', icon: FileText, label: 'Official Documents' },
   ];
 
-  // Analytics visible to commander, executive_staff, staff, and finance
-  if (['commander', 'executive_staff', 'staff', 'finance'].includes(user?.role)) {
+  // Financial Tracker visible to commander, executive_staff, finance only
+  if (['commander', 'executive_staff', 'finance'].includes(user?.role)) {
+    navItems.push({ path: '/budget', icon: DollarSign, label: 'Financial Tracker' });
+  }
+
+  navItems.push(
+    { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
+    { path: '/documents', icon: FileText, label: 'Official Documents' },
+  );
+
+  // Analytics visible to commander, executive_staff, exec_cadre, staff, and finance
+  if (['commander', 'executive_staff', 'exec_cadre', 'staff', 'finance'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
@@ -91,10 +98,8 @@ const Sidebar = ({ children }) => {
     navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
   }
 
-  // Logistics visible to commander, executive_staff, logistics, and staff
-  if (['commander', 'executive_staff', 'logistics', 'staff'].includes(user?.role)) {
-    navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
-  }
+  // Logistics visible to all roles
+  navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
 
   if (['commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
