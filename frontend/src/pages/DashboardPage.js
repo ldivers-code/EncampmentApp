@@ -39,6 +39,25 @@ const ROLE_LABELS = {
   cadre: 'Cadre'
 };
 
+const SM_UNIFORM_DESC = {
+  'ABU': 'Airman Battle Uniform',
+  'Polo Combo': 'CAP corporate polo, blue pants, black shoes',
+  'Hot Weather': 'Gray cargo shorts, CAP corporate polo, black socks, black closed-toe athletic shoes',
+  'Blues': 'Service Dress Blues',
+  'Corporate Gray': 'Corporate gray uniform',
+  'PT': 'PT Gear',
+  'Flight Suit': 'Flight Suit',
+  'Civilian': 'Civilian Attire',
+};
+const CADET_UNIFORM_DESC = {
+  'BDU': 'Battle Dress Uniform',
+  'ABU': 'Airman Battle Uniform',
+  'Hot Weather': 'Black athletic shorts, uniform or activity t-shirt, black socks, closed-toe athletic shoes',
+  'Blues': 'Service Dress Blues',
+  'PT': 'PT Gear',
+  'Civilian': 'Civilian Attire',
+};
+
 const DashboardPage = () => {
   const { user, activeUsers } = useAuth();
   const navigate = useNavigate();
@@ -299,11 +318,15 @@ const DashboardPage = () => {
                     <p className="text-xs font-bold uppercase text-slate-400 tracking-wide">Senior Member — Option 1</p>
                     <div>
                       <Label>Uniform</Label>
-                      <Select value={uniformForm.uniform_code} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code: v }))}>
+                      <Select value={uniformForm.uniform_code} onValueChange={(v) => {
+                        const desc = SM_UNIFORM_DESC[v] || '';
+                        setUniformForm(prev => ({ ...prev, uniform_code: v, description: desc }));
+                      }}>
                         <SelectTrigger><SelectValue placeholder="Select uniform" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
                           <SelectItem value="Polo Combo">Polo Combo</SelectItem>
+                          <SelectItem value="Hot Weather">Hot Weather Uniform</SelectItem>
                           <SelectItem value="Blues">Blues</SelectItem>
                           <SelectItem value="Corporate Gray">Corporate Gray</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
@@ -313,7 +336,7 @@ const DashboardPage = () => {
                       </Select>
                     </div>
                     <div>
-                      <Label>Description (optional)</Label>
+                      <Label>Description</Label>
                       <Input
                         value={uniformForm.description}
                         onChange={(e) => setUniformForm(prev => ({ ...prev, description: e.target.value }))}
@@ -325,12 +348,20 @@ const DashboardPage = () => {
                     </div>
                     <div>
                       <Label>Uniform</Label>
-                      <Select value={uniformForm.uniform_code_2 || 'none'} onValueChange={(v) => setUniformForm(prev => ({ ...prev, uniform_code_2: v === 'none' ? '' : v }))}>
+                      <Select value={uniformForm.uniform_code_2 || 'none'} onValueChange={(v) => {
+                        if (v === 'none') {
+                          setUniformForm(prev => ({ ...prev, uniform_code_2: '', description_2: '' }));
+                        } else {
+                          const desc = SM_UNIFORM_DESC[v] || '';
+                          setUniformForm(prev => ({ ...prev, uniform_code_2: v, description_2: desc }));
+                        }
+                      }}>
                         <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
                           <SelectItem value="Polo Combo">Polo Combo</SelectItem>
+                          <SelectItem value="Hot Weather">Hot Weather Uniform</SelectItem>
                           <SelectItem value="Blues">Blues</SelectItem>
                           <SelectItem value="Corporate Gray">Corporate Gray</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
@@ -341,7 +372,7 @@ const DashboardPage = () => {
                     </div>
                     {uniformForm.uniform_code_2 && uniformForm.uniform_code_2 !== 'none' && (
                       <div>
-                        <Label>Description (optional)</Label>
+                        <Label>Description</Label>
                         <Input
                           value={uniformForm.description_2 || ''}
                           onChange={(e) => setUniformForm(prev => ({ ...prev, description_2: e.target.value }))}
@@ -354,11 +385,15 @@ const DashboardPage = () => {
                     </div>
                     <div>
                       <Label>Cadet Uniform</Label>
-                      <Select value={uniformForm.cadet_uniform_code || ''} onValueChange={(v) => setUniformForm(prev => ({ ...prev, cadet_uniform_code: v }))}>
+                      <Select value={uniformForm.cadet_uniform_code || ''} onValueChange={(v) => {
+                        const desc = CADET_UNIFORM_DESC[v] || '';
+                        setUniformForm(prev => ({ ...prev, cadet_uniform_code: v, cadet_description: desc }));
+                      }}>
                         <SelectTrigger><SelectValue placeholder="Select cadet uniform" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="BDU">BDU (Battle Dress Uniform)</SelectItem>
                           <SelectItem value="ABU">ABU (Airman Battle Uniform)</SelectItem>
+                          <SelectItem value="Hot Weather">Hot Weather Uniform</SelectItem>
                           <SelectItem value="Blues">Blues</SelectItem>
                           <SelectItem value="PT">PT Gear</SelectItem>
                           <SelectItem value="Civilian">Civilian Attire</SelectItem>
@@ -366,7 +401,7 @@ const DashboardPage = () => {
                       </Select>
                     </div>
                     <div>
-                      <Label>Cadet Description (optional)</Label>
+                      <Label>Cadet Description</Label>
                       <Input
                         value={uniformForm.cadet_description || ''}
                         onChange={(e) => setUniformForm(prev => ({ ...prev, cadet_description: e.target.value }))}
