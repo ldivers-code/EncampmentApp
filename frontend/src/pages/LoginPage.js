@@ -66,10 +66,10 @@ const LoginPage = () => {
             <Plane className="w-10 h-10" />
           </div>
           <h1 className="text-4xl font-black uppercase tracking-tight text-center mb-4" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            Civil Air Patrol
+            Tennessee Wing
           </h1>
           <h2 className="text-2xl font-bold uppercase tracking-wide text-center mb-2">
-            Encampment Roster
+            Civil Air Patrol Encampment
           </h2>
           <p className="text-lg text-center text-slate-300 mt-4 max-w-md">
             Comprehensive management system for encampment operations, roster tracking, and financial oversight.
@@ -89,9 +89,9 @@ const LoginPage = () => {
             <Shield className="w-10 h-10 text-[#00205B]" />
             <div>
               <h1 className="text-xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-                Civil Air Patrol
+                TN Wing CAP
               </h1>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Encampment Roster</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Encampment</p>
             </div>
           </div>
 
@@ -214,7 +214,7 @@ const LoginPage = () => {
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Civil Air Patrol • United States Air Force Auxiliary
+            Tennessee Wing Civil Air Patrol • United States Air Force Auxiliary
           </p>
         </div>
       </div>
