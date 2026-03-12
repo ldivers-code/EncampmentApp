@@ -7514,6 +7514,12 @@ from logistics import create_logistics_router
 logistics_router = create_logistics_router(db, get_current_user)
 app.include_router(logistics_router)
 
+# Include status board router using factory pattern
+from statusboard import create_statusboard_router
+statusboard_router = create_statusboard_router(db, get_current_user)
+app.include_router(statusboard_router)
+
+
 
 # ================= APP STARTUP/SHUTDOWN =================
 

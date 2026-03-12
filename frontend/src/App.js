@@ -21,6 +21,8 @@ import MyFlightPage from "./pages/MyFlightPage";
 import HealthServicesDashboard from "./pages/HealthServicesDashboard";
 import TrainingOfficerPage from "./pages/TrainingOfficerPage";
 import LogisticsPage from "./pages/LogisticsPage";
+import StatusBoardControl from "./pages/StatusBoardControl";
+import StatusBoardDisplay from "./pages/StatusBoardDisplay";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -208,6 +210,18 @@ function AppRoutes() {
             <LogisticsPage />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/status-control"
+        element={
+          <ProtectedRoute>
+            <StatusBoardControl />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/status-display"
+        element={<StatusBoardDisplay />}
       />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

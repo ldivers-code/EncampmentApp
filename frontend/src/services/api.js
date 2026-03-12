@@ -1109,3 +1109,46 @@ export const issueSupplyRequest = async (id) => {
 export const completeSupplyRequest = async (id) => {
   const r = await axios.put(`${LOG}/supply-requests/${id}/complete`, {}, { headers: getAuthHeaders() }); return r.data;
 };
+
+// ============ Status Board ============
+const SB = `${API}/statusboard`;
+
+// Display (no auth needed for projector)
+export const getSBDisplay = async () => { const r = await axios.get(`${SB}/display`); return r.data; };
+
+// Flights
+export const getSBFlights = async () => { const r = await axios.get(`${SB}/flights`, { headers: getAuthHeaders() }); return r.data; };
+export const createSBFlight = async (d) => { const r = await axios.post(`${SB}/flights`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBFlight = async (id, d) => { const r = await axios.put(`${SB}/flights/${id}`, d, { headers: getAuthHeaders() }); return r.data; };
+export const deleteSBFlight = async (id) => { const r = await axios.delete(`${SB}/flights/${id}`, { headers: getAuthHeaders() }); return r.data; };
+
+// Issues
+export const getSBIssues = async () => { const r = await axios.get(`${SB}/issues`, { headers: getAuthHeaders() }); return r.data; };
+export const createSBIssue = async (d) => { const r = await axios.post(`${SB}/issues`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBIssue = async (id, d) => { const r = await axios.put(`${SB}/issues/${id}`, d, { headers: getAuthHeaders() }); return r.data; };
+
+// Announcements
+export const getSBAnnouncements = async () => { const r = await axios.get(`${SB}/announcements`, { headers: getAuthHeaders() }); return r.data; };
+export const createSBAnnouncement = async (d) => { const r = await axios.post(`${SB}/announcements`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBAnnouncement = async (id, d) => { const r = await axios.put(`${SB}/announcements/${id}`, d, { headers: getAuthHeaders() }); return r.data; };
+export const deleteSBAnnouncement = async (id) => { const r = await axios.delete(`${SB}/announcements/${id}`, { headers: getAuthHeaders() }); return r.data; };
+
+// Schedule
+export const getSBSchedule = async () => { const r = await axios.get(`${SB}/schedule`, { headers: getAuthHeaders() }); return r.data; };
+export const createSBScheduleEvent = async (d) => { const r = await axios.post(`${SB}/schedule`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBScheduleEvent = async (id, d) => { const r = await axios.put(`${SB}/schedule/${id}`, d, { headers: getAuthHeaders() }); return r.data; };
+export const deleteSBScheduleEvent = async (id) => { const r = await axios.delete(`${SB}/schedule/${id}`, { headers: getAuthHeaders() }); return r.data; };
+
+// Resources
+export const getSBResources = async () => { const r = await axios.get(`${SB}/resources`, { headers: getAuthHeaders() }); return r.data; };
+export const createSBResource = async (d) => { const r = await axios.post(`${SB}/resources`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBResource = async (id, d) => { const r = await axios.put(`${SB}/resources/${id}`, d, { headers: getAuthHeaders() }); return r.data; };
+
+// Settings & Emergency
+export const getSBSettings = async () => { const r = await axios.get(`${SB}/settings`, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBSettings = async (d) => { const r = await axios.put(`${SB}/settings`, d, { headers: getAuthHeaders() }); return r.data; };
+export const updateSBEmergency = async (d) => { const r = await axios.put(`${SB}/emergency`, d, { headers: getAuthHeaders() }); return r.data; };
+
+// Audit & Seed
+export const getSBAudit = async () => { const r = await axios.get(`${SB}/audit`, { headers: getAuthHeaders() }); return r.data; };
+export const seedSBData = async () => { const r = await axios.post(`${SB}/seed`, {}, { headers: getAuthHeaders() }); return r.data; };

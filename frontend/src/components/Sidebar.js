@@ -22,7 +22,8 @@ import {
   Shield,
   Heart,
   ClipboardCheck,
-  Package
+  Package,
+  Monitor
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -100,6 +101,9 @@ const Sidebar = ({ children }) => {
 
   // Logistics visible to all roles
   navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
+
+  // Status Board visible to all roles
+  navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
 
   if (['commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
