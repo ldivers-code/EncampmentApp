@@ -7,7 +7,8 @@ import {
   getFlightLeaderboard, getCumulativeStandings,
   getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings,
   escalateFlightReport, resolveFlightReport,
-  getFlightLeadership, updateFlightLeadership
+  getFlightLeadership, updateFlightLeadership,
+  getHealthAlerts, updateHealthAlerts, getMemberProfile
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -46,7 +47,10 @@ import {
   ArrowUpCircle,
   History,
   CheckCircle2,
-  Edit2
+  Edit2,
+  Heart,
+  X,
+  Mail
 } from 'lucide-react';
 
 const CATEGORY_LABELS = {
@@ -89,6 +93,11 @@ const MyFlightPage = () => {
   const [recentMerits, setRecentMerits] = useState([]);
   const [isMeritModalOpen, setIsMeritModalOpen] = useState(false);
   const [selectedCadet, setSelectedCadet] = useState(null);
+  const [memberDetail, setMemberDetail] = useState(null);
+  const [memberAlerts, setMemberAlerts] = useState(null);
+  const [memberPanelOpen, setMemberPanelOpen] = useState(false);
+  const [editingAlerts, setEditingAlerts] = useState(false);
+  const [alertForm, setAlertForm] = useState({ alerts: [], notes: '', shared_notes: '' });
   const [meritForm, setMeritForm] = useState({
     entry_type: 'merit',
     points: '',
@@ -545,6 +554,91 @@ const MyFlightPage = () => {
     }
   };
 
+  const HEALTH_ALERT_ITEMS = [
+    { key: 'epipen', label: 'Has EpiPen' },
+    { key: 'fainting', label: 'Prone to Fainting' },
+    { key: 'heat_sensitive', label: 'Heat Sensitive' },
+    { key: 'sensory_issues', label: 'Sensory Issues' },
+    { key: 'seizures', label: 'Seizure Risk' },
+    { key: 'diabetes', label: 'Diabetes' },
+    { key: 'asthma', label: 'Asthma' },
+    { key: 'severe_allergies', label: 'Severe Allergies' },
+    { key: 'wheelchair_mobility', label: 'Wheelchair / Mobility' },
+    { key: 'hearing_impaired', label: 'Hearing Impaired' },
+    { key: 'vision_impaired', label: 'Vision Impaired' },
+    { key: 'other', label: 'Other' },
+  ];
+
+  const canEditHealth = ['commander', 'executive_staff', 'health_services'].includes(user?.role);
+
+  const openMemberDetail = async (member) => {
+    setMemberDetail(member);
+    setMemberPanelOpen(true);
+    setEditingAlerts(false);
+    try {
+      const alerts = await getHealthAlerts(member.id);
+      setMemberAlerts(alerts);
+      setAlertForm({
+        alerts: alerts.alerts || [],
+        notes: alerts.notes || '',
+        shared_notes: alerts.shared_notes || '',
+      });
+    } catch {
+      setMemberAlerts({ alerts: [], notes: '' });
+      setAlertForm({ alerts: [], notes: '', shared_notes: '' });
+    }
+  };
+
+  const closeMemberDetail = () => {
+    setMemberPanelOpen(false);
+    setMemberDetail(null);
+    setMemberAlerts(null);
+    setEditingAlerts(false);
+  };
+
+  const toggleAlertItem = (key) => {
+    setAlertForm(prev => {
+      const existing = prev.alerts.find(a => a.key === key);
+      if (existing) {
+        return { ...prev, alerts: prev.alerts.filter(a => a.key !== key) };
+      }
+      return { ...prev, alerts: [...prev.alerts, { key, details: '', shared_with: ['flight_commander'] }] };
+    });
+  };
+
+  const updateAlertSharing = (key, level) => {
+    setAlertForm(prev => ({
+      ...prev,
+      alerts: prev.alerts.map(a => {
+        if (a.key !== key) return a;
+        const shared = a.shared_with || [];
+        return { ...a, shared_with: shared.includes(level) ? shared.filter(l => l !== level) : [...shared, level] };
+      })
+    }));
+  };
+
+  const updateAlertDetails = (key, details) => {
+    setAlertForm(prev => ({
+      ...prev,
+      alerts: prev.alerts.map(a => a.key === key ? { ...a, details } : a)
+    }));
+  };
+
+  const saveHealthAlerts = async () => {
+    if (!memberDetail) return;
+    try {
+      await updateHealthAlerts(memberDetail.id, alertForm);
+      toast.success('Health alerts saved');
+      const updated = await getHealthAlerts(memberDetail.id);
+      setMemberAlerts(updated);
+      setEditingAlerts(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    }
+  };
+
+
+
   const loadDocuments = async () => {
     try {
       const data = await getFlightDocuments(selectedFlight);
@@ -864,7 +958,9 @@ const MyFlightPage = () => {
                 roster.roster?.map((member) => (
                   <div 
                     key={member.id} 
-                    className="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4"
+                    className="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4 cursor-pointer"
+                    onClick={() => openMemberDetail(member)}
+                    data-testid={`member-row-${member.id}`}
                   >
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                       member.is_student ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
@@ -877,6 +973,7 @@ const MyFlightPage = () => {
                         <p className="text-sm text-slate-500">{member.position}</p>
                       )}
                     </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300" />
                     <div className="text-right">
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         member.is_student 
@@ -902,7 +999,8 @@ const MyFlightPage = () => {
                     {members.map((member) => (
                       <div 
                         key={member.id}
-                        className="p-2 bg-slate-50 rounded-sm flex items-center gap-2"
+                        className="p-2 bg-slate-50 rounded-sm flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
+                        onClick={() => openMemberDetail(member)}
                       >
                         <span className={`w-2 h-2 rounded-full ${member.is_student ? 'bg-blue-500' : 'bg-emerald-500'}`} />
                         <span className="text-sm truncate">{member.name}</span>
@@ -2029,6 +2127,191 @@ const MyFlightPage = () => {
                 </Button>
               </div>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MEMBER DETAIL PANEL ===== */}
+      <Dialog open={memberPanelOpen} onOpenChange={(o) => { if (!o) closeMemberDetail(); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          {memberDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-[#00205B] uppercase font-bold text-sm flex items-center gap-2">
+                  <User className="w-4 h-4" /> Member Details
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                {/* Basic Info */}
+                <div className="bg-slate-50 rounded-sm p-4 border border-slate-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      memberDetail.is_student ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'
+                    }`}>
+                      {memberDetail.is_student ? <Star className="w-6 h-6" /> : <User className="w-6 h-6" />}
+                    </div>
+                    <div>
+                      <div className="font-bold text-lg text-[#00205B]">{memberDetail.name}</div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        memberDetail.is_student ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                      }`}>{memberDetail.is_student ? 'Cadet' : 'Cadre'}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {memberDetail.capid && (
+                      <div><span className="text-slate-400 text-xs uppercase">CAPID</span><div className="font-mono">{memberDetail.capid}</div></div>
+                    )}
+                    {memberDetail.email && (
+                      <div><span className="text-slate-400 text-xs uppercase">Email</span><div className="truncate flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" />{memberDetail.email}</div></div>
+                    )}
+                    {memberDetail.rank && (
+                      <div><span className="text-slate-400 text-xs uppercase">Rank</span><div>{memberDetail.rank}</div></div>
+                    )}
+                    {memberDetail.position && (
+                      <div><span className="text-slate-400 text-xs uppercase">Position</span><div>{memberDetail.position}</div></div>
+                    )}
+                    {memberDetail.flight && (
+                      <div><span className="text-slate-400 text-xs uppercase">Flight</span><div className="capitalize">{memberDetail.flight}</div></div>
+                    )}
+                    {memberDetail.squadron && (
+                      <div><span className="text-slate-400 text-xs uppercase">Squadron</span><div className="capitalize">{memberDetail.squadron}</div></div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Health Services Section */}
+                <div className="border border-slate-200 rounded-sm overflow-hidden" data-testid="health-alerts-section">
+                  <div className="bg-red-50 px-4 py-2 flex items-center justify-between border-b border-red-100">
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-red-500" />
+                      <span className="font-bold text-sm text-red-800 uppercase tracking-wide">Health Alerts</span>
+                    </div>
+                    {canEditHealth && !editingAlerts && (
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => setEditingAlerts(true)} data-testid="edit-health-btn">
+                        <Edit2 className="w-3 h-3 mr-1" /> Edit
+                      </Button>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    {!editingAlerts ? (
+                      /* View Mode */
+                      <>
+                        {(!memberAlerts?.alerts || memberAlerts.alerts.length === 0) ? (
+                          <p className="text-sm text-slate-400 text-center py-3">No health alerts on file</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {memberAlerts.alerts.map(alert => {
+                              const item = HEALTH_ALERT_ITEMS.find(h => h.key === alert.key);
+                              return (
+                                <div key={alert.key} className="flex items-start gap-2 bg-red-50/50 rounded p-2 border border-red-100">
+                                  <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm text-red-800">{item?.label || alert.key}</div>
+                                    {alert.details && <div className="text-xs text-red-600 mt-0.5">{alert.details}</div>}
+                                    {canEditHealth && alert.shared_with && (
+                                      <div className="flex gap-1 mt-1">
+                                        {alert.shared_with.map(s => (
+                                          <span key={s} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">
+                                            {s.replace('_', ' ')}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {memberAlerts?.notes && canEditHealth && (
+                          <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-100 text-xs text-amber-800">
+                            <span className="font-bold">Internal Note:</span> {memberAlerts.notes}
+                          </div>
+                        )}
+                        {(memberAlerts?.shared_notes || memberAlerts?.notes) && !canEditHealth && memberAlerts?.shared_notes && (
+                          <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-100 text-xs text-amber-800">
+                            <span className="font-bold">Note:</span> {memberAlerts.shared_notes}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* Edit Mode (Health Services only) */
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-500">Select conditions and choose who can see each alert.</p>
+                        {HEALTH_ALERT_ITEMS.map(item => {
+                          const active = alertForm.alerts.find(a => a.key === item.key);
+                          return (
+                            <div key={item.key} className={`border rounded-sm p-3 ${active ? 'border-red-200 bg-red-50/30' : 'border-slate-200'}`}>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={!!active}
+                                  onChange={() => toggleAlertItem(item.key)}
+                                  className="accent-red-500"
+                                  data-testid={`alert-check-${item.key}`}
+                                />
+                                <span className={`text-sm font-medium ${active ? 'text-red-800' : 'text-slate-600'}`}>{item.label}</span>
+                              </div>
+                              {active && (
+                                <div className="mt-2 ml-6 space-y-2">
+                                  <Input
+                                    value={active.details || ''}
+                                    onChange={(e) => updateAlertDetails(item.key, e.target.value)}
+                                    placeholder="Additional details..."
+                                    className="h-7 text-xs rounded-sm"
+                                  />
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] text-slate-500 uppercase">Share with:</span>
+                                    {[
+                                      { key: 'flight_commander', label: 'Flight Cmdr' },
+                                      { key: 'squadron_commander', label: 'Sqdn Cmdr' },
+                                      { key: 'exec_cadre', label: 'Exec Cadre' },
+                                    ].map(level => (
+                                      <label key={level.key} className="flex items-center gap-1 text-[10px]">
+                                        <input
+                                          type="checkbox"
+                                          checked={(active.shared_with || []).includes(level.key)}
+                                          onChange={() => updateAlertSharing(item.key, level.key)}
+                                          className="accent-blue-500"
+                                          data-testid={`share-${item.key}-${level.key}`}
+                                        />
+                                        <span className="text-slate-600">{level.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <div>
+                          <Label className="text-xs">Internal Notes (Health Services only)</Label>
+                          <Textarea
+                            value={alertForm.notes}
+                            onChange={(e) => setAlertForm(p => ({ ...p, notes: e.target.value }))}
+                            rows={2} className="text-xs rounded-sm"
+                            placeholder="Confidential notes..."
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Shared Notes (visible to those with access)</Label>
+                          <Textarea
+                            value={alertForm.shared_notes || ''}
+                            onChange={(e) => setAlertForm(p => ({ ...p, shared_notes: e.target.value }))}
+                            rows={2} className="text-xs rounded-sm"
+                            placeholder="Notes shared with flight/squadron commanders..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <Button variant="outline" size="sm" onClick={() => setEditingAlerts(false)} className="rounded-sm">Cancel</Button>
+                          <Button size="sm" className="bg-red-600 hover:bg-red-700 rounded-sm" onClick={saveHealthAlerts} data-testid="save-health-btn">Save Health Alerts</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

@@ -1110,6 +1110,18 @@ export const completeSupplyRequest = async (id) => {
   const r = await axios.put(`${LOG}/supply-requests/${id}/complete`, {}, { headers: getAuthHeaders() }); return r.data;
 };
 
+// ============ Health Alerts ============
+export const getHealthAlerts = async (memberId) => {
+  const r = await axios.get(`${API}/health-alerts/${memberId}`, { headers: getAuthHeaders() }); return r.data;
+};
+export const updateHealthAlerts = async (memberId, data) => {
+  const r = await axios.put(`${API}/health-alerts/${memberId}`, data, { headers: getAuthHeaders() }); return r.data;
+};
+export const getMemberProfile = async (memberId) => {
+  const r = await axios.get(`${API}/members/${memberId}/profile`, { headers: getAuthHeaders() }); return r.data;
+};
+
+
 // ============ Status Board ============
 const SB = `${API}/statusboard`;
 
