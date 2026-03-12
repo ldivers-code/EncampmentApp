@@ -892,12 +892,10 @@ const SchedulePage = () => {
                 </DialogContent>
               </Dialog>
             )}
-            {!canEdit() && (
-              <Button size="sm" variant="outline" className="text-xs" onClick={() => setChangeRequestOpen(true)} data-testid="mobile-request-change-btn">
-                <MessageSquarePlus className="w-3 h-3 mr-1" />
-                Request
-              </Button>
-            )}
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => setChangeRequestOpen(true)} data-testid="mobile-request-change-btn">
+              <MessageSquarePlus className="w-3 h-3 mr-1" />
+              Request
+            </Button>
             {canEdit() && (
               <Button size="sm" variant="outline" className="text-xs relative" onClick={() => { setChangeReviewOpen(true); loadChangeRequests(); }} data-testid="mobile-review-changes-btn">
                 <FileEdit className="w-3 h-3" />
@@ -1218,18 +1216,16 @@ const SchedulePage = () => {
               </>
             )}
 
-            {/* Submit Change Request - visible to non-editors */}
-            {!canEdit() && (
-              <Button
-                variant="outline"
-                className="rounded-sm"
-                onClick={() => setChangeRequestOpen(true)}
-                data-testid="submit-change-request-btn"
-              >
-                <MessageSquarePlus className="w-4 h-4 mr-2" />
-                Request Change
-              </Button>
-            )}
+            {/* Submit Change Request - visible to everyone */}
+            <Button
+              variant="outline"
+              className="rounded-sm"
+              onClick={() => setChangeRequestOpen(true)}
+              data-testid="submit-change-request-btn"
+            >
+              <MessageSquarePlus className="w-4 h-4 mr-2" />
+              Request Change
+            </Button>
 
             {/* Review Change Requests - visible to editors */}
             {canEdit() && (
