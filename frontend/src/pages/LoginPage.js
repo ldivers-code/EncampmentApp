@@ -28,6 +28,11 @@ const LoginPage = () => {
         await login(formData.email, formData.password);
         toast.success('Welcome back!');
       } else {
+        if (!formData.capid || !formData.capid.trim()) {
+          toast.error('CAP ID is required for registration');
+          setLoading(false);
+          return;
+        }
         await register(formData);
         toast.success('Account created successfully!');
       }
@@ -113,7 +118,7 @@ const LoginPage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="capid" className="text-xs uppercase tracking-wide text-slate-600">CAP ID (Optional)</Label>
+                    <Label htmlFor="capid" className="text-xs uppercase tracking-wide text-slate-600">CAP ID *</Label>
                     <Input
                       id="capid"
                       name="capid"
@@ -121,7 +126,8 @@ const LoginPage = () => {
                       value={formData.capid}
                       onChange={handleChange}
                       className="mt-1 rounded-sm font-mono"
-                      placeholder="123456"
+                      placeholder="e.g. 123456"
+                      required
                       data-testid="register-capid-input"
                     />
                   </div>

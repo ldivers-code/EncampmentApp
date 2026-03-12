@@ -179,7 +179,7 @@ class UserBase(BaseModel):
     email: EmailStr
     name: str
     role: str = UserRole.STAFF  # Default to staff (can choose staff/cadre during registration)
-    capid: Optional[str] = None
+    capid: str  # Required - CAP ID number for security verification
     squadron: Optional[str] = None  # staff, support_cadre, exec_cadre, ops_cadre, 6th_cts, 21st_cts, 22nd_cts
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
 
