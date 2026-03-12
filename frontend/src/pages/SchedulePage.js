@@ -584,19 +584,17 @@ const SchedulePage = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
+    <div className="p-2 sm:p-4 md:p-6 lg:p-8 animate-fade-in max-w-full overflow-x-hidden">
       {/* Mobile Header */}
       {isMobile ? (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            <h1 className="text-lg font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
               Schedule
             </h1>
-            <div className="flex items-center gap-2">
-              {/* Notification toggle */}
+            <div className="flex items-center gap-1">
               <NotificationManager compact />
-              {/* Sync indicator */}
-              <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+              <div className={`flex items-center px-1.5 py-1 rounded text-[10px] ${isRefreshing ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                 <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
               </div>
               {canEdit() && (
@@ -691,37 +689,53 @@ const SchedulePage = () => {
           )}
 
           {/* Editor Actions (mobile) */}
-          <div className="mt-2 flex gap-2">
-            {/* Schedule Filter - Available to ALL users */}
-            <div className="relative flex-1">
-              <button
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="w-full flex items-center justify-between gap-1 px-3 py-2 text-xs border border-slate-200 rounded-sm bg-white hover:bg-slate-50"
-                data-testid="mobile-schedule-filter"
-              >
-                <span className="flex items-center gap-1">
-                  <Filter className="w-3 h-3 text-slate-400" />
-                  <span className="truncate">{getFilterLabel()}</span>
-                </span>
-                <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${showFilterDropdown ? 'rotate-90' : ''}`} />
-              </button>
-              {showFilterDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg z-20 max-h-64 overflow-y-auto">
-                  {scheduleFilterOptions.map(option => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        setScheduleFilter(option.value);
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
-                        scheduleFilter === option.value ? 'bg-[#00205B] text-white' : ''
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+          <div className="mt-2 space-y-2">
+            <div className="flex gap-2">
+              {/* Schedule Filter - Available to ALL users */}
+              <div className="relative flex-1">
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className="w-full flex items-center justify-between gap-1 px-3 py-2 text-xs border border-slate-200 rounded-sm bg-white hover:bg-slate-50"
+                  data-testid="mobile-schedule-filter"
+                >
+                  <span className="flex items-center gap-1">
+                    <Filter className="w-3 h-3 text-slate-400" />
+                    <span className="truncate">{getFilterLabel()}</span>
+                  </span>
+                  <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${showFilterDropdown ? 'rotate-90' : ''}`} />
+                </button>
+                {showFilterDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg z-20 max-h-64 overflow-y-auto">
+                    {scheduleFilterOptions.map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setScheduleFilter(option.value);
+                          setShowFilterDropdown(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-50 ${
+                          scheduleFilter === option.value ? 'bg-[#00205B] text-white' : ''
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button size="sm" variant="outline" className="text-xs px-2 shrink-0" onClick={() => setChangeRequestOpen(true)} data-testid="mobile-request-change-btn">
+                <MessageSquarePlus className="w-3 h-3 mr-1" />
+                Request
+              </Button>
+              {canEdit() && (
+                <Button size="sm" variant="outline" className="text-xs px-2 shrink-0 relative" onClick={() => { setChangeReviewOpen(true); loadChangeRequests(); }} data-testid="mobile-review-changes-btn">
+                  <FileEdit className="w-3 h-3" />
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold rounded-full bg-red-500 text-white">
+                      {pendingCount}
+                    </span>
+                  )}
+                </Button>
               )}
             </div>
             {canEdit() && (
@@ -730,9 +744,9 @@ const SchedulePage = () => {
                 if (!open) resetForm();
               }}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="bg-[#00205B] text-xs">
+                  <Button size="sm" className="bg-[#00205B] text-xs w-full">
                     <Plus className="w-3 h-3 mr-1" />
-                    Add
+                    Add Event
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto rounded-lg">
@@ -891,20 +905,6 @@ const SchedulePage = () => {
                   </form>
                 </DialogContent>
               </Dialog>
-            )}
-            <Button size="sm" variant="outline" className="text-xs" onClick={() => setChangeRequestOpen(true)} data-testid="mobile-request-change-btn">
-              <MessageSquarePlus className="w-3 h-3 mr-1" />
-              Request
-            </Button>
-            {canEdit() && (
-              <Button size="sm" variant="outline" className="text-xs relative" onClick={() => { setChangeReviewOpen(true); loadChangeRequests(); }} data-testid="mobile-review-changes-btn">
-                <FileEdit className="w-3 h-3" />
-                {pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold rounded-full bg-red-500 text-white">
-                    {pendingCount}
-                  </span>
-                )}
-              </Button>
             )}
           </div>
         </div>
@@ -1284,7 +1284,7 @@ const SchedulePage = () => {
 
       {/* Event Type Legend */}
       <div className={`bg-white border border-slate-200 rounded-lg p-2 mb-4 ${isMobile ? 'overflow-x-auto' : ''}`}>
-        <div className={`flex gap-2 ${isMobile ? 'flex-nowrap min-w-max' : 'flex-wrap gap-3'}`}>
+        <div className={`flex gap-2 ${isMobile ? 'flex-wrap' : 'flex-wrap gap-3'}`}>
           {eventTypes.map(type => (
             <div key={type.value} className="flex items-center gap-1">
               <span className={`w-2 h-2 rounded-sm ${type.color}`}></span>
@@ -1393,7 +1393,7 @@ const SchedulePage = () => {
           </div>
           
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
+            <table className="w-full">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200">
                   <th className="w-20 px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-600">Time</th>
