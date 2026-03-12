@@ -64,6 +64,7 @@ const AdminPage = () => {
   const [syncingNow, setSyncingNow] = useState(false);
 
   const roles = [
+    { value: 'dcp', label: 'Director of Cadet Programs', color: 'bg-yellow-100 text-yellow-900 border-yellow-300' },
     { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
     { value: 'executive_staff', label: 'Executive Staff', color: 'bg-[#00205B] text-white' },
     { value: 'training_officer', label: 'Training Officer', color: 'bg-teal-100 text-teal-800 border-teal-200' },

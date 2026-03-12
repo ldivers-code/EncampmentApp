@@ -162,11 +162,11 @@ export const AuthProvider = ({ children }) => {
     return roles.includes(user.role);
   };
 
-  const canEdit = () => hasRole(['commander', 'executive_staff', 'staff']);
+  const canEdit = () => hasRole(['dcp', 'commander', 'executive_staff', 'staff']);
   
-  const canAccessFinance = () => hasRole(['commander', 'executive_staff', 'finance']);
+  const canAccessFinance = () => hasRole(['dcp', 'commander', 'executive_staff', 'finance']);
   
-  const isCommander = () => hasRole(['commander', 'executive_staff']);
+  const isCommander = () => hasRole(['dcp', 'commander', 'executive_staff']);
 
   return (
     <AuthContext.Provider value={{

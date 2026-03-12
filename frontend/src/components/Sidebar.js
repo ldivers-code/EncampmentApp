@@ -75,7 +75,7 @@ const Sidebar = ({ children }) => {
   ];
 
   // Financial Tracker visible to commander, executive_staff, finance only
-  if (['commander', 'executive_staff', 'finance'].includes(user?.role)) {
+  if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
     navItems.push({ path: '/budget', icon: DollarSign, label: 'Financial Tracker' });
   }
 
@@ -85,17 +85,17 @@ const Sidebar = ({ children }) => {
   );
 
   // Analytics visible to commander, executive_staff, exec_cadre, staff, and finance
-  if (['commander', 'executive_staff', 'exec_cadre', 'staff', 'finance'].includes(user?.role)) {
+  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
   // Health Services visible to commander, executive_staff, health_services, and staff
-  if (['commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
+  if (['dcp', 'commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
 
   // Training Officer visible to commander, executive_staff, training_officer, and staff
-  if (['commander', 'executive_staff', 'training_officer', 'staff'].includes(user?.role)) {
+  if (['dcp', 'commander', 'executive_staff', 'training_officer', 'staff'].includes(user?.role)) {
     navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
   }
 
@@ -105,7 +105,7 @@ const Sidebar = ({ children }) => {
   // Status Board visible to all roles
   navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
 
-  if (['commander', 'executive_staff'].includes(user?.role)) {
+  if (['dcp', 'commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }
 

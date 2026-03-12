@@ -9,11 +9,11 @@ import uuid
 
 # Roles that can edit status board data
 SB_EDITOR_ROLES = [
-    "commander", "executive_staff", "staff", "plans_programs",
+    "dcp", "commander", "executive_staff", "staff", "plans_programs",
     "logistics", "health_services", "training_officer"
 ]
 # Roles that can trigger emergency banner
-SB_EMERGENCY_ROLES = ["commander", "executive_staff"]
+SB_EMERGENCY_ROLES = ["dcp", "commander", "executive_staff"]
 
 
 def now_iso():

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 
-LOGISTICS_ADMIN_ROLES = ["commander", "executive_staff", "logistics"]
+LOGISTICS_ADMIN_ROLES = ["dcp", "commander", "executive_staff", "logistics"]
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()

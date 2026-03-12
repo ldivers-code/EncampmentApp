@@ -368,12 +368,12 @@ const MyFlightPage = () => {
 
   const canSubmitReports = () => {
     // Staff, cadre, commanders can submit reports
-    return ['commander', 'executive_staff', 'staff', 'cadre', 'plans_programs', 'exec_cadre'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'staff', 'cadre', 'plans_programs', 'exec_cadre'].includes(user?.role);
   };
 
   const canReviewReports = () => {
     // Commanders and exec cadre can review
-    return ['commander', 'executive_staff', 'exec_cadre'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'exec_cadre'].includes(user?.role);
   };
 
   // Auto-detect reporter role based on user's actual role/position
@@ -400,7 +400,7 @@ const MyFlightPage = () => {
     }
     
     // Default based on general role
-    if (userRole === 'commander' || userRole === 'executive_staff' || userRole === 'exec_cadre') {
+    if (userRole === 'dcp' || userRole === 'commander' || userRole === 'executive_staff' || userRole === 'exec_cadre') {
       return 'squadron_commander';
     }
     
@@ -413,7 +413,7 @@ const MyFlightPage = () => {
 
   // Check if user can view all flights (Exec Cadre, Commander, Staff, Plans & Programs)
   const canViewAllFlights = () => {
-    return ['commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
   };
 
   // Check if user can only submit reports for their assigned flight
@@ -423,12 +423,12 @@ const MyFlightPage = () => {
 
   // Check if user can escalate reports
   const canEscalateReports = () => {
-    return ['commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
   };
 
   // Check if user can resolve escalated reports
   const canResolveReports = () => {
-    return ['commander', 'executive_staff', 'exec_cadre'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'exec_cadre'].includes(user?.role);
   };
 
   // Get the next escalation level for a report based on current level
@@ -569,7 +569,7 @@ const MyFlightPage = () => {
     { key: 'other', label: 'Other' },
   ];
 
-  const canEditHealth = ['commander', 'executive_staff', 'health_services'].includes(user?.role);
+  const canEditHealth = ['dcp', 'commander', 'executive_staff', 'health_services'].includes(user?.role);
 
   const openMemberDetail = async (member) => {
     setMemberDetail(member);
@@ -1037,7 +1037,7 @@ const MyFlightPage = () => {
               </Select>
             </div>
             
-            {['commander', 'executive_staff'].includes(user?.role) && (
+            {['dcp', 'commander', 'executive_staff'].includes(user?.role) && (
               <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="upload-document-btn">
@@ -1195,7 +1195,7 @@ const MyFlightPage = () => {
                                 <ExternalLink className="w-4 h-4" />
                               </a>
                             )}
-                            {['commander', 'executive_staff'].includes(user?.role) && (
+                            {['dcp', 'commander', 'executive_staff'].includes(user?.role) && (
                               <button
                                 onClick={() => handleDeleteDocument(doc.id)}
                                 className="p-2 text-red-500 hover:bg-red-50 rounded-sm transition-colors opacity-0 group-hover:opacity-100"

@@ -56,6 +56,7 @@ security = HTTPBearer()
 # ================= MODELS =================
 
 class UserRole:
+    DCP = "dcp"  # Director of Cadet Programs — advisory role above Commander, full access
     COMMANDER = "commander"
     EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support — same perms as Commander
     LOGISTICS = "logistics"  # Logistics operations
@@ -93,6 +94,14 @@ class AccessPermissions(BaseModel):
 
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
+    UserRole.DCP: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        budget_view=True, budget_edit=True,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=True,
+        health_view=True, health_full=True
+    ),
     UserRole.COMMANDER: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
@@ -858,14 +867,14 @@ async def get_me(user: dict = Depends(get_current_user)):
 # ================= USER MANAGEMENT =================
 
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+async def get_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return [UserResponse(**u) for u in users]
 
 @api_router.put("/users/{user_id}/role")
-async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     valid_roles = [
-        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
         UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
         UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES
     ]
@@ -884,7 +893,7 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
 async def assign_user_unit(
     user_id: str, 
     assignment: UserUnitAssignment,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Assign a user to a squadron and flight"""
     # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and CTS Squadrons
@@ -935,7 +944,7 @@ async def assign_user_unit(
     return UserResponse(**updated_user)
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     result = await db.users.delete_one({"id": user_id})
@@ -1105,7 +1114,7 @@ async def verify_reset_token(token: str):
 async def admin_reset_password(
     user_id: str,
     new_password: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Admin/Commander reset password for a user"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1259,7 +1268,7 @@ async def delete_profile_photo(user: dict = Depends(get_current_user)):
 # ================= USER APPROVAL ROUTES =================
 
 @api_router.get("/users/pending")
-async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+async def get_pending_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     """Get users pending approval"""
     pending_users = await db.users.find(
         {"$or": [{"is_approved": False}, {"is_approved": None}]},
@@ -1272,7 +1281,7 @@ async def get_pending_users(user: dict = Depends(require_role([UserRole.COMMANDE
 async def approve_user(
     user_id: str,
     background_tasks: BackgroundTasks,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Approve a user account and send email notification"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1306,7 +1315,7 @@ async def approve_user(
 async def update_user_permissions(
     user_id: str,
     permissions: AccessPermissions,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Update a user's granular permissions"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1330,7 +1339,7 @@ async def update_user_permissions(
 @api_router.post("/users/{user_id}/reset-permissions")
 async def reset_user_permissions(
     user_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Reset a user's permissions to role defaults"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1358,7 +1367,7 @@ async def link_user_to_participant(
     user_id: str,
     participant_id: str,
     auto_populate: bool = True,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Link a user account to a roster participant by CAPID or participant ID"""
     target_user = await db.users.find_one({"id": user_id})
@@ -1421,7 +1430,7 @@ async def link_user_to_participant(
 @api_router.get("/users/{user_id}/match-participants")
 async def find_matching_participants(
     user_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Find potential participant matches for a user based on CAPID, name, or email"""
     target_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
@@ -2036,7 +2045,7 @@ async def get_participant(participant_id: str, user: dict = Depends(get_current_
 @api_router.post("/participants", response_model=ParticipantResponse)
 async def create_participant(
     data: ParticipantCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     participant_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -2055,7 +2064,7 @@ async def create_participant(
 async def update_participant(
     participant_id: str,
     data: ParticipantCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
@@ -2073,7 +2082,7 @@ async def update_participant(
 @api_router.delete("/participants/{participant_id}")
 async def delete_participant(
     participant_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     result = await db.participants.delete_one({"id": participant_id})
     if result.deleted_count == 0:
@@ -2085,7 +2094,7 @@ async def delete_participant(
 async def remove_participant_from_encampment(
     participant_id: str,
     removal_data: ParticipantRemoval,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Mark a participant as removed from encampment (soft delete) with reason"""
     participant = await db.participants.find_one({"id": participant_id})
@@ -2112,7 +2121,7 @@ async def remove_participant_from_encampment(
 @api_router.post("/participants/{participant_id}/reinstate")
 async def reinstate_participant(
     participant_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Reinstate a previously removed participant"""
     participant = await db.participants.find_one({"id": participant_id})
@@ -2139,7 +2148,7 @@ async def reinstate_participant(
 @api_router.post("/participants/import")
 async def import_participants(
     file: UploadFile = File(...),
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Import participants from CAP Event Admin Report Excel file"""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -2493,7 +2502,7 @@ async def sync_roster_to_budget():
 
 @api_router.post("/participants/sync-to-budget")
 async def trigger_roster_budget_sync(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE]))
 ):
     """Manually trigger sync of roster payment data to budget"""
     result = await sync_roster_to_budget()
@@ -2514,7 +2523,7 @@ async def get_score_categories(user: dict = Depends(get_current_user)):
 @api_router.post("/points/categories")
 async def create_score_category(
     category: ScoreCategoryCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Create a new score category"""
     category_id = str(uuid.uuid4())
@@ -2533,7 +2542,7 @@ async def create_score_category(
 async def update_score_category(
     category_id: str,
     category: ScoreCategoryCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Update a score category"""
     result = await db.score_categories.update_one(
@@ -2549,7 +2558,7 @@ async def update_score_category(
 @api_router.delete("/points/categories/{category_id}")
 async def delete_score_category(
     category_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Delete (deactivate) a score category"""
     await db.score_categories.update_one(
@@ -2560,7 +2569,7 @@ async def delete_score_category(
 
 @api_router.post("/points/categories/seed-defaults")
 async def seed_default_categories(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Seed default score categories"""
     now = datetime.now(timezone.utc).isoformat()
@@ -3181,7 +3190,7 @@ async def get_schedule_settings(user: dict = Depends(get_current_user)):
 
 @api_router.post("/schedule/publish")
 async def publish_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Publish the schedule so all users can see it"""
     now = datetime.now(timezone.utc).isoformat()
@@ -3202,7 +3211,7 @@ async def publish_schedule(
 
 @api_router.post("/schedule/unpublish")
 async def unpublish_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Unpublish the schedule (make it draft)"""
     await db.schedule_settings.update_one(
@@ -3215,7 +3224,7 @@ async def unpublish_schedule(
 @api_router.post("/schedule", response_model=ScheduleEventResponse)
 async def create_schedule_event(
     data: ScheduleEventCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     event_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -3240,7 +3249,7 @@ async def create_schedule_event(
 async def update_schedule_event(
     event_id: str,
     data: ScheduleEventCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
@@ -3260,7 +3269,7 @@ async def update_schedule_event(
 @api_router.delete("/schedule/{event_id}")
 async def delete_schedule_event(
     event_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     result = await db.schedule.delete_one({"id": event_id})
     if result.deleted_count == 0:
@@ -3274,7 +3283,7 @@ async def delete_schedule_event(
 @api_router.post("/schedule/import")
 async def import_schedule(
     file: UploadFile = File(...),
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Import schedule from Excel file. Dates are shifted to July 17-24."""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -3480,7 +3489,7 @@ async def import_schedule(
 
 @api_router.delete("/schedule/clear")
 async def clear_schedule(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Clear all schedule events - commander only"""
     result = await db.schedule.delete_many({})
@@ -3541,7 +3550,7 @@ async def get_notification_status(user: dict = Depends(get_current_user)):
 @api_router.post("/notifications/send")
 async def send_notification(
     notification: PushNotificationRequest,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Send push notification to users (filtered by target groups)"""
     try:
@@ -3601,7 +3610,7 @@ async def send_notification(
 
 @api_router.get("/notifications/history")
 async def get_notification_history(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Get history of sent notifications"""
     notifications = await db.notifications.find({}, {"_id": 0}).sort("sent_at", -1).to_list(50)
@@ -4234,7 +4243,7 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
 @api_router.post("/documents", response_model=DocumentResponse)
 async def create_document(
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Create a new document (Commander only)"""
     doc_id = str(uuid.uuid4())
@@ -4257,7 +4266,7 @@ async def create_document(
 async def update_document(
     doc_id: str,
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Update a document with version tracking"""
     existing = await db.documents.find_one({"id": doc_id})
@@ -4294,7 +4303,7 @@ async def update_document(
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     result = await db.documents.delete_one({"id": doc_id})
     if result.deleted_count == 0:
@@ -4447,7 +4456,7 @@ async def get_flight_leadership(flight: str, user: dict = Depends(get_current_us
 async def update_flight_leadership(
     flight: str,
     leadership: dict,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.EXEC_CADRE]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.EXEC_CADRE]))
 ):
     """Update leadership assignments for a flight"""
     flight_lower = flight.lower()
@@ -4579,7 +4588,7 @@ async def get_org_chart_role(role_id: str, user: dict = Depends(get_current_user
 @api_router.post("/org-chart/roles", response_model=OrgChartRoleResponse)
 async def create_org_chart_role(
     data: OrgChartRoleCreate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Create new org chart role - editors only"""
     # Check if role_id already exists
@@ -4606,7 +4615,7 @@ async def create_org_chart_role(
 async def update_org_chart_role(
     role_id: str,
     data: OrgChartRoleUpdate,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Update org chart role - editors only"""
     now = datetime.now(timezone.utc).isoformat()
@@ -4630,7 +4639,7 @@ async def update_org_chart_role(
 async def assign_org_chart_role(
     role_id: str,
     participant_id: Optional[str] = None,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Assign or unassign a participant to a role - editors only"""
     now = datetime.now(timezone.utc).isoformat()
@@ -4655,7 +4664,7 @@ async def assign_org_chart_role(
 @api_router.delete("/org-chart/roles/{role_id}")
 async def delete_org_chart_role(
     role_id: str,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Delete org chart role - editors only"""
     # Check if any roles report to this one
@@ -4673,7 +4682,7 @@ async def delete_org_chart_role(
 
 @api_router.post("/org-chart/seed-defaults")
 async def seed_default_org_chart(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
     """Seed default encampment org chart structure - commander only"""
     # Check if roles already exist
@@ -4684,102 +4693,107 @@ async def seed_default_org_chart(
     now = datetime.now(timezone.utc).isoformat()
     
     default_roles = [
-        # ===== LEVEL 0 - Encampment Commander =====
-        {"role_id": "enc-commander", "title": "Encampment Commander", "level": 0, "order": 0, "reports_to": None,
+        # ===== LEVEL 0 - Director of Cadet Programs (Advisory) =====
+        {"role_id": "dcp", "title": "Director of Cadet Programs", "level": 0, "order": 0, "reports_to": None,
+         "summary": "Wing-level advisory role overseeing the encampment. Above the Commander but serves in an advisory capacity for the activity.",
+         "responsibilities": "- Provide Wing-level oversight and guidance\n- Advise Encampment Commander on program execution\n- Ensure alignment with CAP Cadet Programs standards\n- Observe and evaluate encampment operations\n- Liaison between encampment and Wing HQ\n- Final authority on program policy matters"},
+        
+        # ===== LEVEL 1 - Encampment Commander =====
+        {"role_id": "enc-commander", "title": "Encampment Commander", "level": 1, "order": 0, "reports_to": "dcp",
          "summary": "Overall commander responsible for the entire encampment operation.",
          "responsibilities": "- Provide strategic leadership and vision for encampment\n- Ensure safety and welfare of all participants\n- Coordinate with Wing and Region leadership\n- Final authority on all encampment matters\n- Conduct commander's calls and briefings\n- Approve all major decisions"},
         
-        # ===== LEVEL 1 - Direct Reports to EC =====
-        {"role_id": "sm-superintendent", "title": "SM Superintendent", "level": 1, "order": 0, "reports_to": "enc-commander",
+        # ===== LEVEL 2 - Direct Reports to EC =====
+        {"role_id": "sm-superintendent", "title": "SM Superintendent", "level": 2, "order": 0, "reports_to": "enc-commander",
          "summary": "Senior Member Superintendent - supports commander with senior member coordination.",
          "responsibilities": "- Coordinate senior member staff activities\n- Serve as liaison between cadets and senior members\n- Assist with administrative functions\n- Support commander as needed"},
-        {"role_id": "finance", "title": "Finance", "level": 1, "order": 1, "reports_to": "enc-commander",
+        {"role_id": "finance", "title": "Finance", "level": 2, "order": 1, "reports_to": "enc-commander",
          "summary": "Manages all financial operations for encampment.",
          "responsibilities": "- Track all income and expenses\n- Process registration payments\n- Manage budget allocations\n- Prepare financial reports\n- Handle vendor payments"},
-        {"role_id": "chaplain-cdi", "title": "Chaplain/CDI", "level": 1, "order": 2, "reports_to": "enc-commander",
+        {"role_id": "chaplain-cdi", "title": "Chaplain/CDI", "level": 2, "order": 2, "reports_to": "enc-commander",
          "summary": "Provides spiritual support and character development instruction.",
          "responsibilities": "- Conduct religious services\n- Provide counseling support\n- Lead character development sessions\n- Support cadet welfare"},
-        {"role_id": "health-services", "title": "Health Services", "level": 1, "order": 3, "reports_to": "enc-commander",
+        {"role_id": "health-services", "title": "Health Services", "level": 2, "order": 3, "reports_to": "enc-commander",
          "summary": "Oversees all medical support and health services.",
          "responsibilities": "- Manage medical staff and supplies\n- Coordinate emergency medical response\n- Track medications and health records\n- Conduct health screenings\n- Ensure AED and first aid readiness"},
-        {"role_id": "safety", "title": "Safety", "level": 1, "order": 4, "reports_to": "enc-commander",
+        {"role_id": "safety", "title": "Safety", "level": 2, "order": 4, "reports_to": "enc-commander",
          "summary": "Ensures safety compliance throughout encampment operations.",
          "responsibilities": "- Conduct safety briefings and inspections\n- Monitor activity safety compliance\n- Investigate and report incidents\n- Maintain safety documentation\n- Coordinate with health services"},
         
         # ===== LEVEL 2 - Commandant & Deputy Support =====
-        {"role_id": "commandant", "title": "Commandant", "level": 2, "order": 0, "reports_to": "enc-commander",
+        {"role_id": "commandant", "title": "Commandant", "level": 3, "order": 0, "reports_to": "enc-commander",
          "summary": "Senior Member overseeing all cadet training operations.",
          "responsibilities": "- Supervise Cadet Commander and training staff\n- Ensure training objectives are met\n- Coordinate training schedule execution\n- Evaluate cadet performance\n- Maintain discipline standards"},
-        {"role_id": "cadet-commander", "title": "Cadet Commander", "level": 2, "order": 1, "reports_to": "enc-commander",
+        {"role_id": "cadet-commander", "title": "Cadet Commander", "level": 3, "order": 1, "reports_to": "enc-commander",
          "summary": "Senior cadet leader commanding the cadet corps.",
          "responsibilities": "- Lead cadet staff and corps\n- Execute training plan\n- Set example for all cadets\n- Conduct formations and inspections\n- Report to Commandant and EC"},
-        {"role_id": "deputy-support", "title": "Deputy Comm for Support", "level": 2, "order": 2, "reports_to": "enc-commander",
+        {"role_id": "deputy-support", "title": "Deputy Comm for Support", "level": 3, "order": 2, "reports_to": "enc-commander",
          "summary": "Oversees all support and logistics functions.",
          "responsibilities": "- Supervise support staff sections\n- Manage facilities and resources\n- Coordinate transportation and logistics\n- Oversee communications and PA"},
         
         # ===== LEVEL 3 - Under Commandant =====
-        {"role_id": "chief-instructor", "title": "Chief Instructor", "level": 3, "order": 0, "reports_to": "commandant",
+        {"role_id": "chief-instructor", "title": "Chief Instructor", "level": 4, "order": 0, "reports_to": "commandant",
          "summary": "Leads instructor cadre for training delivery.",
          "responsibilities": "- Train and supervise instructors\n- Ensure training quality\n- Develop lesson plans\n- Evaluate instruction effectiveness"},
-        {"role_id": "chief-training-officer", "title": "Chief Training Officer", "level": 3, "order": 1, "reports_to": "commandant",
+        {"role_id": "chief-training-officer", "title": "Chief Training Officer", "level": 4, "order": 1, "reports_to": "commandant",
          "summary": "Manages training schedule and operations.",
          "responsibilities": "- Coordinate daily training schedule\n- Track training completion\n- Manage training resources\n- Support instructors"},
         
         # ===== LEVEL 3 - Under Cadet Commander =====
-        {"role_id": "dean-academics", "title": "Dean of Academics", "level": 3, "order": 2, "reports_to": "cadet-commander",
+        {"role_id": "dean-academics", "title": "Dean of Academics", "level": 4, "order": 2, "reports_to": "cadet-commander",
          "summary": "Oversees academic and classroom instruction.",
          "responsibilities": "- Manage classroom training\n- Coordinate testing and evaluations\n- Track academic progress\n- Support instructor development"},
-        {"role_id": "deputy-commander", "title": "Deputy Commander", "level": 3, "order": 3, "reports_to": "cadet-commander",
+        {"role_id": "deputy-commander", "title": "Deputy Commander", "level": 4, "order": 3, "reports_to": "cadet-commander",
          "summary": "Assists Cadet Commander with corps leadership.",
          "responsibilities": "- Support Cadet Commander duties\n- Lead in CC's absence\n- Coordinate staff activities\n- Assist with formations"},
         
         # ===== LEVEL 3 - Under Deputy Support =====
-        {"role_id": "word", "title": "Word", "level": 3, "order": 4, "reports_to": "deputy-support",
+        {"role_id": "word", "title": "Word", "level": 4, "order": 4, "reports_to": "deputy-support",
          "summary": "Manages administrative and word processing functions.",
          "responsibilities": "- Prepare documents and reports\n- Maintain records and files\n- Support administrative tasks\n- Coordinate information flow"},
-        {"role_id": "public-affairs", "title": "Public Affairs", "level": 3, "order": 5, "reports_to": "deputy-support",
+        {"role_id": "public-affairs", "title": "Public Affairs", "level": 4, "order": 5, "reports_to": "deputy-support",
          "summary": "Manages public affairs and media documentation.",
          "responsibilities": "- Photography and videography\n- Social media updates\n- Prepare graduation program\n- Media coordination and releases"},
-        {"role_id": "logistics", "title": "Logistics", "level": 3, "order": 6, "reports_to": "deputy-support",
+        {"role_id": "logistics", "title": "Logistics", "level": 4, "order": 6, "reports_to": "deputy-support",
          "summary": "Manages supply and logistics operations.",
          "responsibilities": "- Inventory management\n- Supply distribution\n- Equipment accountability\n- Facility coordination"},
-        {"role_id": "plans-programs", "title": "Plans and Programs", "level": 3, "order": 7, "reports_to": "deputy-support",
+        {"role_id": "plans-programs", "title": "Plans and Programs", "level": 4, "order": 7, "reports_to": "deputy-support",
          "summary": "Manages planning and program coordination.",
          "responsibilities": "- Develop activity plans\n- Coordinate special programs\n- Track milestones and objectives\n- Support scheduling"},
-        {"role_id": "comms", "title": "Comms", "level": 3, "order": 8, "reports_to": "deputy-support",
+        {"role_id": "comms", "title": "Comms", "level": 4, "order": 8, "reports_to": "deputy-support",
          "summary": "Manages communications equipment and operations.",
          "responsibilities": "- Maintain radios and comm equipment\n- Coordinate communication channels\n- Support emergency communications\n- Train users on equipment"},
         
-        # ===== LEVEL 4 - Training Officers (3 squadrons) =====
-        {"role_id": "to-sq1", "title": "Training Officer - 6th CTS", "level": 4, "order": 0, "reports_to": "chief-training-officer",
+        # ===== LEVEL 5 - Training Officers (3 squadrons) =====
+        {"role_id": "to-sq1", "title": "Training Officer - 6th CTS", "level": 5, "order": 0, "reports_to": "chief-training-officer",
          "summary": "Training Officer for 6th CTS.",
          "responsibilities": "- Oversee 6th CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
-        {"role_id": "to-sq2", "title": "Training Officer - 21st CTS", "level": 4, "order": 1, "reports_to": "chief-training-officer",
+        {"role_id": "to-sq2", "title": "Training Officer - 21st CTS", "level": 5, "order": 1, "reports_to": "chief-training-officer",
          "summary": "Training Officer for 21st CTS.",
          "responsibilities": "- Oversee 21st CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
-        {"role_id": "to-sq3", "title": "Training Officer - 22nd CTS", "level": 4, "order": 2, "reports_to": "chief-training-officer",
+        {"role_id": "to-sq3", "title": "Training Officer - 22nd CTS", "level": 5, "order": 2, "reports_to": "chief-training-officer",
          "summary": "Training Officer for 22nd CTS.",
          "responsibilities": "- Oversee 22nd CTS training\n- Supervise Assistant TO\n- Evaluate training effectiveness\n- Report to Chief Training Officer"},
         
-        # ===== LEVEL 5 - Asst Training Officers =====
-        {"role_id": "ato-sq1", "title": "Asst Training Officer - 6th CTS", "level": 5, "order": 0, "reports_to": "to-sq1",
+        # ===== LEVEL 6 - Asst Training Officers =====
+        {"role_id": "ato-sq1", "title": "Asst Training Officer - 6th CTS", "level": 6, "order": 0, "reports_to": "to-sq1",
          "summary": "Assistant Training Officer for 6th CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
-        {"role_id": "ato-sq2", "title": "Asst Training Officer - 21st CTS", "level": 5, "order": 1, "reports_to": "to-sq2",
+        {"role_id": "ato-sq2", "title": "Asst Training Officer - 21st CTS", "level": 6, "order": 1, "reports_to": "to-sq2",
          "summary": "Assistant Training Officer for 21st CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
-        {"role_id": "ato-sq3", "title": "Asst Training Officer - 22nd CTS", "level": 5, "order": 2, "reports_to": "to-sq3",
+        {"role_id": "ato-sq3", "title": "Asst Training Officer - 22nd CTS", "level": 6, "order": 2, "reports_to": "to-sq3",
          "summary": "Assistant Training Officer for 22nd CTS.",
          "responsibilities": "- Assist with squadron training\n- Support Training Officer\n- Fill in as needed"},
         
-        # ===== LEVEL 5 - Squadron Commanders =====
-        {"role_id": "sq1-cc", "title": "Squadron Commander - 6th CTS", "level": 5, "order": 3, "reports_to": "to-sq1",
+        # ===== LEVEL 6 - Squadron Commanders =====
+        {"role_id": "sq1-cc", "title": "Squadron Commander - 6th CTS", "level": 6, "order": 3, "reports_to": "to-sq1",
          "summary": "Commands 6th CTS cadets.",
          "responsibilities": "- Lead 6th CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
-        {"role_id": "sq2-cc", "title": "Squadron Commander - 21st CTS", "level": 5, "order": 4, "reports_to": "to-sq2",
+        {"role_id": "sq2-cc", "title": "Squadron Commander - 21st CTS", "level": 6, "order": 4, "reports_to": "to-sq2",
          "summary": "Commands 21st CTS cadets.",
          "responsibilities": "- Lead 21st CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
-        {"role_id": "sq3-cc", "title": "Squadron Commander - 22nd CTS", "level": 5, "order": 5, "reports_to": "to-sq3",
+        {"role_id": "sq3-cc", "title": "Squadron Commander - 22nd CTS", "level": 6, "order": 5, "reports_to": "to-sq3",
          "summary": "Commands 22nd CTS cadets.",
          "responsibilities": "- Lead 22nd CTS cadets\n- Conduct formations\n- Supervise flight commanders\n- Maintain discipline"},
         {"role_id": "support-sq-cc", "title": "Support Squadron Commander", "level": 5, "order": 6, "reports_to": "deputy-support",
@@ -5331,7 +5345,7 @@ async def get_report_settings(user: dict = Depends(get_current_user)):
 @api_router.post("/reports/settings")
 async def update_report_settings(
     settings: ReportDeadlineSettings,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Update report deadline settings (admin only)"""
     await db.report_settings.update_one(
@@ -5360,7 +5374,7 @@ async def get_my_submitted_reports(
 
 @api_router.get("/reports/commander-issues")
 async def get_commander_issues(
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
 ):
     """Get all reports with commander issues (escalated status)"""
     reports = await db.flight_reports.find(
@@ -5717,7 +5731,7 @@ async def escalate_flight_report(
 async def resolve_escalated_report(
     report_id: str,
     resolution_notes: Optional[str] = None,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
 ):
     """Mark an escalated report as resolved (Commander or Exec Cadre only)"""
     report = await db.flight_reports.find_one({"id": report_id})
@@ -6535,7 +6549,7 @@ async def get_health_settings(user: dict = Depends(require_health_view())):
 @api_router.post("/health/settings")
 async def update_health_settings(
     settings_data: dict,
-    user: dict = Depends(require_role([UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.HEALTH_SERVICES]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.HEALTH_SERVICES]))
 ):
     """Update health services event settings"""
     await db.hs_settings.update_one(
@@ -7435,7 +7449,7 @@ async def get_import_summary(user: dict = Depends(require_health_view())):
 
 # ================= SCHEDULE CHANGE REQUESTS =================
 
-SCHEDULE_EDITOR_ROLES = ['commander', 'executive_staff', 'staff', 'plans_programs']
+SCHEDULE_EDITOR_ROLES = ['dcp', 'commander', 'executive_staff', 'staff', 'plans_programs']
 
 @api_router.get("/schedule-changes")
 async def list_schedule_changes(status: str = None, user: dict = Depends(get_current_user)):
@@ -7537,7 +7551,7 @@ async def get_health_alerts(member_id: str, user: dict = Depends(get_current_use
         return {"member_id": member_id, "alerts": [], "notes": ""}
 
     # Health Services and Commander see everything
-    if role in ["commander", "executive_staff", "health_services"]:
+    if role in ["dcp", "commander", "executive_staff", "health_services"]:
         return doc
 
     # For other roles, filter to only alerts shared with their level
@@ -7554,7 +7568,7 @@ async def get_health_alerts(member_id: str, user: dict = Depends(get_current_use
 
 @api_router.put("/health-alerts/{member_id}")
 async def update_health_alerts(member_id: str, data: dict = Body(...), user: dict = Depends(get_current_user)):
-    if user.get("role") not in ["commander", "executive_staff", "health_services"]:
+    if user.get("role") not in ["dcp", "commander", "executive_staff", "health_services"]:
         raise HTTPException(status_code=403, detail="Health Services access required")
     now = datetime.now(timezone.utc).isoformat()
     doc = {

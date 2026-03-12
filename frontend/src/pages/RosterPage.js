@@ -74,7 +74,7 @@ const RosterPage = () => {
 
   // Check if user can see full roster details (sensitive info)
   const canViewSensitiveData = () => {
-    const privilegedRoles = ['commander', 'executive_staff', 'exec_cadre', 'plans_programs', 'finance', 'staff'];
+    const privilegedRoles = ['dcp', 'commander', 'executive_staff', 'exec_cadre', 'plans_programs', 'finance', 'staff'];
     return privilegedRoles.includes(user?.role);
   };
 
