@@ -631,7 +631,21 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - [ ] Audit log viewer page (/health/audit)
 - [ ] Health settings page (/health/settings)
 
-### Completed (March 10, 2026) - Logistics Module & Fixes
+### Completed (March 12, 2026) - Status Board System
+- [x] **Status Board - Projected Display System (Full Implementation)**
+  - **Control View** (`/status-control`): 7-tab management interface (Flights, Schedule, Issues, Announcements, Resources, Settings, Audit Log) with full CRUD, emergency banner controls, seed data, and "Open Display" link
+  - **Display View** (`/status-display`): Dark-themed projector wallboard with 4 auto-rotating modes (Command Dashboard, Schedule, Logistics, Safety), live clock, Heat Category indicator, flight status cards, active issues, upcoming events, scrolling announcement ticker
+  - Emergency banner system (commander/exec_staff only) with pulsing red alert
+  - Auto-refresh every 15s, auto-rotate modes every 25s (configurable)
+  - Keyboard navigation: ArrowRight/Left for modes, F for fullscreen
+  - Role-based permissions for editing vs viewing
+  - Audit trail for all changes
+  - Sample data seed for testing
+  - Backend: Factory pattern router in /app/backend/statusboard.py with 22+ API endpoints
+  - MongoDB collections: sb_flights, sb_issues, sb_announcements, sb_resources, sb_schedule_events, sb_display_settings, sb_audit_log
+  - Testing: 24 backend tests (100%), 17 frontend features verified (100%)
+
+### Completed (March 12, 2026) - Sidebar & UI Fixes
 - [x] **Logistics Module - Full Implementation (10 sub-pages)**
   - Dashboard: Real-time stats (11 metric cards), overdue alerts, quick actions
   - Inventory Management: CRUD with categories, quantity tracking, low stock alerts, search
