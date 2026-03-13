@@ -23,7 +23,8 @@ import {
   ClipboardCheck,
   Package,
   Monitor,
-  UtensilsCrossed
+  UtensilsCrossed,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -59,6 +60,7 @@ const Sidebar = ({ children }) => {
       '/my-flight': 'my-flight',
       '/admin': 'admin',
       '/schedule': 'schedule',
+      '/budget': 'budget',
       '/roster': 'roster'
     };
     return keyMap[path];
@@ -75,6 +77,11 @@ const Sidebar = ({ children }) => {
 
   // Meal Plan Schedule visible to all roles
   navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
+
+  // Financial Tracker visible to commander, executive_staff, finance
+  if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
+    navItems.push({ path: '/budget', icon: DollarSign, label: 'Financial Tracker' });
+  }
 
   navItems.push(
     { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },

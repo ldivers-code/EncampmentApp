@@ -6,8 +6,6 @@ import {
   updateBudgetItem, 
   deleteBudgetItem, 
   importBudget,
-  getFoodExpenseSettings,
-  updateFoodExpenseSettings,
   uploadReceipt,
   deleteReceipt,
   seedTNWGBudgetTemplate,
@@ -58,14 +56,12 @@ const BudgetPage = () => {
   const [items, setItems] = useState([]);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [foodSettings, setFoodSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isFoodSettingsOpen, setIsFoodSettingsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(null);
@@ -87,14 +83,6 @@ const BudgetPage = () => {
     vendor: '',
     item_type: 'expense',
     payment_status: 'pending'
-  });
-
-  // Food expense default from 2026 TNWG Encampment Budget: $13.15 per person per day
-  const [foodFormData, setFoodFormData] = useState({
-    cost_per_person_per_day: 13.15,
-    total_participants: 0,
-    total_days: 8,
-    notes: ''
   });
 
   // Budget categories from 2026 TNWG Encampment Budget structure
@@ -127,20 +115,12 @@ const BudgetPage = () => {
 
   const loadData = async () => {
     try {
-      const [budgetItems, budgetSummary, foodSettingsData] = await Promise.all([
+      const [budgetItems, budgetSummary] = await Promise.all([
         getBudget(),
-        getBudgetSummary(),
-        getFoodExpenseSettings()
+        getBudgetSummary()
       ]);
       setItems(budgetItems);
       setSummary(budgetSummary);
-      setFoodSettings(foodSettingsData);
-      setFoodFormData({
-        cost_per_person_per_day: foodSettingsData.cost_per_person_per_day || 15,
-        total_participants: foodSettingsData.total_participants || 0,
-        total_days: foodSettingsData.total_days || 8,
-        notes: foodSettingsData.notes || ''
-      });
       setAccessDenied(false);
     } catch (error) {
       if (error.response?.status === 403) {
@@ -263,23 +243,6 @@ const BudgetPage = () => {
       loadData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Operation failed');
-    }
-  };
-
-  const handleFoodSettingsSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const result = await updateFoodExpenseSettings({
-        cost_per_person_per_day: parseFloat(foodFormData.cost_per_person_per_day) || 15,
-        total_participants: parseInt(foodFormData.total_participants) || 0,
-        total_days: parseInt(foodFormData.total_days) || 8,
-        notes: foodFormData.notes
-      });
-      setFoodSettings(result);
-      toast.success('Food expense settings updated');
-      setIsFoodSettingsOpen(false);
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to update settings');
     }
   };
 
@@ -495,16 +458,6 @@ const BudgetPage = () => {
               {loadingTemplate ? 'Loading...' : 'TNWG Template'}
             </Button>
           )}
-
-          <Button 
-            variant="outline" 
-            className="rounded-sm border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-            onClick={() => setIsFoodSettingsOpen(true)}
-            data-testid="food-settings-btn"
-          >
-            <Calculator className="w-4 h-4 mr-2" />
-            Food Planner
-          </Button>
 
           <label className="cursor-pointer">
             <input
@@ -790,133 +743,6 @@ const BudgetPage = () => {
           </div>
         </div>
       </div>
-
-      {/* Food Expense Calculator Card */}
-      {foodSettings && (
-        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-sm mb-6 p-4" data-testid="food-expense-card">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white rounded-sm shadow-sm">
-                <Calculator className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-emerald-800 uppercase text-sm tracking-wide">Food Expense Planner</h3>
-                <p className="text-emerald-700 text-sm mt-1">
-                  <span className="font-mono font-bold">{formatCurrency(foodSettings.cost_per_person_per_day)}</span> per person/day 
-                  × <span className="font-bold">{foodSettings.total_participants}</span> people 
-                  × <span className="font-bold">{foodSettings.total_days}</span> days
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-xs uppercase text-emerald-600 mb-1">Total Food Budget</p>
-              <p className="text-2xl lg:text-3xl font-bold text-emerald-700 font-mono">
-                {formatCurrency(foodSettings.total_food_budget)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Food Settings Dialog */}
-      <Dialog open={isFoodSettingsOpen} onOpenChange={setIsFoodSettingsOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              <Calculator className="w-5 h-5" />
-              Food Expense Settings
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleFoodSettingsSubmit} className="space-y-4 mt-4">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-3 mb-4">
-              <p className="text-sm text-emerald-700">
-                Configure the cost per person per day to calculate total food expenses for the encampment.
-              </p>
-            </div>
-            <div>
-              <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Cost Per Person Per Day *
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={foodFormData.cost_per_person_per_day}
-                onChange={(e) => setFoodFormData({ ...foodFormData, cost_per_person_per_day: e.target.value })}
-                className="mt-1 rounded-sm font-mono text-lg"
-                placeholder="15.00"
-                data-testid="food-cost-input"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Total Participants
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={foodFormData.total_participants}
-                  onChange={(e) => setFoodFormData({ ...foodFormData, total_participants: e.target.value })}
-                  className="mt-1 rounded-sm font-mono"
-                  placeholder="0"
-                  data-testid="food-participants-input"
-                />
-                <p className="text-xs text-slate-400 mt-1">From roster: {foodSettings?.total_participants || 0}</p>
-              </div>
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-600 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Total Days
-                </Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={foodFormData.total_days}
-                  onChange={(e) => setFoodFormData({ ...foodFormData, total_days: e.target.value })}
-                  className="mt-1 rounded-sm font-mono"
-                  placeholder="8"
-                  data-testid="food-days-input"
-                />
-                <p className="text-xs text-slate-400 mt-1">Jul 17-24 = 8 days</p>
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs uppercase tracking-wide text-slate-600">Notes</Label>
-              <Textarea
-                value={foodFormData.notes}
-                onChange={(e) => setFoodFormData({ ...foodFormData, notes: e.target.value })}
-                className="mt-1 rounded-sm"
-                rows={2}
-                placeholder="Any special considerations..."
-              />
-            </div>
-            
-            {/* Preview calculation */}
-            <div className="bg-slate-50 rounded-sm p-4 border border-slate-200">
-              <p className="text-xs uppercase text-slate-500 mb-2">Calculated Total</p>
-              <p className="text-2xl font-bold text-emerald-600 font-mono">
-                {formatCurrency(
-                  (parseFloat(foodFormData.cost_per_person_per_day) || 0) * 
-                  (parseInt(foodFormData.total_participants) || 0) * 
-                  (parseInt(foodFormData.total_days) || 0)
-                )}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsFoodSettingsOpen(false)} className="rounded-sm">
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 rounded-sm" data-testid="save-food-settings-btn">
-                Save Settings
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

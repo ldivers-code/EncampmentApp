@@ -11,6 +11,7 @@ import RosterPage from "./pages/RosterPage";
 import OrgChartPage from "./pages/OrgChartPage";
 import SchedulePage from "./pages/SchedulePage";
 import MealPlanPage from "./pages/MealPlanPage";
+import BudgetPage from "./pages/BudgetPage";
 import HandbooksPage from "./pages/HandbooksPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
@@ -136,6 +137,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <MealPlanPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/budget"
+        element={
+          <ProtectedRoute>
+            <BudgetPage />
           </ProtectedRoute>
         }
       />

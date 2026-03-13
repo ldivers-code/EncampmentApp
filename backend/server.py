@@ -90,6 +90,8 @@ class AccessPermissions(BaseModel):
     schedule_edit: bool = False
     meal_plan_view: bool = True
     meal_plan_edit: bool = False
+    budget_view: bool = False
+    budget_edit: bool = False
     analytics: bool = False
     org_chart: bool = True
     handbooks: bool = True
@@ -105,6 +107,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         meal_plan_view=True, meal_plan_edit=True,
+        budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -113,6 +116,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         meal_plan_view=True, meal_plan_edit=True,
+        budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -121,6 +125,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         meal_plan_view=True, meal_plan_edit=True,
+        budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -129,6 +134,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -137,6 +143,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         meal_plan_view=True, meal_plan_edit=True,
+        budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=False, health_full=False
@@ -145,6 +152,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -153,6 +161,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=False
@@ -161,6 +170,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -169,6 +179,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=True
@@ -177,6 +188,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=False
@@ -185,6 +197,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -193,6 +206,7 @@ DEFAULT_PERMISSIONS = {
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=True,
+        budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
