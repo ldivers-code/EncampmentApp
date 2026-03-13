@@ -64,7 +64,7 @@ security = HTTPBearer()
 class UserRole:
     DCP = "dcp"  # Director of Cadet Programs — advisory role above Commander, full access
     COMMANDER = "commander"
-    EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support — same perms as Commander
+    EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support, DCS — same perms as Commander
     LOGISTICS = "logistics"  # Logistics operations
     TRAINING_OFFICER = "training_officer"  # Assigned to squadron, blister checks, counseling, cadre issues
     FINANCE = "finance"
@@ -73,6 +73,7 @@ class UserRole:
     STAFF = "staff"
     CADRE = "cadre"
     HEALTH_SERVICES = "health_services"  # Full access to health data
+    DINING_FACILITY = "dining_facility"  # Meal plan management, view access to most pages
 
 class UserUnit:
     STAFF = "staff"
@@ -87,8 +88,8 @@ class AccessPermissions(BaseModel):
     roster_edit: bool = False
     schedule_view: bool = True
     schedule_edit: bool = False
-    budget_view: bool = False
-    budget_edit: bool = False
+    meal_plan_view: bool = True
+    meal_plan_edit: bool = False
     analytics: bool = False
     org_chart: bool = True
     handbooks: bool = True
@@ -103,7 +104,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.DCP: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
-        budget_view=True, budget_edit=True,
+        meal_plan_view=True, meal_plan_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -111,7 +112,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.COMMANDER: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
-        budget_view=True, budget_edit=True,
+        meal_plan_view=True, meal_plan_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -119,7 +120,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.EXECUTIVE_STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
-        budget_view=True, budget_edit=True,
+        meal_plan_view=True, meal_plan_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True
@@ -127,7 +128,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.FINANCE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=True, budget_edit=True,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -135,7 +136,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.PLANS_PROGRAMS: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=False, health_full=False
@@ -143,7 +144,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.EXEC_CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -151,15 +152,15 @@ DEFAULT_PERMISSIONS = {
     UserRole.STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
         schedule_view=True, schedule_edit=True,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
-        health_view=True, health_full=False  # Staff can see basic health info but not medications
+        health_view=True, health_full=False
     ),
     UserRole.CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
@@ -167,7 +168,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.HEALTH_SERVICES: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=True
@@ -175,7 +176,7 @@ DEFAULT_PERMISSIONS = {
     UserRole.TRAINING_OFFICER: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=True, health_full=False
@@ -183,8 +184,16 @@ DEFAULT_PERMISSIONS = {
     UserRole.LOGISTICS: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
-        budget_view=False, budget_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
         analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.DINING_FACILITY: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=True,
+        analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
     )
@@ -887,7 +896,8 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
     valid_roles = [
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
         UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
-        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES
+        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES,
+        UserRole.DINING_FACILITY
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -4255,7 +4265,7 @@ DOCUMENT_UPLOAD_ROLES = [
     UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
     UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
     UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS,
-    UserRole.FINANCE
+    UserRole.FINANCE, UserRole.DINING_FACILITY
 ]
 
 @api_router.post("/documents", response_model=DocumentResponse)
@@ -4479,6 +4489,94 @@ async def replace_document_file(
 
     doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     return DocumentResponse(**doc)
+
+
+# ================= MEAL PLAN SCHEDULE =================
+
+MEAL_PLAN_EDITOR_ROLES = [
+    UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+    UserRole.PLANS_PROGRAMS, UserRole.DINING_FACILITY
+]
+
+class MealPlanBase(BaseModel):
+    date: str  # ISO date string
+    meal_type: str  # breakfast, lunch, dinner, snack
+    menu_items: str  # Description of menu items
+    location: Optional[str] = None
+    time: Optional[str] = None  # e.g. "0700", "1200"
+    notes: Optional[str] = None
+    headcount: Optional[int] = None
+    dietary_notes: Optional[str] = None
+
+class MealPlanCreate(MealPlanBase):
+    pass
+
+class MealPlanResponse(MealPlanBase):
+    id: str
+    created_by: str
+    updated_by: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+@api_router.get("/meal-plans")
+async def get_meal_plans(user: dict = Depends(get_current_user)):
+    """Get all meal plans"""
+    plans = await db.meal_plans.find({}, {"_id": 0}).sort([("date", 1), ("meal_type", 1)]).to_list(1000)
+    return plans
+
+
+@api_router.post("/meal-plans", response_model=MealPlanResponse)
+async def create_meal_plan(
+    data: MealPlanCreate,
+    user: dict = Depends(require_role(MEAL_PLAN_EDITOR_ROLES))
+):
+    """Create a new meal plan entry"""
+    now = datetime.now(timezone.utc).isoformat()
+    plan = {
+        "id": str(uuid.uuid4()),
+        **data.dict(),
+        "created_by": user["name"],
+        "updated_by": None,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.meal_plans.insert_one(plan)
+    plan.pop("_id", None)
+    return MealPlanResponse(**plan)
+
+
+@api_router.put("/meal-plans/{plan_id}", response_model=MealPlanResponse)
+async def update_meal_plan(
+    plan_id: str,
+    data: MealPlanCreate,
+    user: dict = Depends(require_role(MEAL_PLAN_EDITOR_ROLES))
+):
+    """Update an existing meal plan entry"""
+    existing = await db.meal_plans.find_one({"id": plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Meal plan not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.meal_plans.update_one({"id": plan_id}, {"$set": {
+        **data.dict(),
+        "updated_by": user["name"],
+        "updated_at": now
+    }})
+    updated = await db.meal_plans.find_one({"id": plan_id}, {"_id": 0})
+    return MealPlanResponse(**updated)
+
+
+@api_router.delete("/meal-plans/{plan_id}")
+async def delete_meal_plan(
+    plan_id: str,
+    user: dict = Depends(require_role(MEAL_PLAN_EDITOR_ROLES))
+):
+    """Delete a meal plan entry"""
+    result = await db.meal_plans.delete_one({"id": plan_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Meal plan not found")
+    return {"message": "Meal plan deleted"}
 
 
 # ================= FLIGHT ROSTER ROUTES =================

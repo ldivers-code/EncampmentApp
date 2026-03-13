@@ -6,7 +6,6 @@ import {
   LayoutDashboard, 
   Users, 
   Calendar, 
-  DollarSign, 
   BookOpen, 
   FileText, 
   Settings, 
@@ -23,7 +22,8 @@ import {
   Heart,
   ClipboardCheck,
   Package,
-  Monitor
+  Monitor,
+  UtensilsCrossed
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -59,7 +59,6 @@ const Sidebar = ({ children }) => {
       '/my-flight': 'my-flight',
       '/admin': 'admin',
       '/schedule': 'schedule',
-      '/budget': 'budget',
       '/roster': 'roster'
     };
     return keyMap[path];
@@ -74,22 +73,20 @@ const Sidebar = ({ children }) => {
     { path: '/points', icon: Trophy, label: 'Point Tracking' },
   ];
 
-  // Financial Tracker visible to commander, executive_staff, finance only
-  if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
-    navItems.push({ path: '/budget', icon: DollarSign, label: 'Financial Tracker' });
-  }
+  // Meal Plan Schedule visible to all roles
+  navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
 
   navItems.push(
     { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
     { path: '/documents', icon: FileText, label: 'Official Documents' },
   );
 
-  // Analytics visible to commander, executive_staff, exec_cadre, staff, and finance
-  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance'].includes(user?.role)) {
+  // Analytics visible to commander, executive_staff, exec_cadre, staff, finance, and dining_facility
+  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
-  // Health Services visible to commander, executive_staff, health_services, and staff
+  // Health Services visible to commander, executive_staff, health_services, and staff (NOT dining_facility)
   if (['dcp', 'commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
@@ -105,6 +102,7 @@ const Sidebar = ({ children }) => {
   // Status Board visible to all roles
   navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
 
+  // Admin - NOT visible to dining_facility
   if (['dcp', 'commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }

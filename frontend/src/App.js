@@ -10,7 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 import RosterPage from "./pages/RosterPage";
 import OrgChartPage from "./pages/OrgChartPage";
 import SchedulePage from "./pages/SchedulePage";
-import BudgetPage from "./pages/BudgetPage";
+import MealPlanPage from "./pages/MealPlanPage";
 import HandbooksPage from "./pages/HandbooksPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
@@ -132,10 +132,10 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/budget"
+        path="/meal-plan"
         element={
           <ProtectedRoute>
-            <BudgetPage />
+            <MealPlanPage />
           </ProtectedRoute>
         }
       />

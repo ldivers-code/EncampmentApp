@@ -55,7 +55,7 @@ const StatusBoardControl = () => {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
 
-  const canEdit = ['dcp', 'commander', 'executive_staff', 'staff', 'plans_programs', 'logistics', 'health_services', 'training_officer'].includes(user?.role);
+  const canEdit = ['dcp', 'commander', 'executive_staff', 'staff', 'plans_programs', 'logistics', 'health_services', 'training_officer', 'dining_facility'].includes(user?.role);
   const canEmergency = ['dcp', 'commander', 'executive_staff'].includes(user?.role);
 
   const load = useCallback(async () => {

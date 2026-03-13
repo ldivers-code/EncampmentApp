@@ -74,7 +74,8 @@ const AdminPage = () => {
     { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200' },
     { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' },
-    { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200' }
+    { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200' },
+    { value: 'dining_facility', label: 'Dining Facility', color: 'bg-orange-100 text-orange-800 border-orange-200' }
   ];
 
   const squadrons = [

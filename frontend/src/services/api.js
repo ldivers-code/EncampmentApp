@@ -379,6 +379,27 @@ export const previewDocumentFile = async (docId) => {
   return response;
 };
 
+// Meal Plans
+export const getMealPlans = async () => {
+  const response = await axios.get(`${API}/meal-plans`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const createMealPlan = async (data) => {
+  const response = await axios.post(`${API}/meal-plans`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateMealPlan = async (id, data) => {
+  const response = await axios.put(`${API}/meal-plans/${id}`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deleteMealPlan = async (id) => {
+  const response = await axios.delete(`${API}/meal-plans/${id}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Users
 export const getUsers = async () => {
   const response = await axios.get(`${API}/users`, { headers: getAuthHeaders() });
