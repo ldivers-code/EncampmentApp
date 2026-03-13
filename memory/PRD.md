@@ -732,6 +732,16 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
   - July 24: Graduation Day
 - Assigning a flight automatically sets the correct squadron
 - Cadets without unit assignment see all events
-- Budget access restricted to Commander and Finance roles only
-- Food expense calculation: cost × participants × days
+- Budget access restricted to Commander, Executive Staff, and Finance roles only
+- Meal Plan editable by: Commander, Executive Staff (DCS), Plans & Programs, Dining Facility, DCP
 - Health Services permissions: health_view (basic info) and health_full (all data)
+- Dining Facility role: view all pages except Admin and Health Services, edit only Meal Plan
+
+### Mar 13, 2026 - Meal Plan Schedule & Dining Facility Role
+- **New Meal Plan Schedule page** with weekly calendar view, color-coded meal types (Breakfast, Lunch, Dinner, Snack)
+- **Removed Food Planner** from Financial Tracker (kept all other budget features intact)
+- **New "Dining Facility" role** with view access to all pages EXCEPT admin and health services, edit privileges ONLY for Meal Plan Schedule
+- **Meal Plan CRUD**: Full create/edit/delete with date, meal type, menu items, time, headcount, location, dietary notes
+- **Backend**: `MEAL_PLAN_EDITOR_ROLES`, `dining_facility` role in UserRole, `meal_plans` MongoDB collection
+- **Frontend**: `MealPlanPage.js`, `canEditMealPlan()` in AuthContext, updated Sidebar navigation
+- **Testing**: 15/15 backend tests passed, 100% frontend tests passed
