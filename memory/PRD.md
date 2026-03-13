@@ -678,6 +678,24 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - [x] MongoDB collections: hs_allergies, hs_otc_approvals
 - [x] Backend endpoints: POST /api/health/import/medical-data, GET /api/health/cadet/{capid}/allergies, GET /api/health/cadet/{capid}/otc-approvals, GET /api/health/import/summary
 
+### Mar 13, 2026 - CSS Header Cutoff Bug Fix (P0)
+- **Fixed recurring global CSS bug** where header action buttons and dropdowns were cut off or appeared behind other elements
+- **Root causes identified and fixed**:
+  1. `overflow-x-hidden` on SchedulePage.js was clipping custom dropdown menus - REMOVED
+  2. Main content wrapper in Sidebar.js lacked `overflow-visible` - ADDED
+  3. Custom dropdown z-index on SchedulePage was too low (z-20) - INCREASED to z-50
+  4. Radix UI popper content had no guaranteed z-index - ADDED global CSS rule (z-index: 100)
+  5. Roster page header buttons (Import CAP Report, Add Participant) overflowed at 1280px viewport - Changed responsive breakpoint from `sm:flex-row` to `2xl:flex-row`
+- **Files modified**: Sidebar.js, SchedulePage.js, RosterPage.js, index.css
+- **Testing results**: 11/12 tests passed initially, then remaining Roster header overflow fixed
+
+### Mar 13, 2026 - Favicon Update
+- Updated app favicon to 60th Cadet Training Group (60th CTG) patch
+- Generated ICO format with multiple sizes (16x16, 32x32, 48x48, 64x64)
+- Added apple-touch-icon link tag for mobile devices
+- **Files modified**: public/favicon.ico, public/favicon-new.png, public/index.html
+
+
 ## Notes
 - First registered user automatically becomes Commander
 - Schedule dates: July 17-24, 2026

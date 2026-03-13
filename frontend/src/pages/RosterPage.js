@@ -473,9 +473,9 @@ const RosterPage = () => {
   return (
     <div className="p-6 lg:p-8 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4 mb-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
               {rosterView === 'master' ? 'Master Roster' : 'Full Roster'}
             </h1>
