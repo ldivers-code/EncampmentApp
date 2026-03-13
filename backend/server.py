@@ -23,6 +23,9 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
+from fastapi import Form, Query
+from fastapi.responses import Response
+from file_storage import init_storage, put_object, get_object
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -44,6 +47,9 @@ VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', 'UUxI4O8-FbRouAevSmBQ6o1
 # SendGrid Configuration
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDGRID_SENDER_EMAIL = os.environ.get('SENDGRID_SENDER_EMAIL', 'noreply@cap-encampment.org')
+
+# Object Storage
+APP_NAME = "tnwing-cap"
 
 # Create the main app
 app = FastAPI(title="CAP Encampment Roster API")
@@ -551,10 +557,15 @@ class BudgetItemResponse(BudgetItemBase):
 class DocumentBase(BaseModel):
     title: str
     description: Optional[str] = None
-    doc_type: str  # handbook, official_document, form, tlp, pocket_class
+    doc_type: str  # handbook, official_document, form, tlp, pocket_class, reference, checklist
     category: Optional[str] = None  # Custom category for organization
     content: Optional[str] = None
     file_url: Optional[str] = None
+    # File storage fields
+    storage_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None
     # Flight/Squadron scope
     flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot, or None for all
     squadron: Optional[str] = None  # 6th_cts, 21st_cts, 22nd_cts, or None for all
@@ -4240,10 +4251,19 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     
     return DocumentResponse(**doc)
 
+DOCUMENT_UPLOAD_ROLES = [
+    UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+    UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+    UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS,
+    UserRole.FINANCE
+]
+
 @api_router.post("/documents", response_model=DocumentResponse)
 async def create_document(
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+        UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.FINANCE]))
 ):
     """Create a new document (Commander only)"""
     doc_id = str(uuid.uuid4())
@@ -4266,7 +4286,9 @@ async def create_document(
 async def update_document(
     doc_id: str,
     data: DocumentCreate,
-    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+        UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.FINANCE]))
 ):
     """Update a document with version tracking"""
     existing = await db.documents.find_one({"id": doc_id})
@@ -4303,12 +4325,130 @@ async def update_document(
 @api_router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: str,
-    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+        UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.FINANCE]))
 ):
     result = await db.documents.delete_one({"id": doc_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted successfully"}
+
+
+# ================= FILE UPLOAD/DOWNLOAD ROUTES =================
+
+@api_router.post("/documents/upload")
+async def upload_document_with_file(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    doc_type: str = Form("handbook"),
+    category: str = Form(""),
+    scope: str = Form("global"),
+    flight: str = Form(""),
+    squadron: str = Form(""),
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+        UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.FINANCE]))
+):
+    """Upload a document with file attachment to object storage"""
+    file_data = await file.read()
+    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+    storage_path = f"{APP_NAME}/documents/{user['id']}/{uuid.uuid4()}.{ext}"
+
+    result = put_object(storage_path, file_data, file.content_type or "application/octet-stream")
+
+    doc_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    doc = {
+        "id": doc_id,
+        "title": title,
+        "description": description or None,
+        "doc_type": doc_type,
+        "category": category or None,
+        "content": None,
+        "file_url": None,
+        "storage_path": result["path"],
+        "file_name": file.filename,
+        "file_size": result.get("size", len(file_data)),
+        "file_type": file.content_type or "application/octet-stream",
+        "flight": flight or None,
+        "squadron": squadron or None,
+        "scope": scope,
+        "uploaded_by": user["name"],
+        "uploaded_by_role": user["role"],
+        "version": 1,
+        "version_history": [],
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.documents.insert_one(doc)
+    doc.pop("_id", None)
+    return DocumentResponse(**doc)
+
+
+@api_router.get("/documents/{doc_id}/download")
+async def download_document_file(
+    doc_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Download a document's attached file"""
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not can_access_document(user, doc):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+
+    if not doc.get("storage_path"):
+        raise HTTPException(status_code=404, detail="No file attached to this document")
+
+    try:
+        file_data, content_type = get_object(doc["storage_path"])
+    except Exception as e:
+        logger.error(f"Failed to download file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to download file")
+
+    file_name = doc.get("file_name", "download")
+    return Response(
+        content=file_data,
+        media_type=doc.get("file_type", content_type),
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'}
+    )
+
+
+@api_router.post("/documents/{doc_id}/replace-file")
+async def replace_document_file(
+    doc_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER,
+        UserRole.HEALTH_SERVICES, UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.FINANCE]))
+):
+    """Replace the file attachment on an existing document"""
+    existing = await db.documents.find_one({"id": doc_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    file_data = await file.read()
+    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+    storage_path = f"{APP_NAME}/documents/{user['id']}/{uuid.uuid4()}.{ext}"
+
+    result = put_object(storage_path, file_data, file.content_type or "application/octet-stream")
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.documents.update_one({"id": doc_id}, {"$set": {
+        "storage_path": result["path"],
+        "file_name": file.filename,
+        "file_size": result.get("size", len(file_data)),
+        "file_type": file.content_type or "application/octet-stream",
+        "updated_at": now,
+        "uploaded_by": user["name"]
+    }})
+
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    return DocumentResponse(**doc)
 
 
 # ================= FLIGHT ROSTER ROUTES =================
@@ -7633,6 +7773,13 @@ async def startup_event():
     
     scheduler.start()
     logger.info(f"Scheduler started. Google Sheets sync scheduled every {interval_hours} hour(s)")
+
+    # Initialize object storage
+    try:
+        init_storage()
+        logger.info("Object storage initialized successfully")
+    except Exception as e:
+        logger.warning(f"Object storage init failed (uploads will retry): {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

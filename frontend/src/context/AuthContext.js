@@ -164,6 +164,11 @@ export const AuthProvider = ({ children }) => {
 
   const canEdit = () => hasRole(['dcp', 'commander', 'executive_staff', 'staff']);
   
+  const canUploadDocuments = () => hasRole([
+    'dcp', 'commander', 'executive_staff', 'staff', 'exec_cadre',
+    'training_officer', 'health_services', 'plans_programs', 'logistics', 'finance'
+  ]);
+  
   const canAccessFinance = () => hasRole(['dcp', 'commander', 'executive_staff', 'finance']);
   
   const isCommander = () => hasRole(['dcp', 'commander', 'executive_staff']);
@@ -178,6 +183,7 @@ export const AuthProvider = ({ children }) => {
       logout,
       hasRole,
       canEdit,
+      canUploadDocuments,
       canAccessFinance,
       isCommander,
       isAuthenticated: !!user,
