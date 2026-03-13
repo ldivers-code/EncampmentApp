@@ -188,7 +188,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Self-Service Password Reset** (`/forgot-password`):
   - User enters email and CAPID for identity verification
   - Reset link sent via email (when SendGrid configured)
-  - Token valid for 24 hours
+  - Token valid for 1 hour (updated from 24 hours)
   - Security: Same response message whether user exists or not (no info leakage)
 - **Admin Password Reset** (Admin Panel > All Users):
   - Key icon button for each user
@@ -199,10 +199,17 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Shows error for invalid/expired tokens
   - Password + confirm password form
   - Success message with redirect to login
+- **Profile Page Change Password**:
+  - Expandable "Change Password" section on Profile page
+  - Requires current password verification
+  - New password + confirm new password fields
+  - Minimum 6 character validation
+  - Show/hide password toggle
 - **Security Features**:
   - CAPID verification prevents unauthorized reset requests
   - Tokens invalidated after use
-  - 24-hour token expiry
+  - 1-hour token expiry
+  - Current password verification for profile change
 
 ### Feb 24, 2026 - Active Users / Who's Online
 - **Real-time Presence System** with heartbeat tracking:
