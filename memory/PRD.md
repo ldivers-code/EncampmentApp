@@ -16,8 +16,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Excel import for roster data
 - [x] Schedule calendar with event management
 - [x] Financial budget tracker with estimated vs actual
-- [x] Handbooks document repository (placeholder)
-- [x] Official documents section (placeholder)
+- [x] Handbooks document repository with file upload & object storage
+- [x] Official documents section with file upload & object storage
 - [x] Role-based access control (Commander/Executive Staff/Staff/Finance/Cadet/Health Services)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
@@ -694,6 +694,23 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - Generated ICO format with multiple sizes (16x16, 32x32, 48x48, 64x64)
 - Added apple-touch-icon link tag for mobile devices
 - **Files modified**: public/favicon.ico, public/favicon-new.png, public/index.html
+
+
+### Mar 13, 2026 - Handbooks & Documents Upload System
+- **Full file upload system** with Emergent Object Storage integration
+- **Handbooks Page**: Complete rewrite with drag-and-drop file upload, categories (SOPs, Training Guides, Cadet/Staff Handbook, Regulations, References), search, filter, download
+- **Documents Page**: Complete rewrite with file upload, document types (Official Document, Form/CAPF, Reference, Checklist, Regulation/Policy), search, type filter, download
+- **Backend endpoints**:
+  - `POST /api/documents/upload` - Multipart file upload to object storage
+  - `GET /api/documents/{id}/download` - Download file with auth
+  - `POST /api/documents/{id}/replace-file` - Replace file attachment
+- **Upload permissions**: Commander, Executive Staff, Staff, Exec Cadre, Training Officer, Health Services, Plans & Programs, Logistics, Finance (all roles except Cadre)
+- **View/download**: All users including Cadre
+- **File support**: All file types, no size limits
+- **New files**: `backend/file_storage.py` (object storage module)
+- **Modified files**: `server.py`, `api.js`, `AuthContext.js`, `HandbooksPage.js`, `DocumentsPage.js`
+- **MongoDB**: Uses existing `documents` collection with new fields: `storage_path`, `file_name`, `file_size`, `file_type`
+- **Testing**: 13/13 backend tests passed, 100% frontend tests passed
 
 
 ## Notes
