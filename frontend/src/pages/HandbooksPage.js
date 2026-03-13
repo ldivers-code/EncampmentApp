@@ -8,10 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
+import DocumentPreview, { canPreview } from '../components/DocumentPreview';
 import {
   Plus, Edit2, Trash2, BookOpen, Download, FileText, File,
   Upload, Search, X, Loader2, FileSpreadsheet, Image, FileArchive,
-  Presentation, ChevronDown
+  Presentation, Eye
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -57,6 +58,7 @@ const HandbooksPage = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -344,6 +346,18 @@ const HandbooksPage = () => {
 
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      {(doc.storage_path || doc.content) && canPreview(doc.file_type) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPreviewDoc(doc)}
+                          className="h-8 text-xs rounded-sm"
+                          data-testid={`preview-handbook-${doc.id}`}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Preview
+                        </Button>
+                      )}
                       {(doc.storage_path || doc.file_url) && (
                         <Button
                           variant="outline"
@@ -359,6 +373,18 @@ const HandbooksPage = () => {
                             <Download className="w-3 h-3 mr-1" />
                           )}
                           Download
+                        </Button>
+                      )}
+                      {!doc.storage_path && !doc.file_url && doc.content && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPreviewDoc(doc)}
+                          className="h-8 text-xs rounded-sm"
+                          data-testid={`view-handbook-${doc.id}`}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          View
                         </Button>
                       )}
                     </div>
@@ -555,6 +581,14 @@ const HandbooksPage = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Preview Modal */}
+      <DocumentPreview
+        doc={previewDoc}
+        open={!!previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        onDownload={handleDownload}
+      />
     </div>
   );
 };

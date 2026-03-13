@@ -371,6 +371,14 @@ export const replaceDocumentFile = async (docId, formData, onProgress) => {
   return response.data;
 };
 
+export const previewDocumentFile = async (docId) => {
+  const response = await axios.get(`${API}/documents/${docId}/preview`, {
+    headers: getAuthHeaders(),
+    responseType: 'blob'
+  });
+  return response;
+};
+
 // Users
 export const getUsers = async () => {
   const response = await axios.get(`${API}/users`, { headers: getAuthHeaders() });

@@ -4418,6 +4418,36 @@ async def download_document_file(
     )
 
 
+@api_router.get("/documents/{doc_id}/preview")
+async def preview_document_file(
+    doc_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Serve a document file inline for browser preview"""
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not can_access_document(user, doc):
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+
+    if not doc.get("storage_path"):
+        raise HTTPException(status_code=404, detail="No file attached to this document")
+
+    try:
+        file_data, content_type = get_object(doc["storage_path"])
+    except Exception as e:
+        logger.error(f"Failed to preview file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load file")
+
+    file_name = doc.get("file_name", "preview")
+    return Response(
+        content=file_data,
+        media_type=doc.get("file_type", content_type),
+        headers={"Content-Disposition": f'inline; filename="{file_name}"'}
+    )
+
+
 @api_router.post("/documents/{doc_id}/replace-file")
 async def replace_document_file(
     doc_id: str,
