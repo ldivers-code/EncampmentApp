@@ -52,7 +52,7 @@ const ForgotPasswordPage = () => {
               If an account exists with that email and the CAPID matches, we've sent you a password reset link.
             </p>
             <p className="text-sm text-slate-500 mb-6">
-              The link will expire in 24 hours.
+              The link will expire in 1 hour.
             </p>
             <Link to="/login">
               <Button className="w-full bg-[#00205B] hover:bg-[#001540]">

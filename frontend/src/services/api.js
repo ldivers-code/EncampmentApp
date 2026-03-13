@@ -446,6 +446,14 @@ export const deleteProfilePhoto = async () => {
   return response.data;
 };
 
+export const changePassword = async (currentPassword, newPassword) => {
+  const response = await axios.post(`${API}/profile/change-password`, {
+    current_password: currentPassword,
+    new_password: newPassword
+  }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // User Approval
 export const getPendingUsers = async () => {
   const response = await axios.get(`${API}/users/pending`, { headers: getAuthHeaders() });

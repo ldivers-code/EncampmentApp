@@ -990,7 +990,7 @@ async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.
 
 # ================= PASSWORD RESET ROUTES =================
 
-RESET_TOKEN_EXPIRY_HOURS = 24
+RESET_TOKEN_EXPIRY_HOURS = 1  # User requested 1 hour expiry
 
 async def send_password_reset_email(to_email: str, reset_token: str, user_name: str) -> bool:
     """Send password reset email via SendGrid"""
@@ -1300,6 +1300,42 @@ async def delete_profile_photo(user: dict = Depends(get_current_user)):
     return {"message": "Photo deleted successfully"}
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@api_router.post("/profile/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Change password for logged in user - requires current password verification"""
+    # Get full user record with password hash
+    user_record = await db.users.find_one({"id": user["id"]})
+    if not user_record:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not verify_password(request.current_password, user_record["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    
+    # Hash new password
+    new_password_hash = hash_password(request.new_password)
+    
+    # Update password
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": new_password_hash}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+
 # ================= USER APPROVAL ROUTES =================
 
 @api_router.get("/users/pending")
@@ -1334,7 +1370,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://tnwing-preview.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://tn-cap-portal.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),

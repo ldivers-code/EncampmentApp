@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getProfile, updateProfile, uploadProfilePhoto, deleteProfilePhoto } from '../services/api';
+import { getProfile, updateProfile, uploadProfilePhoto, deleteProfilePhoto, changePassword } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -20,7 +20,10 @@ import {
   Clock,
   Building,
   Users,
-  Heart
+  Heart,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const ProfilePage = () => {
@@ -31,6 +34,17 @@ const ProfilePage = () => {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({});
   const fileInputRef = useRef(null);
+  
+  // Password change state
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const cadetRanks = [
     'C/AB', 'C/Amn', 'C/A1C', 'C/SrA', 'C/SSgt', 'C/TSgt', 'C/MSgt', 'C/SMSgt', 'C/CMSgt',
@@ -121,6 +135,32 @@ const ProfilePage = () => {
       toast.success('Photo removed');
     } catch (error) {
       toast.error('Failed to remove photo');
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    if (passwordData.newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    
+    setChangingPassword(true);
+    try {
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      toast.success('Password changed successfully!');
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordSection(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -623,6 +663,116 @@ const ProfilePage = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Change Password Section */}
+      <div className="mt-6 bg-white border border-slate-200 rounded-sm">
+        <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-[#00205B]" />
+            <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">Change Password</h2>
+          </div>
+          {!showPasswordSection && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPasswordSection(true)}
+              className="rounded-sm"
+              data-testid="show-change-password-btn"
+            >
+              Change Password
+            </Button>
+          )}
+        </div>
+        
+        {showPasswordSection && (
+          <div className="p-4">
+            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-500">Current Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                    required
+                    className="rounded-sm pr-10"
+                    placeholder="Enter current password"
+                    data-testid="current-password-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-500">New Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                    required
+                    minLength={6}
+                    className="rounded-sm pr-10"
+                    placeholder="Enter new password"
+                    data-testid="new-password-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Minimum 6 characters</p>
+              </div>
+              
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-slate-500">Confirm New Password</Label>
+                <Input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  required
+                  minLength={6}
+                  className="mt-1 rounded-sm"
+                  placeholder="Confirm new password"
+                  data-testid="confirm-new-password-input"
+                />
+              </div>
+              
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowPasswordSection(false);
+                    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                  className="rounded-sm"
+                  data-testid="cancel-password-change-btn"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={changingPassword}
+                  className="rounded-sm bg-[#00205B] hover:bg-[#001540]"
+                  data-testid="submit-password-change-btn"
+                >
+                  {changingPassword ? 'Changing...' : 'Update Password'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Approval Notice */}
