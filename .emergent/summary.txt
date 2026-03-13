@@ -1,152 +1,156 @@
 <analysis>**original_problem_statement**: The user wants to build an interactive roster and management application for a Civil Air Patrol (CAP) encampment.
 
 **PRODUCT REQUIREMENTS**:
-The application has evolved to include:
-*   **Roster Management**: Interactive roster with live filtering, search, different views, and inline editing.
-*   **Flight Reporting System**: A multi-level flight reporting system with a detailed escalation chain.
-*   **Health Services Module**: A module to track cadet health information (medication, incidents) using a mix of MongoDB and data imported from Excel.
-*   **Training Officer Module**: A dedicated page for Training Officers to log blister checks, counseling sessions, and cadre issues.
-*   **Logistics Module (New Major Feature)**: A comprehensive, real-time logistics management system to track inventory, radios, vehicles, supply requests, and more. This includes an automated overdue alert system.
-*   **Role-Based Access Control**: Granular permissions for roles including Commander, Executive Staff, DCS, Commandant, Health Services, Logistics, Cadre, and Training Officer.
+The application, now titled Tennessee Wing Civil Air Patrol Encampment, has evolved to include:
+*   **Roster Management**: Interactive roster with live filtering, search, and inline editing.
+*   **Flight Reporting System**: A multi-level flight reporting system.
+*   **Health Services Module**: Tracks cadet health information (medication, incidents) and includes a role-based alert system for emergency items (e.g., EpiPens, fainting risk) with configurable visibility for leadership.
+*   **Training Officer Module**: A dedicated page for Training Officers.
+*   **Logistics Module**: A comprehensive, real-time logistics management system to track inventory, radios, vehicles, supply requests, and more.
+*   **Schedule Management**: An interactive schedule with a change-request system for non-editors and review/approval flow for editors.
+*   **Status Board System**: A dual-interface live command dashboard. It includes a Control View for staff to update statuses and a read-only, auto-refreshing Projector Display View for situational awareness in an HQ environment.
+*   **Role-Based Access Control**: Granular permissions for roles including Commander, Director of Cadet Programs (DCP), Executive Staff, DCS, Commandant, Health Services, Logistics, Cadre, and Training Officer.
+*   **Registration**: Requires users to provide their CAPID for account creation.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack FastAPI and React application with several key features implemented:
-*   A robust roster with advanced filtering, search, and inline editing capabilities.
-*   A functional flight reporting system.
-*   A Health Services module that can import allergy and OTC medication data from Excel files and display it within a cadet's detail page.
-*   A page for My Flight that displays a configurable Chain of Command for flight leadership.
-*   A dedicated Training Officer page with forms and logs for their specific duties.
-*   An expanded role-based access system that now includes  and  roles with appropriate permissions.
-*   Dynamic rank selection on user profiles, which correctly shows Cadet or Senior Member ranks based on the user's role.
-*   The initial scaffolding for the new **Logistics Module**, including a new  role, placeholder API files, and frontend page stubs. However, this module is currently non-functional due to a backend architectural issue.
+A full-stack FastAPI and React application with a rich feature set. The backend dependency injection error that previously blocked development has been fixed. All major modules are functional:
+*   The **Logistics Module** is now fully implemented and accessible.
+*   The **Login** system has been made more robust by handling whitespace and email case-insensitivity.
+*   A comprehensive **Status Board** has been built, featuring a staff-only Control View and a large-format, auto-refreshing Display View for projectors.
+*   The **Schedule Page** now includes a change request system for all users and has been made mobile-responsive.
+*   The **My Flight** page features a clickable roster, allowing authorized users to view a detailed modal for each member, which includes a new, editable **Health Alerts** section with role-based sharing controls.
+*   A new top-level **Director of Cadet Programs (DCP)** role has been added with full application access.
+*   The Uniform of the Day feature has been significantly enhanced, allowing for multiple uniform options for Senior Members and auto-populating descriptions for specific uniforms like the Hot Weather Uniform.
+*   The entire application has been rebranded to Tennessee Wing Civil Air Patrol Encampment.
 
 **Last working item**:
-*   **Last item agent was working**: The agent was attempting to implement the large, multi-part **Logistics Module**. It began by creating the necessary backend files and roles but encountered a critical Python dependency injection error in FastAPI. The error prevents the backend from starting, blocking all further development on the module.
-*   **Status**: BLOCKED
+*   **Last item agent was working**: The user requested to ignore the previously discussed Google Sheets finance integration and instead focus on backlog items, starting with the recurring CSS header cutoff bug. The agent acknowledged this and was about to begin investigating the CSS issue.
+*   **Status**: NOT STARTED
 *   **Agent Testing Done**: N
-*   **Which testing method agent to use?**: both. This is a very large feature. Once the backend is unblocked, the  should be used to validate the numerous new endpoints and frontend components.
+*   **Which testing method agent to use?**: Frontend testing agent or screenshot tool to identify and verify the fix for the visual CSS bug across different pages and screen sizes.
 *   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-*   **Issue 1 (P0)**: Backend FastAPI dependency injection error blocking Logistics module.
-*   **Issue 2 (P1)**: User reported invalid login credentials, which the agent could not reproduce.
-*   **Issue 3 (P2)**: A recurring, low-priority CSS issue where header action buttons can be cut off on some pages.
+*   **Issue 1 (P0)**: A recurring global CSS bug where header action buttons or dropdowns can be cut off or appear behind other elements on some pages.
+*   **Issue 2 (P1)**: User-reported invalid login credentials may still exist.
 
 **Issues Detail**:
-*   **Issue 1: Backend FastAPI dependency injection error**
-    *   **Attempted fixes**: The agent tried to create a separate FastAPI router in  that uses a dependency () for authentication. This failed because the dependency relies on  from , which is  during Python's module import phase, causing a circular dependency/initialization order problem. The agent's last idea was to refactor using a setup function pattern, but did not implement it.
+*   **Issue 1: Recurring CSS header cutoff**
+    *   **Attempted fixes**: None. This is a long-standing, low-priority issue that the user has now prioritized.
     *   **Next debug checklist**:
-        1.  Refactor . Create a function like  that constructs and returns the . All  calls inside this file should use the  argument.
-        2.  In , after the  function is defined, import .
-        3.  Call .
-        4.  Include the  in the main FastAPI app instance. This pattern correctly defers dependency resolution until runtime.
-    *   **Why fix this issue and what will be achieved with the fix?**: This is a hard blocker for the user's highest priority feature request. Fixing it will unblock the entire Logistics Module implementation.
-    *   **Status**: BLOCKED
-    *   **Is recurring issue?**: N
-    *   **Should Test frontend/backend/both after fix?**: backend (initially, to confirm the server starts)
+        1.  Identify specific pages and components where the issue occurs (e.g., header dropdowns, action buttons).
+        2.  Inspect the CSS of the main layout, , and the affected header components.
+        3.  Look for conflicting , , and  properties that could cause stacking context problems.
+        4.  Verify the fix using the screenshot tool at various viewport sizes.
+    *   **Why fix this issue and what will be achieved with the fix?**: Resolving this will improve UI consistency and professionalism across the application.
+    *   **Status**: NOT STARTED
+    *   **Is recurring issue?**: Y
+    *   **Should Test frontend/backend/both after fix?**: frontend
     *   **Blocked on other issue**: None
 
 *   **Issue 2: User-reported invalid login credentials**
-    *   **Attempted fixes**: The agent confirmed that the known credentials ( and ) worked via API calls and frontend simulation. The agent asked the user for clarification on which credentials were failing, but the user replied with a new feature request instead.
+    *   **Attempted fixes**: The agent made the login endpoint case-insensitive for emails and added whitespace trimming for both email and password. A specific user's password was also manually reset.
     *   **Next debug checklist**:
-        1.  Wait for the user to confirm if the issue is still present and provide the specific credentials they are using.
-        2.  If the issue persists, consider adding more detailed logging to the  endpoint in  to trace the failure reason.
+        1.  Await confirmation from the user that the login issue is fully resolved for everyone, not just the user whose password was reset.
+        2.  If the problem continues, add more detailed server-side logging to the  endpoint to trace the exact reason for authentication failure.
     *   **Why fix this issue and what will be achieved with the fix?**: A user being unable to log in is a critical usability problem.
     *   **Status**: USER VERIFICATION PENDING
-    *   **Is recurring issue?**: N
+    *   **Is recurring issue?**: Y
     *   **Should Test frontend/backend/both after fix?**: backend
     *   **Blocked on other issue**: None
 
 **In progress Task List**:
-*   **Task 1: Implement the Logistics Module (P0)**
-    *   **Where to resume**: Begin by fixing the dependency injection issue in  and  as detailed in Issue 1. Once the backend server can run with the new router, proceed to implement the 10 sub-pages and associated functionality as detailed in the user's comprehensive request.
-    *   **What will be achieved with this?**: A fully functional, multi-page logistics operations center within the application.
-    *   **Status**: BLOCKED
-    *   **Should Test frontend/backend/both after fix?**: both
-    *   **Blocked on something**: Issue 1: Backend FastAPI dependency injection error.
+None.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks**:
-    *   **P1**: Implement the Overdue Alert System as part of the Logistics Module.
-    *   **P1**: Implement Main Handbooks and Documents Pages (globally accessible).
+    *   **P0**: Implement a system for uploading and managing Handbooks and Documents within the app.
+    *   **P1**: Add Rich Text Support to the Org Chart for the Responsibilities field.
 *   **Future Tasks**:
-    *   **P2**: Add Rich Text Support to Org Chart for the Responsibilities field.
     *   **P2**: Integrate Receipt Scanning (OCR) for the financial module.
 
 **Completed work in this session**
-- **Health Services Data Import & UI**: Implemented functionality to import and display member allergy and OTC medication data from Excel files.
-- **Executive Staff Role**: Added a new  role with Commander-level permissions across the backend and frontend.
-- **Dynamic Rank Selection**: Updated the profile page's rank dropdown to correctly filter and display Cadet vs. Senior Member ranks based on user type.
-- **My Flight Chain of Command**: Added an editable section to the My Flight page to display flight leadership.
-- **Training Officer Module**: Created the  role and a new dedicated page for them to log daily checks, counseling, and cadre issues.
-- **Login Permissions Fix**: Resolved a bug where user permissions were not being correctly returned by the  endpoint after a role change.
+*   **Backend Architecture Fix**: Resolved the P0 FastAPI dependency injection error, enabling modular development.
+*   **Logistics Module**: Fully implemented the multi-page logistics system.
+*   **Status Board System**: Built the dual-view (Control and Display) live command dashboard.
+*   **Schedule Change Request System**: Implemented a submission and approval workflow for schedule modifications.
+*   **My Flight Health Alerts**: Added clickable roster members opening a detail modal with a role-based, editable health alerts panel.
+*   **Director of Cadet Programs (DCP) Role**: Integrated a new top-level advisory role with full permissions throughout the backend and frontend.
+*   **Uniform Management**: Overhauled the Uniform of the Day feature to support multiple, described options for different member types.
+*   **Registration Security**: Made CAPID a mandatory field for new account registration.
+*   **Login Robustness**: Hardened the login endpoint against common user errors (case sensitivity, whitespace).
+*   **UI/UX Fixes**: Corrected  sidebar permissions and resolved mobile layout overflow issues on the Schedule page.
+*   **Application Rebranding**: Renamed the app to Tennessee Wing Civil Air Patrol Encampment.
+*   **Deployment Readiness**: Successfully passed a pre-deployment health check.
 
 **Earlier issues found/mentioned but not fixed**
-*   **Issue**: User reported invalid login credentials, which was not resolved as the user moved on to another topic. (Status: USER VERIFICATION PENDING)
-*   **Issue**: A global CSS bug where header dropdowns can appear cut off or behind other elements. (Status: NOT STARTED)
+*   **Issue 1**: A global CSS bug where header dropdowns can appear cut off. This is now the highest priority pending issue.
 
 **Known issue recurrence from previous fork**
 *   **Issue recurrence in previous fork**: CSS issue with header buttons being cut off.
-*   **Recurrence count**: 2+
+*   **Recurrence count**: 3+
 *   **Status**: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-*   **FastAPI Dependency Injection**: The primary technical blocker is a misunderstanding of FastAPI's dependency injection system, specifically how  is evaluated at module import time. The correct solution is to use a factory/setup function pattern to defer dependency creation until after the application is initialized.
-*   **Modular Backend Architecture**: The agent attempted to create a modular backend by separating logistics into its own file, which is a good practice. Solving the dependency issue is key to enabling this pattern for future features.
+*   **Modular Backend Architecture**: The application now successfully uses separate FastAPI routers for major features (, ), improving organization.
+*   **Real-time UI (Polling)**: The  uses  to poll the backend every 15 seconds, creating a live-updating dashboard experience.
+*   **Complex Role-Based Access Control (RBAC)**: The permission system is highly granular, with feature access and edit capabilities deeply tied to user roles (e.g., Health Alert visibility, Status Board editing).
+*   **Component-Based State Management**: Complex pages like  and  manage significant state for modals, selected items, and fetched data using React hooks (, , ).
 
 **key DB schema**
-*   **New MongoDB Collections (Implemented)**: , , , .
-*   **New MongoDB Collections (Planned for Logistics)**: , , , , , , , , .
+*   **New Collections**: , , , , , .
 
 **All files of reference**
-*   : The main server file where the dependency fix needs to be orchestrated.
-*   : The new, non-functional module that needs to be fixed.
-*   User Message #525: Contains the complete, detailed requirements for the Logistics Module.
-*   : The large placeholder React component to be implemented.
-*   : The frontend service file to be populated with API call functions.
+*   : Extremely large component that was heavily modified for the change request system and mobile fixes. A primary candidate for refactoring.
+*   : Heavily modified to add the clickable roster and health alert modal.
+*   : Continues to be the central hub for authentication and many smaller endpoints. Contains logic for numerous roles.
+*   : Central point for navigation and role-based visibility control on the frontend.
+*    & : The two new frontend components for the Status Board feature.
+*   : The new backend module for the Status Board.
 
 **Areas that need refactoring**:
-*   ****: This file is extremely large and handles authentication, roles, flight reports, training officer notes, and more. Once the dependency injection pattern in  is fixed, the same pattern should be used to move the Training Officer and Health Services endpoints into their own respective modules to improve maintainability.
+*   ****: This file has grown to over 2800 lines and is difficult to maintain. The modals, calendar views, and action headers should be extracted into separate, smaller components.
+*   ****: This file remains very large. The patterns used for  and  should be applied to extract other domains like , , and  into their own modules.
+*   **Frontend Data Constants**: Several components, like the one handling uniform selection, now contain large, hardcoded data maps (e.g., ). This data should be moved into dedicated constant files (e.g., ) to clean up component logic.
 
 **Critical Info for New Agent**
-*   **Your immediate priority is to fix the backend dependency injection issue.** The application will not start until this is resolved. The correct approach is the setup function or factory pattern for the FastAPI router in . Do not move all the code into .
-*   Once the backend is fixed, the next task is the full implementation of the **Logistics Module**, which is a massive feature. Refer to the user's detailed request (message #525) as the source of truth. Plan to implement it in logical chunks (e.g., Inventory, then Radios, then Vehicles, etc.).
-*   The user previously reported a login issue that was not resolved. Be prepared to address this if the user brings it up again.
+*   **User Priority Shift**: The user has explicitly instructed to **ignore** the Google Sheets/Drive finance integration. The immediate focus should be on the backlog, starting with the P0 CSS header cutoff bug.
+*   **Next Major Feature**: After fixing the CSS bug, the next large task is to build a file upload and management system for Handbooks and Documents.
+*   **Refactoring is Needed**: Be aware that several key files (, ) have become very large and complex. While implementing new features, consider opportunities to break down these components to improve maintainability.
 
 **documents and test reports created in this job**
+*   
+*   
 *    (updated)
-*   
-*   
-*   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Asks to build the comprehensive Logistics Module with 10 sub-pages and an overdue alert system. [STATUS: IN PROGRESS, BLOCKED]
-2.  **User**: Asks to add a section for Training Officers with specific logging features. [STATUS: COMPLETED]
-3.  **User**: Provides clarifications for the Training Officer implementation. [STATUS: COMPLETED]
-4.  **User**: Asks to add an editable Chain of Command section to the My Flight page. [STATUS: COMPLETED]
-5.  **User**: Asks to update the rank list and filter it for Cadets vs. Senior Members. [STATUS: COMPLETED]
-6.  **User**: Approves the plan for the Executive Staff role. [STATUS: COMPLETED]
-7.  **Agent**: Asks for approval for the Executive Staff role plan. [STATUS: RESOLVED]
-8.  **User**: Asks to create an Executive Staff user role with the same permissions as Commander. [STATUS: COMPLETED]
-9.  **Agent**: Responds to login issue, states it's not reproducible, and asks for the user's credentials. The user's next message was a new feature request. [STATUS: RESOLVED, ISSUE PENDING USER FEEDBACK]
-10. **User**: app is showing invalid login credentials [STATUS: IN PROGRESS, PENDING USER FEEDBACK]
+10. **User**: Requests a Director of Cadet Programs (DCP) role with universal permissions. [STATUS: COMPLETED]
+9.  **Agent**: Asks to call the deployer agent for a health check. [STATUS: COMPLETED]
+8.  **User**: Provides a new favicon for the app. [STATUS: PENDING - Agent did not implement this due to recharge message].
+7.  **User**: recharged. [STATUS: ACKNOWLEDGED]
+6.  **Agent**: Acknowledges the recharge and asks for the next task, summarizing pending items (finance integration) and backlog. [STATUS: RESOLVED]
+5.  **User**: Instructs to ignore the pending finance items and instead fix the CSS header cutoff bug and then work on other backlog items like the handbooks upload feature. [STATUS: PENDING IMPLEMENTATION]
+4.  **User**: Asks to make the  role able to see the schedule change request option. [STATUS: COMPLETED]
+3.  **User**: Complains that the mobile view looks too wide and asks for an adjustment. [STATUS: COMPLETED]
+2.  **User**: Asks to build a comprehensive, dual-view (Control/Display) Status Board system. [STATUS: COMPLETED]
+1.  **User**: Asks to require CAPID during account registration. [STATUS: COMPLETED]
 
 **Project Health Check:**
-*   **Broken**: The entire backend is currently broken and will not start due to a dependency injection error related to the new Logistics module. This is a P0 blocker.
-*   **Mocked**:  is a large, non-functional placeholder file. The associated API service file is also a stub.
+*   **Broken**: None. The application is stable and all major features are functional.
+*   **Mocked**: None.
 
 **3rd Party Integrations**
 *   : For email notifications.
-*    & : Used for Google Sheets data sync (Roster) and Excel data import (Health Services).
+*    & : Previously used for Roster/Health Services data import. The planned finance integration using this was de-prioritized by the user.
 *   : For background sync tasks.
 
 **Testing status**
-*   **Testing agent used after significant changes**: YES, used to validate the Training Officer and other features.
+*   **Testing agent used after significant changes**: YES, for both the Logistics and Status Board features, with 100% pass rates reported.
 *   **Troubleshoot agent used after agent stuck in loop**: NO
 *   **Test files created**: None.
 *   **Known regressions**: None.
@@ -154,8 +158,8 @@ A full-stack FastAPI and React application with several key features implemented
 **Credentials to test flow:**
 *   **Commander/Admin**:  (password ) or  (password ).
 *   **Cadre**:  (password ).
-*   New roles like , , and  can be assigned to test users via the Admin page.
+*   **Exec Cadre**:  (password ).
+*   **DCP**: Assign the Director of Cadet Programs role to an existing user via the Admin page to test.
 
 **What agent forgot to execute**
-*   The agent failed to resolve the architectural FastAPI dependency issue, which is a fundamental requirement for creating a scalable and modular backend.
-*   The agent did not resolve the user's reported login issue, as the user changed topics before providing clarifying information. The issue remains pending.</analysis>
+*   The agent did not implement the new favicon requested by the user just before the recharge message. This is a minor, pending UI task.</analysis>

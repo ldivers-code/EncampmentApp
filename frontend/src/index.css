@@ -171,6 +171,16 @@ input:focus, select:focus, textarea:focus {
     animation: fadeIn 0.2s ease-out;
 }
 
+/* Ensure dropdown menus and popovers always render above page content */
+[data-radix-popper-content-wrapper] {
+    z-index: 100 !important;
+}
+
+/* Prevent page-level containers from clipping absolutely positioned children */
+main > div {
+    position: relative;
+}
+
 /* Debug wrapper */
 [data-debug-wrapper="true"] {
     display: contents !important;

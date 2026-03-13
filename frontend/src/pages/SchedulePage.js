@@ -584,7 +584,7 @@ const SchedulePage = () => {
   }
 
   return (
-    <div className="p-2 sm:p-4 md:p-6 lg:p-8 animate-fade-in max-w-full overflow-x-hidden">
+    <div className="p-2 sm:p-4 md:p-6 lg:p-8 animate-fade-in max-w-full">
       {/* Mobile Header */}
       {isMobile ? (
         <div className="mb-4">
@@ -705,7 +705,7 @@ const SchedulePage = () => {
                   <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${showFilterDropdown ? 'rotate-90' : ''}`} />
                 </button>
                 {showFilterDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg z-20 max-h-64 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg z-50 max-h-64 overflow-y-auto">
                     {scheduleFilterOptions.map(option => (
                       <button
                         key={option.value}
