@@ -712,6 +712,16 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **MongoDB**: Uses existing `documents` collection with new fields: `storage_path`, `file_name`, `file_size`, `file_type`
 - **Testing**: 13/13 backend tests passed, 100% frontend tests passed
 
+### Mar 13, 2026 - Document Preview Feature
+- **In-browser document preview** for PDFs, images (PNG, JPG, GIF, SVG, WebP), and text files (TXT, CSV, JSON, XML, Markdown)
+- **Backend**: `GET /api/documents/{id}/preview` - serves file inline (Content-Disposition: inline)
+- **Frontend**: New `DocumentPreview.js` shared component with full-screen modal
+- Preview/View buttons on both Handbooks and Documents pages
+- Smart button logic: "Preview" for files with storage, "View" for text content-only docs, "Download" always available
+- Bug fix: content-only docs infinite loading state resolved
+- **Testing**: 19/19 backend tests passed, 100% frontend tests passed
+
+
 
 ## Notes
 - First registered user automatically becomes Commander
