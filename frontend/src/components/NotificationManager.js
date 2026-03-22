@@ -249,11 +249,11 @@ const NotificationManager = ({ compact = false }) => {
 
   // Full version for settings/admin page
   return (
-    <div className="bg-white border border-slate-200 rounded-sm p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4">
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div className="flex items-center gap-2">
-          <Bell className="w-5 h-5 text-[#00205B]" />
-          <h3 className="font-bold text-[#00205B] uppercase text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
+          <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-[#00205B]" />
+          <h3 className="font-bold text-[#00205B] uppercase text-xs sm:text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
             Push Notifications
           </h3>
         </div>
@@ -272,13 +272,13 @@ const NotificationManager = ({ compact = false }) => {
       </div>
 
       {notSupported ? (
-        <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800 flex items-center gap-2">
+        <div className="bg-amber-50 border border-amber-200 rounded p-2 sm:p-3 text-xs sm:text-sm text-amber-800 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>Push notifications are not supported in this browser.</span>
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-600 mb-4">
+          <p className="text-xs sm:text-sm text-slate-600 mb-3 sm:mb-4 hidden sm:block">
             {isSubscribed 
               ? 'You will receive notifications when the schedule is updated or important announcements are made.'
               : 'Enable notifications to stay updated on schedule changes and announcements.'}
@@ -289,7 +289,8 @@ const NotificationManager = ({ compact = false }) => {
               onClick={isSubscribed ? handleUnsubscribe : handleSubscribe}
               disabled={subscribing}
               variant={isSubscribed ? 'outline' : 'default'}
-              className={isSubscribed ? 'border-red-200 text-red-600 hover:bg-red-50' : 'bg-[#00205B]'}
+              size="sm"
+              className={`text-xs sm:text-sm ${isSubscribed ? 'border-red-200 text-red-600 hover:bg-red-50' : 'bg-[#00205B]'}`}
               data-testid="notification-toggle-btn"
             >
               {subscribing ? (
@@ -311,9 +312,10 @@ const NotificationManager = ({ compact = false }) => {
               <>
                 <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" data-testid="send-notification-btn">
-                      <Send className="w-4 h-4 mr-2" />
-                      Send Notification
+                    <Button variant="outline" size="sm" className="text-xs sm:text-sm" data-testid="send-notification-btn">
+                      <Send className="w-4 h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Send Notification</span>
+                      <span className="sm:hidden">Send</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md">
@@ -381,8 +383,8 @@ const NotificationManager = ({ compact = false }) => {
                   if (open) loadHistory();
                 }}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" data-testid="notification-history-btn">
-                      <History className="w-4 h-4 mr-2" />
+                    <Button variant="outline" size="sm" className="text-xs sm:text-sm" data-testid="notification-history-btn">
+                      <History className="w-4 h-4 mr-1 sm:mr-2" />
                       History
                     </Button>
                   </DialogTrigger>

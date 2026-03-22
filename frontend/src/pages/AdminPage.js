@@ -395,34 +395,34 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
+    <div className="p-3 sm:p-6 lg:p-8 animate-fade-in">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Settings className="w-8 h-8 text-[#00205B]" />
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+      <div className="mb-4 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+          <Settings className="w-6 h-6 sm:w-8 sm:h-8 text-[#00205B]" />
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
             Administration
           </h1>
         </div>
-        <p className="text-slate-500">
+        <p className="text-sm sm:text-base text-slate-500">
           Manage user roles, permissions, and unit assignments
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      <div className="flex gap-1 mb-4 sm:mb-6 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
             activeTab === 'pending'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
           data-testid="pending-users-tab"
         >
-          <span className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            Pending Approval
+          <span className="flex items-center gap-1 sm:gap-2">
+            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Pending</span> Approval
             {pendingUsers.length > 0 && (
               <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                 {pendingUsers.length}
@@ -432,29 +432,29 @@ const AdminPage = () => {
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
             activeTab === 'users'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
           data-testid="all-users-tab"
         >
-          <span className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
+          <span className="flex items-center gap-1 sm:gap-2">
+            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
             All Users ({users.length})
           </span>
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
             activeTab === 'settings'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
           data-testid="settings-tab"
         >
-          <span className="flex items-center gap-2">
-            <Settings className="w-4 h-4" />
+          <span className="flex items-center gap-1 sm:gap-2">
+            <Settings className="w-3 h-3 sm:w-4 sm:h-4" />
             Settings
           </span>
         </button>
@@ -575,19 +575,19 @@ const AdminPage = () => {
 
       {/* All Users Tab */}
       {activeTab === 'users' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Push Notifications */}
-          <div className="mb-6">
-            <NotificationManager />
+          <div className="mb-4 sm:mb-6">
+            <NotificationManager compact={true} />
           </div>
 
           {/* Users Table */}
       <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
-        <div className="border-b border-slate-100 p-4 flex items-center justify-between">
-          <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+        <div className="border-b border-slate-100 p-3 sm:p-4 flex items-center justify-between">
+          <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
             Registered Users
           </h2>
-          <span className="text-sm text-slate-500">{users.length} users</span>
+          <span className="text-xs sm:text-sm text-slate-500">{users.length} users</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full cap-table" data-testid="users-table">
@@ -774,13 +774,12 @@ const AdminPage = () => {
       </div>
 
       {/* Warning */}
-      <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-sm flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-800">
+      <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-sm flex items-start gap-2 sm:gap-3">
+        <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs sm:text-sm text-amber-800">
           <p className="font-semibold">Important</p>
           <p className="mt-1">
-            Role and unit changes take effect immediately. Users will need to refresh their browser to see updated permissions and schedule filtering.
-            Assigning a flight will automatically set the correct squadron.
+            Role and unit changes take effect immediately. Users will need to refresh their browser to see updated permissions.
           </p>
         </div>
       </div>
