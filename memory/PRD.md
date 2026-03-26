@@ -72,6 +72,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Training Officer Module (Blister checks, counseling logs, cadre issues)**
 - [x] **Support Squadron Deep Hierarchical Org Chart (5 sections x 4 roles each: OIC, AOIC, NCOIC, Cadre)**
 - [x] **Medical Roster on Health Services tab (cadet health tracking with detailed profiles)**
+- [x] **In-Processing Check-In System (multi-step: Arrival, Paperwork, Room Assignment, Gear Issue)**
+- [x] **Support Cadre Roles (support_logistics, support_comms, support_pa, support_dining, support_health)**
 
 ## What's Been Implemented
 
@@ -96,6 +98,29 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Cadet Detail Sheet** (slide-out): Collapsible sections for Allergies, OTC Approvals (approved/denied grid), Prescription Medications, Incidents, Medication Log, Custody Log, Health Notes
 - **RBAC**: Full access users see medication details, med log, custody; view-only users see allergy/OTC/incident data
 - **Testing**: 100% pass rate (14/14 backend + full frontend validation)
+
+### Mar 26, 2026 - In-Processing Check-In System
+- **New Check-In page** (`/check-in`) for tracking in-processing day arrival and processing
+- **Multi-step process**: Arrival → Paperwork → Room Assignment → Gear Issue
+- **Backend**: 6 new endpoints (`/api/check-in/roster`, `/api/check-in/summary`, `/api/check-in/{id}/step`, `/api/check-in/{id}/step/{step}`, `/api/check-in/{id}/check-all`, `/api/check-in/{id}/undo-all`)
+- **Tabs**: All (104), Students (40), Staff (5), Cadre (59) with real-time counts
+- **Filters**: Search by name/CAPID, filter by flight, filter by status (Complete/Partial/Not Started)
+- **Step pills**: Quick check-in directly from table, with undo on hover
+- **Detail Sheet**: Full step-by-step check-in with timestamps, operator name, and optional notes per step
+- **Bulk actions**: Check-All and Undo-All buttons
+- **Access restricted**: Plans & Programs, Exec Staff, Logistics, Commander, DCP, and support_logistics
+- **Testing**: 100% pass rate (19/19 backend + full frontend validation)
+
+### Mar 26, 2026 - Support Cadre Roles
+- **5 new user roles**: support_logistics, support_comms, support_pa, support_dining, support_health
+- **Permissions mapping**:
+  - `support_logistics` → Logistics page + Check-In page (view + edit)
+  - `support_comms` → Standard dashboard/schedule/org chart access
+  - `support_pa` → Standard access + Analytics
+  - `support_dining` → Standard access + Meal Plan edit
+  - `support_health` → Standard access + Health Services view
+- **Sidebar updated**: Shows relevant pages for each support cadre role
+- **Routes updated**: Health, Logistics, Analytics, Check-In routes include support roles
 
 ### Mar 26, 2026 - Auto-Assignment System
 - **Automatic Flight Assignment Triggers**:
