@@ -83,13 +83,18 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
   - Students with existing valid flights are NEVER changed
   - Only assigns students where flight is empty/null
   - Case-insensitive flight validation (Alpha = alpha = ALPHA)
+- **Distribution Algorithm** (weighted scoring, lower = better):
+  - **Total Balance** (weight: 10): Even distribution across 6 flights
+  - **Gender Balance** (weight: 5): Balance M/F ratio per flight
+  - **Wing Distribution** (weight: 3): Spread students from same wing
+  - **Unit Distribution** (weight: 3): Spread students from same home unit
+  - **Age Balance** (weight: 2): Balance age tiers (young/mid/older)
 - **Helper Functions**:
-  - `is_valid_flight()`: Validates flight names case-insensitively
+  - `get_age_tier()`: Categorizes ages into 3 tiers (12-13, 14-15, 16+)
   - `auto_assign_single_student()`: Assigns one student
   - `auto_assign_flights()`: Batch assigns multiple students
 - **New Endpoint**: `/api/students/auto-assign`
   - POST to trigger assignment of all unassigned students
-  - Returns count of assigned students and flight distribution
 
 ### Mar 26, 2026 - Role-Based Assignment Permissions
 - **New Endpoint**: `/api/participants/{id}/assignment`

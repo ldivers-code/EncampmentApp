@@ -2653,6 +2653,22 @@ def get_rank_tier(rank: str) -> int:
         return 3  # Senior (MSgt, SMSgt, CMSgt)
 
 
+def get_age_tier(age) -> int:
+    """Get age tier for distribution (1=young, 2=mid, 3=older)"""
+    if age is None:
+        return 2  # Default to mid
+    try:
+        age = int(age)
+    except (ValueError, TypeError):
+        return 2
+    if age <= 13:
+        return 1  # Young (12-13)
+    elif age <= 15:
+        return 2  # Mid (14-15)
+    else:
+        return 3  # Older (16+)
+
+
 def is_valid_flight(flight: str) -> bool:
     """Check if a flight value is a valid assigned flight (not empty/null), case-insensitive"""
     if not flight:
@@ -2666,6 +2682,8 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     Returns the updated document with flight/squadron assignment.
     
     PROTECTION: Only assigns if flight is empty/null. Does NOT change existing assignments.
+    
+    Distribution balanced by: Wing, Unit (home squadron), Age, Gender
     """
     # Only apply to students
     participant_type = student_doc.get("participant_type", "")
@@ -2677,31 +2695,64 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     if is_valid_flight(current_flight):
         return student_doc  # Already assigned, don't change
     
-    # Get current flight counts from database
-    flight_counts = {f: {"total": 0, "male": 0, "female": 0, "rank_tiers": {1: 0, 2: 0, 3: 0}} for f in ALL_FLIGHTS}
+    # Get current flight distribution from database
+    flight_counts = {f: {
+        "total": 0, 
+        "male": 0, 
+        "female": 0, 
+        "wings": {},      # Count per wing
+        "units": {},      # Count per unit (home squadron)
+        "age_tiers": {1: 0, 2: 0, 3: 0}
+    } for f in ALL_FLIGHTS}
+    
+    # Build case-insensitive flight list for query
+    valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
     existing = await db.participants.find(
-        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": ALL_FLIGHTS}},
-        {"flight": 1, "gender": 1, "rank": 1}
+        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
     for p in existing:
-        f = p.get("flight", "").lower()
+        f = (p.get("flight") or "").lower()
         if f in flight_counts:
-            flight_counts[f]["total"] += 1
+            fc = flight_counts[f]
+            fc["total"] += 1
+            
+            # Gender
             gender = (p.get("gender") or "").upper()
-            if gender == "MALE":
-                flight_counts[f]["male"] += 1
-            elif gender == "FEMALE":
-                flight_counts[f]["female"] += 1
-            rank_tier = get_rank_tier(p.get("rank", ""))
-            flight_counts[f]["rank_tiers"][rank_tier] += 1
+            if gender == "MALE" or gender == "M":
+                fc["male"] += 1
+            elif gender == "FEMALE" or gender == "F":
+                fc["female"] += 1
+            
+            # Wing
+            wing = (p.get("wing") or "").upper()
+            if wing:
+                fc["wings"][wing] = fc["wings"].get(wing, 0) + 1
+            
+            # Unit (home squadron)
+            unit = str(p.get("unit") or "")
+            if unit:
+                fc["units"][unit] = fc["units"].get(unit, 0) + 1
+            
+            # Age tier
+            age = p.get("age") or p.get("age_at_event")
+            age_tier = get_age_tier(age)
+            fc["age_tiers"][age_tier] += 1
     
     # Get this student's attributes for assignment
     gender = (student_doc.get("gender") or "").upper()
-    rank_tier = get_rank_tier(student_doc.get("rank", ""))
+    if gender == "M":
+        gender = "MALE"
+    elif gender == "F":
+        gender = "FEMALE"
+    wing = (student_doc.get("wing") or "").upper()
+    unit = str(student_doc.get("unit") or "")
+    age = student_doc.get("age") or student_doc.get("age_at_event")
+    age_tier = get_age_tier(age)
     
-    # Find best flight
+    # Find best flight using weighted scoring
     best_flight = None
     best_score = float('inf')
     
@@ -2713,17 +2764,29 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
             continue
         
         # Calculate score (lower is better)
+        # Weight: total (10) > gender (5) > wing (3) > unit (3) > age (2)
+        
+        # Total balance - heavily weighted
         total_score = fc["total"] * 10
         
+        # Gender balance
         if gender == "MALE":
-            gender_score = fc["male"] - fc["female"]
+            gender_score = (fc["male"] - fc["female"]) * 5
         elif gender == "FEMALE":
-            gender_score = fc["female"] - fc["male"]
+            gender_score = (fc["female"] - fc["male"]) * 5
         else:
             gender_score = 0
         
-        rank_score = fc["rank_tiers"].get(rank_tier, 0)
-        score = total_score + gender_score + rank_score
+        # Wing distribution - spread students from same wing
+        wing_score = fc["wings"].get(wing, 0) * 3 if wing else 0
+        
+        # Unit distribution - spread students from same home unit
+        unit_score = fc["units"].get(unit, 0) * 3 if unit else 0
+        
+        # Age tier balance
+        age_score = fc["age_tiers"].get(age_tier, 0) * 2
+        
+        score = total_score + gender_score + wing_score + unit_score + age_score
         
         if score < best_score:
             best_score = score
@@ -2739,53 +2802,89 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
 async def auto_assign_flights(students: list) -> dict:
     """
     Automatically assign students to flights using balanced distribution.
-    Rules:
+    
+    Distribution Rules:
     1. Evenly distribute total students across 6 flights (max 15 per flight)
-    2. Balance male/female distribution
-    3. Spread ranks across flights (avoid grouping all senior ranks together)
-    4. Keep flights reasonably balanced by age
+    2. Balance male/female distribution (Gender)
+    3. Spread students from same Wing across different flights
+    4. Spread students from same Unit (home squadron) across different flights
+    5. Balance age distribution across flights
     """
-    # Get current flight counts from database
-    flight_counts = {f: {"total": 0, "male": 0, "female": 0, "rank_tiers": {1: 0, 2: 0, 3: 0}} for f in ALL_FLIGHTS}
+    # Get current flight distribution from database
+    flight_counts = {f: {
+        "total": 0, 
+        "male": 0, 
+        "female": 0, 
+        "wings": {},      # Count per wing
+        "units": {},      # Count per unit
+        "age_tiers": {1: 0, 2: 0, 3: 0}
+    } for f in ALL_FLIGHTS}
+    
+    # Build case-insensitive flight list for query
+    valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
     existing = await db.participants.find(
-        {"participant_type": "basic_student", "is_removed": {"$ne": True}, "flight": {"$in": ALL_FLIGHTS}},
-        {"flight": 1, "gender": 1, "rank": 1}
+        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
     for p in existing:
-        f = p.get("flight", "").lower()
+        f = (p.get("flight") or "").lower()
         if f in flight_counts:
-            flight_counts[f]["total"] += 1
+            fc = flight_counts[f]
+            fc["total"] += 1
+            
             gender = (p.get("gender") or "").upper()
-            if gender == "MALE":
-                flight_counts[f]["male"] += 1
-            elif gender == "FEMALE":
-                flight_counts[f]["female"] += 1
-            rank_tier = get_rank_tier(p.get("rank", ""))
-            flight_counts[f]["rank_tiers"][rank_tier] += 1
+            if gender == "MALE" or gender == "M":
+                fc["male"] += 1
+            elif gender == "FEMALE" or gender == "F":
+                fc["female"] += 1
+            
+            wing = (p.get("wing") or "").upper()
+            if wing:
+                fc["wings"][wing] = fc["wings"].get(wing, 0) + 1
+            
+            unit = str(p.get("unit") or "")
+            if unit:
+                fc["units"][unit] = fc["units"].get(unit, 0) + 1
+            
+            age = p.get("age") or p.get("age_at_event")
+            age_tier = get_age_tier(age)
+            fc["age_tiers"][age_tier] += 1
     
-    # Sort students by rank tier (distribute senior ranks first for better spread)
+    # Prepare students to assign
     students_to_assign = []
     for s in students:
-        if not s.get("flight"):  # Only assign if not already assigned
+        current_flight = s.get("flight")
+        if not current_flight or (isinstance(current_flight, str) and current_flight.lower() not in ALL_FLIGHTS):
+            gender = (s.get("gender") or "").upper()
+            if gender == "M":
+                gender = "MALE"
+            elif gender == "F":
+                gender = "FEMALE"
+            
             students_to_assign.append({
                 **s,
-                "rank_tier": get_rank_tier(s.get("rank", "")),
-                "gender": (s.get("gender") or "").upper()
+                "gender": gender,
+                "wing": (s.get("wing") or "").upper(),
+                "unit": str(s.get("unit") or ""),
+                "age_tier": get_age_tier(s.get("age") or s.get("age_at_event"))
             })
     
-    # Sort: senior ranks first, then by gender to alternate
-    students_to_assign.sort(key=lambda x: (-x["rank_tier"], x["gender"]))
+    # Sort to distribute diverse groups first (helps balance)
+    # Sort by: wing, then unit, then age_tier, then gender
+    students_to_assign.sort(key=lambda x: (x["wing"], x["unit"], x["age_tier"], x["gender"]))
     
     assignments = {}
     
     for student in students_to_assign:
         capid = student.get("capid")
         gender = student["gender"]
-        rank_tier = student["rank_tier"]
+        wing = student["wing"]
+        unit = student["unit"]
+        age_tier = student["age_tier"]
         
-        # Find best flight: balance by total, gender, and rank tier
+        # Find best flight using weighted scoring
         best_flight = None
         best_score = float('inf')
         
@@ -2797,21 +2896,22 @@ async def auto_assign_flights(students: list) -> dict:
                 continue
             
             # Calculate score (lower is better)
-            # Prioritize: total balance, gender balance, rank tier balance
-            total_score = fc["total"] * 10  # Weight total count heavily
+            # Weight: total (10) > gender (5) > wing (3) > unit (3) > age (2)
             
-            # Gender balance score
+            total_score = fc["total"] * 10
+            
             if gender == "MALE":
-                gender_score = fc["male"] - fc["female"]
+                gender_score = (fc["male"] - fc["female"]) * 5
             elif gender == "FEMALE":
-                gender_score = fc["female"] - fc["male"]
+                gender_score = (fc["female"] - fc["male"]) * 5
             else:
                 gender_score = 0
             
-            # Rank tier balance score
-            rank_score = fc["rank_tiers"].get(rank_tier, 0)
+            wing_score = fc["wings"].get(wing, 0) * 3 if wing else 0
+            unit_score = fc["units"].get(unit, 0) * 3 if unit else 0
+            age_score = fc["age_tiers"].get(age_tier, 0) * 2
             
-            score = total_score + gender_score + rank_score
+            score = total_score + gender_score + wing_score + unit_score + age_score
             
             if score < best_score:
                 best_score = score
@@ -2822,13 +2922,18 @@ async def auto_assign_flights(students: list) -> dict:
                 "flight": best_flight,
                 "squadron": FLIGHT_TO_SQUADRON[best_flight]
             }
-            # Update counts
-            flight_counts[best_flight]["total"] += 1
+            # Update counts for next iteration
+            fc = flight_counts[best_flight]
+            fc["total"] += 1
             if gender == "MALE":
-                flight_counts[best_flight]["male"] += 1
+                fc["male"] += 1
             elif gender == "FEMALE":
-                flight_counts[best_flight]["female"] += 1
-            flight_counts[best_flight]["rank_tiers"][rank_tier] += 1
+                fc["female"] += 1
+            if wing:
+                fc["wings"][wing] = fc["wings"].get(wing, 0) + 1
+            if unit:
+                fc["units"][unit] = fc["units"].get(unit, 0) + 1
+            fc["age_tiers"][age_tier] += 1
     
     return {
         "assignments": assignments,
