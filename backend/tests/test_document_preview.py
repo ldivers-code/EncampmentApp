@@ -14,7 +14,7 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = 'https://tn-cap-portal.preview.emergentagent.com'
+    BASE_URL = 'https://tn-wing-cadets.preview.emergentagent.com'
 
 # Test credentials
 TEST_EMAIL = "ldivers@cap.gov"
