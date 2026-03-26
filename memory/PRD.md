@@ -73,6 +73,24 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Mar 26, 2026 - Auto-Assignment System
+- **Automatic Flight Assignment Triggers**:
+  - When student spreadsheet is uploaded
+  - When new student records are created via API
+  - When student records are updated (if no flight)
+  - When `/api/students/auto-assign` endpoint is called
+- **Assignment Protection**:
+  - Students with existing valid flights are NEVER changed
+  - Only assigns students where flight is empty/null
+  - Case-insensitive flight validation (Alpha = alpha = ALPHA)
+- **Helper Functions**:
+  - `is_valid_flight()`: Validates flight names case-insensitively
+  - `auto_assign_single_student()`: Assigns one student
+  - `auto_assign_flights()`: Batch assigns multiple students
+- **New Endpoint**: `/api/students/auto-assign`
+  - POST to trigger assignment of all unassigned students
+  - Returns count of assigned students and flight distribution
+
 ### Mar 26, 2026 - Role-Based Assignment Permissions
 - **New Endpoint**: `/api/participants/{id}/assignment`
   - PUT endpoint for updating flight/squadron/position assignments

@@ -133,6 +133,11 @@ export const getFlightDistribution = async () => {
   return response.data;
 };
 
+export const autoAssignUnassignedStudents = async () => {
+  const response = await axios.post(`${API}/students/auto-assign`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const getParticipantStats = async () => {
   const response = await axios.get(`${API}/participants/stats`, { headers: getAuthHeaders() });
   return response.data;

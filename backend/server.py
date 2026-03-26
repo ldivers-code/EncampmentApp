@@ -2137,6 +2137,10 @@ async def create_participant(
         "created_at": now,
         "updated_at": now
     }
+    
+    # AUTO-ASSIGNMENT: If this is a student without a flight, auto-assign
+    doc = await auto_assign_single_student(doc)
+    
     await db.participants.insert_one(doc)
     doc.pop("_id", None)
     return ParticipantResponse(**doc)
@@ -2150,12 +2154,29 @@ async def update_participant(
     now = datetime.now(timezone.utc).isoformat()
     update_data = {**data.model_dump(), "updated_at": now}
     
+    # First get the existing participant to check current flight
+    existing = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    # Merge update data with participant_id for auto-assignment check
+    merged_doc = {**existing, **update_data, "id": participant_id}
+    
+    # AUTO-ASSIGNMENT: If this is a student and flight is being cleared or was never set
+    # Only auto-assign if the incoming data doesn't have a valid flight
+    incoming_flight = data.flight
+    if not is_valid_flight(incoming_flight):
+        # Check if participant is a student type
+        participant_type = update_data.get("participant_type") or existing.get("participant_type", "")
+        if participant_type in ["basic_student", "advanced_student"]:
+            merged_doc = await auto_assign_single_student(merged_doc)
+            update_data["flight"] = merged_doc.get("flight")
+            update_data["squadron"] = merged_doc.get("squadron")
+    
     result = await db.participants.update_one(
         {"id": participant_id},
         {"$set": update_data}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Participant not found")
     
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
     return ParticipantResponse(**participant)
@@ -2632,6 +2653,89 @@ def get_rank_tier(rank: str) -> int:
         return 3  # Senior (MSgt, SMSgt, CMSgt)
 
 
+def is_valid_flight(flight: str) -> bool:
+    """Check if a flight value is a valid assigned flight (not empty/null), case-insensitive"""
+    if not flight:
+        return False
+    return flight.lower() in ALL_FLIGHTS
+
+
+async def auto_assign_single_student(student_doc: dict) -> dict:
+    """
+    Auto-assign a single student to a flight if they don't already have one.
+    Returns the updated document with flight/squadron assignment.
+    
+    PROTECTION: Only assigns if flight is empty/null. Does NOT change existing assignments.
+    """
+    # Only apply to students
+    participant_type = student_doc.get("participant_type", "")
+    if participant_type not in ["basic_student", "advanced_student"]:
+        return student_doc  # Not a student, no auto-assignment
+    
+    # PROTECTION: Don't change students who already have a valid flight
+    current_flight = student_doc.get("flight")
+    if is_valid_flight(current_flight):
+        return student_doc  # Already assigned, don't change
+    
+    # Get current flight counts from database
+    flight_counts = {f: {"total": 0, "male": 0, "female": 0, "rank_tiers": {1: 0, 2: 0, 3: 0}} for f in ALL_FLIGHTS}
+    
+    existing = await db.participants.find(
+        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": ALL_FLIGHTS}},
+        {"flight": 1, "gender": 1, "rank": 1}
+    ).to_list(1000)
+    
+    for p in existing:
+        f = p.get("flight", "").lower()
+        if f in flight_counts:
+            flight_counts[f]["total"] += 1
+            gender = (p.get("gender") or "").upper()
+            if gender == "MALE":
+                flight_counts[f]["male"] += 1
+            elif gender == "FEMALE":
+                flight_counts[f]["female"] += 1
+            rank_tier = get_rank_tier(p.get("rank", ""))
+            flight_counts[f]["rank_tiers"][rank_tier] += 1
+    
+    # Get this student's attributes for assignment
+    gender = (student_doc.get("gender") or "").upper()
+    rank_tier = get_rank_tier(student_doc.get("rank", ""))
+    
+    # Find best flight
+    best_flight = None
+    best_score = float('inf')
+    
+    for flight in ALL_FLIGHTS:
+        fc = flight_counts[flight]
+        
+        # Skip if at capacity
+        if fc["total"] >= MAX_STUDENTS_PER_FLIGHT:
+            continue
+        
+        # Calculate score (lower is better)
+        total_score = fc["total"] * 10
+        
+        if gender == "MALE":
+            gender_score = fc["male"] - fc["female"]
+        elif gender == "FEMALE":
+            gender_score = fc["female"] - fc["male"]
+        else:
+            gender_score = 0
+        
+        rank_score = fc["rank_tiers"].get(rank_tier, 0)
+        score = total_score + gender_score + rank_score
+        
+        if score < best_score:
+            best_score = score
+            best_flight = flight
+    
+    if best_flight:
+        student_doc["flight"] = best_flight
+        student_doc["squadron"] = FLIGHT_TO_SQUADRON[best_flight]
+    
+    return student_doc
+
+
 async def auto_assign_flights(students: list) -> dict:
     """
     Automatically assign students to flights using balanced distribution.
@@ -2959,6 +3063,64 @@ async def get_flight_distribution(user: dict = Depends(get_current_user)):
         "total_students": total_students,
         "total_capacity": total_capacity,
         "utilization": round(total_students / total_capacity * 100, 1) if total_capacity > 0 else 0
+    }
+
+
+@api_router.post("/students/auto-assign")
+async def auto_assign_unassigned_students(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS, UserRole.STAFF]))
+):
+    """
+    Auto-assign all students who don't have a flight.
+    PROTECTION: Students with existing flight assignments are NOT changed.
+    """
+    # Valid flight values (both lowercase and capitalized for case-insensitive matching)
+    valid_flights_all_cases = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
+    
+    # Find all students without a valid flight assignment
+    unassigned = await db.participants.find(
+        {
+            "participant_type": {"$in": ["basic_student", "advanced_student"]},
+            "is_removed": {"$ne": True},
+            "$or": [
+                {"flight": None},
+                {"flight": ""},
+                {"flight": {"$exists": False}},
+                {"flight": {"$nin": valid_flights_all_cases}}
+            ]
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    if not unassigned:
+        return {
+            "message": "All students already have flight assignments",
+            "assigned": 0,
+            "total_unassigned": 0
+        }
+    
+    # Use the batch assignment function
+    result = await auto_assign_flights(unassigned)
+    assignments = result.get("assignments", {})
+    
+    # Apply assignments to database
+    assigned_count = 0
+    for capid, assignment in assignments.items():
+        await db.participants.update_one(
+            {"capid": capid},
+            {"$set": {
+                "flight": assignment["flight"],
+                "squadron": assignment["squadron"],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        assigned_count += 1
+    
+    return {
+        "message": f"Auto-assigned {assigned_count} students to flights",
+        "assigned": assigned_count,
+        "total_unassigned": len(unassigned),
+        "flight_counts": result.get("flight_counts", {})
     }
 
 
