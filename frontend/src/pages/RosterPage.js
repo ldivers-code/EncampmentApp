@@ -503,30 +503,34 @@ const RosterPage = () => {
 
   // Flight/Squadron colors matching the master roster spreadsheet
   const getFlightColors = (flight) => {
+    const flightLower = (flight || '').toLowerCase();
     const flightColors = {
       // 6th CTS - Light Blue
-      'Alpha': { bg: 'bg-sky-100', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
-      'Bravo': { bg: 'bg-sky-100', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
+      'alpha': { bg: 'bg-sky-50', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
+      'bravo': { bg: 'bg-sky-50', border: 'border-l-4 border-l-sky-500', text: 'text-sky-700', badge: 'bg-sky-500 text-white' },
       // 21st CTS - Dark Red
-      'Charlie': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
-      'Delta': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
+      'charlie': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
+      'delta': { bg: 'bg-red-50', border: 'border-l-4 border-l-red-700', text: 'text-red-700', badge: 'bg-red-700 text-white' },
       // 22nd CTS - Dark Blue
-      'Echo': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
-      'Foxtrot': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
+      'echo': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
+      'foxtrot': { bg: 'bg-indigo-50', border: 'border-l-4 border-l-indigo-800', text: 'text-indigo-800', badge: 'bg-indigo-800 text-white' },
     };
-    return flightColors[flight] || { bg: '', border: '', text: 'text-slate-500', badge: 'bg-slate-200 text-slate-700' };
+    return flightColors[flightLower] || { bg: '', border: '', text: 'text-slate-500', badge: 'bg-slate-200 text-slate-700' };
   };
 
-  const getSquadronInfo = (flight) => {
+  const getSquadronDisplay = (squadron) => {
+    // Convert squadron code to display name with color
+    const squadronLower = (squadron || '').toLowerCase().replace(/\s+/g, '_');
     const squadronMap = {
-      'Alpha': { name: '6th CTS', color: 'text-sky-600' },
-      'Bravo': { name: '6th CTS', color: 'text-sky-600' },
-      'Charlie': { name: '21st CTS', color: 'text-red-700' },
-      'Delta': { name: '21st CTS', color: 'text-red-700' },
-      'Echo': { name: '22nd CTS', color: 'text-indigo-800' },
-      'Foxtrot': { name: '22nd CTS', color: 'text-indigo-800' },
+      '6th_cts': { name: '6th CTS', color: 'text-sky-600', badge: 'bg-sky-100 text-sky-700 border-sky-300' },
+      '21st_cts': { name: '21st CTS', color: 'text-red-700', badge: 'bg-red-100 text-red-700 border-red-300' },
+      '22nd_cts': { name: '22nd CTS', color: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+      // Handle space-separated versions too
+      '6th cts': { name: '6th CTS', color: 'text-sky-600', badge: 'bg-sky-100 text-sky-700 border-sky-300' },
+      '21st cts': { name: '21st CTS', color: 'text-red-700', badge: 'bg-red-100 text-red-700 border-red-300' },
+      '22nd cts': { name: '22nd CTS', color: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
     };
-    return squadronMap[flight] || { name: '-', color: 'text-slate-400' };
+    return squadronMap[squadronLower] || { name: '-', color: 'text-slate-400', badge: 'bg-slate-100 text-slate-500 border-slate-200' };
   };
 
   if (loading) {
@@ -957,18 +961,18 @@ const RosterPage = () => {
           </div>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {Object.entries(flightDistribution.flights || {}).map(([flight, data]) => {
-              const flightColors = getFlightColors(flight.charAt(0).toUpperCase() + flight.slice(1));
+              const flightColors = getFlightColors(flight);
               return (
-                <div key={flight} className={`p-2 rounded-sm ${flightColors.bg} border ${flightColors.border}`}>
+                <div key={flight} className={`p-2 rounded-sm border ${flightColors.badge} bg-opacity-20`}>
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-bold uppercase ${flightColors.text}`}>
+                    <span className={`text-xs font-bold uppercase`}>
                       {flight.charAt(0).toUpperCase() + flight.slice(1)}
                     </span>
-                    <span className={`text-xs ${flightColors.text}`}>
+                    <span className={`text-xs font-medium`}>
                       {data.total}/{data.capacity}
                     </span>
                   </div>
-                  <div className="flex gap-2 mt-1 text-xs text-slate-500">
+                  <div className="flex gap-2 mt-1 text-xs opacity-80">
                     <span>M: {data.male}</span>
                     <span>F: {data.female}</span>
                   </div>
@@ -1272,7 +1276,7 @@ const RosterPage = () => {
               ) : (
                 paginatedParticipants.map((p) => {
                   const flightColors = getFlightColors(p.flight);
-                  const squadronInfo = getSquadronInfo(p.flight);
+                  const squadronDisplay = getSquadronDisplay(p.squadron);
                   const isEditing = inlineEditId === p.id;
                   return (
                   <tr 
@@ -1330,17 +1334,23 @@ const RosterPage = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="None">None</SelectItem>
-                            <SelectItem value="6th CTS">6th CTS</SelectItem>
-                            <SelectItem value="21st CTS">21st CTS</SelectItem>
-                            <SelectItem value="22nd CTS">22nd CTS</SelectItem>
+                            <SelectItem value="6th_cts">6th CTS</SelectItem>
+                            <SelectItem value="21st_cts">21st CTS</SelectItem>
+                            <SelectItem value="22nd_cts">22nd CTS</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
                         <div 
-                          className={`cursor-pointer group flex items-center gap-1 text-xs font-medium ${squadronInfo.color}`}
+                          className="cursor-pointer group flex items-center gap-1"
                           onClick={() => canEdit() && startInlineEdit(p)}
                         >
-                          <span>{squadronInfo.name}</span>
+                          {p.squadron && p.squadron !== 'None' ? (
+                            <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm border ${squadronDisplay.badge}`}>
+                              {squadronDisplay.name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
                           {canEdit() && (
                             <Edit3 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                           )}
