@@ -25,6 +25,7 @@ import {
   Monitor,
   UtensilsCrossed,
   DollarSign,
+  BedDouble,
   UserCheck
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -107,6 +108,7 @@ const Sidebar = ({ children }) => {
   // Check-In visible to Plans & Programs, Exec Staff, Logistics, and support_logistics
   if (['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics'].includes(user?.role)) {
     navItems.push({ path: '/check-in', icon: UserCheck, label: 'Check-In' });
+    navItems.push({ path: '/barracks', icon: BedDouble, label: 'Barracks' });
   }
 
   // Logistics visible to all roles + support_logistics

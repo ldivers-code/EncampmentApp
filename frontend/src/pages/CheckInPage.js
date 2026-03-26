@@ -18,7 +18,7 @@ import {
 const STEPS = [
   { key: 'arrival', label: 'Arrival', icon: Plane, color: 'emerald' },
   { key: 'paperwork', label: 'Paperwork', icon: FileText, color: 'blue' },
-  { key: 'room_assignment', label: 'Room Assign', icon: Home, color: 'amber' },
+  { key: 'bunk_assignment', label: 'Bunk Assign', icon: Home, color: 'amber' },
   { key: 'gear_issue', label: 'Gear Issue', icon: Package, color: 'purple' },
 ];
 

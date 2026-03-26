@@ -75,7 +75,12 @@ const AdminPage = () => {
     { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' },
     { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200' },
-    { value: 'dining_facility', label: 'Dining Facility', color: 'bg-orange-100 text-orange-800 border-orange-200' }
+    { value: 'dining_facility', label: 'Dining Facility', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    { value: 'support_logistics', label: 'Support - Logistics', color: 'bg-slate-200 text-slate-800 border-slate-300' },
+    { value: 'support_comms', label: 'Support - Comms', color: 'bg-slate-200 text-slate-800 border-slate-300' },
+    { value: 'support_pa', label: 'Support - Public Affairs', color: 'bg-slate-200 text-slate-800 border-slate-300' },
+    { value: 'support_dining', label: 'Support - Dining', color: 'bg-slate-200 text-slate-800 border-slate-300' },
+    { value: 'support_health', label: 'Support - Health Svc', color: 'bg-slate-200 text-slate-800 border-slate-300' }
   ];
 
   const squadrons = [

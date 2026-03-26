@@ -25,6 +25,7 @@ import LogisticsPage from "./pages/LogisticsPage";
 import StatusBoardControl from "./pages/StatusBoardControl";
 import StatusBoardDisplay from "./pages/StatusBoardDisplay";
 import CheckInPage from "./pages/CheckInPage";
+import BarracksPage from "./pages/BarracksPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -226,6 +227,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics']}>
             <CheckInPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/barracks"
+        element={
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics']}>
+            <BarracksPage />
           </ProtectedRoute>
         }
       />

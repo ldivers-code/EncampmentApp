@@ -1055,6 +1055,40 @@ export const undoAllCheckIn = async (participantId) => {
 
 
 
+// ============ Barracks & Bunk Assignment ============
+export const getBarracks = async () => {
+  const response = await axios.get(`${API}/barracks`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getBarracksDetail = async (barracksId) => {
+  const response = await axios.get(`${API}/barracks/${barracksId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const assignBunk = async (barracksId, participantId, bunkNumber, position) => {
+  const response = await axios.post(`${API}/barracks/${barracksId}/assign`, {
+    participant_id: participantId, bunk_number: bunkNumber, position
+  }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const unassignBunk = async (barracksId, bunkNumber, position) => {
+  const response = await axios.delete(`${API}/barracks/${barracksId}/bunk/${bunkNumber}/${position}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getUnassignedParticipants = async () => {
+  const response = await axios.get(`${API}/barracks/unassigned-participants`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getFacilityBuildings = async () => {
+  const response = await axios.get(`${API}/facility/buildings`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
 // ============ Training Officer ============
 
 export const getTrainingSummary = async () => {
