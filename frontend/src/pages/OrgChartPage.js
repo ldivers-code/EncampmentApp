@@ -300,30 +300,14 @@ const OrgChartPage = () => {
               )}
               <Connector type="vertical" />
               
-              {/* Staff positions to the right of Deputy Support */}
+              {/* Staff positions under Deputy Support */}
               <div className="flex gap-2 mb-2">
                 {getRole('finance') && <RoleBox role={getRole('finance')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'finance'} size="small" />}
                 {getRole('chaplain-cdi') && <RoleBox role={getRole('chaplain-cdi')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chaplain-cdi'} size="small" />}
               </div>
-              
-              {/* Support Squadron Commander */}
-              {getRole('support-sq-cc') && (
-                <RoleBox role={getRole('support-sq-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'support-sq-cc'} />
-              )}
-              
-              <Connector type="vertical" />
-              
-              {/* Support Squadron Staff - Row 1 */}
-              <div className="flex gap-2 mb-1">
-                {getRole('logistics') && <RoleBox role={getRole('logistics')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'logistics'} size="small" />}
-                {getRole('public-affairs') && <RoleBox role={getRole('public-affairs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'public-affairs'} size="small" />}
-                {getRole('health-services') && <RoleBox role={getRole('health-services')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'health-services'} size="small" />}
-              </div>
-              
-              {/* Support Squadron Staff - Row 2 */}
               <div className="flex gap-2">
-                {getRole('comms') && <RoleBox role={getRole('comms')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'comms'} size="small" />}
-                {getRole('word') && <RoleBox role={getRole('word')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'word'} size="small" />}
+                {getRole('safety') && <RoleBox role={getRole('safety')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'safety'} size="small" />}
+                {getRole('plans-programs') && <RoleBox role={getRole('plans-programs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'plans-programs'} size="small" />}
               </div>
             </div>
           </div>
@@ -469,6 +453,27 @@ const OrgChartPage = () => {
               <div className="flex gap-2">
                 {getRole('ato-echo') && <RoleBox role={getRole('ato-echo')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-echo'} size="small" />}
                 {getRole('ato-foxtrot') && <RoleBox role={getRole('ato-foxtrot')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-foxtrot'} size="small" />}
+              </div>
+            </div>
+            
+            {/* Support Squadron */}
+            <div className="flex flex-col items-center min-w-[200px]">
+              {getRole('support-sq-cc') && (
+                <RoleBox role={getRole('support-sq-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'support-sq-cc'} />
+              )}
+              <Connector type="vertical" />
+              
+              {/* Support Squadron Staff */}
+              <div className="flex flex-col gap-1">
+                <div className="flex gap-1">
+                  {getRole('logistics-oic') && <RoleBox role={getRole('logistics-oic')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'logistics-oic'} size="small" />}
+                  {getRole('word-oic') && <RoleBox role={getRole('word-oic')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'word-oic'} size="small" />}
+                </div>
+                <div className="flex gap-1">
+                  {getRole('pa-ncoic') && <RoleBox role={getRole('pa-ncoic')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'pa-ncoic'} size="small" />}
+                  {getRole('xp-oic') && <RoleBox role={getRole('xp-oic')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'xp-oic'} size="small" />}
+                </div>
+                {getRole('dfac') && <RoleBox role={getRole('dfac')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'dfac'} size="small" />}
               </div>
             </div>
           </div>
