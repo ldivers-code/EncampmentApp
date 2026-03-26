@@ -252,193 +252,225 @@ const OrgChartPage = () => {
     );
   }
 
-  // Render visual org chart matching the reference image
+  // Render visual org chart matching the reference structure
   const renderOrgChart = () => {
     if (roles.length === 0) return null;
 
     return (
       <div className="org-chart-visual p-4 overflow-x-auto">
-        <div className="min-w-[1200px]">
+        <div className="min-w-[1400px]">
           
-          {/* ROW 1: Top Leadership */}
-          <div className="flex items-start justify-center gap-2 mb-2">
-            {/* SM Superintendent - Left */}
+          {/* === TOP SECTION === */}
+          {/* ROW 1: Encampment Commander */}
+          <div className="flex justify-center mb-2">
+            <div className="flex flex-col items-center">
+              {getRole('enc-commander') && (
+                <RoleBox role={getRole('enc-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'enc-commander'} size="large" />
+              )}
+              <Connector type="vertical" />
+              {getRole('cadet-commander') && (
+                <RoleBox role={getRole('cadet-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'cadet-commander'} />
+              )}
+            </div>
+          </div>
+          
+          <Connector type="vertical" className="h-4" />
+          
+          {/* ROW 2: Three Main Branches */}
+          <div className="flex justify-center gap-16 mb-4">
+            {/* LEFT BRANCH: SM Position / Dean of Academics */}
+            <div className="flex flex-col items-center">
+              <div className="text-[10px] uppercase text-slate-400 mb-1">SM Position</div>
+              {getRole('dean-academics') && (
+                <RoleBox role={getRole('dean-academics')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'dean-academics'} />
+              )}
+            </div>
+            
+            {/* CENTER BRANCH: Superintendent */}
             <div className="flex flex-col items-center">
               {getRole('sm-superintendent') && (
                 <RoleBox role={getRole('sm-superintendent')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sm-superintendent'} />
               )}
             </div>
             
-            {/* Connector */}
-            <div className="flex items-center h-12">
-              <div className="w-8 h-0.5 bg-slate-400 border-dashed border-t-2 border-slate-400"></div>
-            </div>
-            
-            {/* Encampment Commander - Center */}
-            <div className="flex flex-col items-center">
-              {getRole('enc-commander') && (
-                <RoleBox role={getRole('enc-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'enc-commander'} size="large" />
-              )}
-            </div>
-            
-            {/* Connector to right staff */}
-            <div className="flex items-center h-12">
-              <div className="w-8 h-0.5 border-dashed border-t-2 border-slate-400"></div>
-            </div>
-            
-            {/* Right Staff - Finance, Chaplain, Health, Safety */}
-            <div className="flex flex-col gap-1">
-              <div className="flex gap-1">
-                {getRole('finance') && <RoleBox role={getRole('finance')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'finance'} size="small" />}
-                {getRole('chaplain-cdi') && <RoleBox role={getRole('chaplain-cdi')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chaplain-cdi'} size="small" />}
-              </div>
-              <div className="flex gap-1">
-                {getRole('health-services') && <RoleBox role={getRole('health-services')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'health-services'} size="small" />}
-                {getRole('safety') && <RoleBox role={getRole('safety')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'safety'} size="small" />}
-              </div>
-            </div>
-          </div>
-          
-          <Connector type="vertical" className="h-6" />
-          
-          {/* ROW 2: Commandant, Cadet Commander, Deputy Support */}
-          <div className="flex items-start justify-center gap-8 mb-2">
-            {/* Commandant Branch */}
-            <div className="flex flex-col items-center">
-              {getRole('commandant') && (
-                <RoleBox role={getRole('commandant')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'commandant'} />
-              )}
-            </div>
-            
-            {/* Cadet Commander Branch */}
-            <div className="flex flex-col items-center">
-              {getRole('cadet-commander') && (
-                <RoleBox role={getRole('cadet-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'cadet-commander'} />
-              )}
-              <Connector type="vertical" />
-              <div className="flex gap-2">
-                {getRole('dean-academics') && <RoleBox role={getRole('dean-academics')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'dean-academics'} size="small" />}
-                {getRole('deputy-commander') && <RoleBox role={getRole('deputy-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'deputy-commander'} size="small" />}
-              </div>
-            </div>
-            
-            {/* Deputy Support Branch */}
+            {/* RIGHT BRANCH: Deputy Commander of Support */}
             <div className="flex flex-col items-center">
               {getRole('deputy-support') && (
                 <RoleBox role={getRole('deputy-support')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'deputy-support'} />
               )}
               <Connector type="vertical" />
-              <div className="flex flex-col gap-1">
-                <div className="flex gap-1">
-                  {getRole('word') && <RoleBox role={getRole('word')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'word'} size="small" />}
-                  {getRole('public-affairs') && <RoleBox role={getRole('public-affairs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'public-affairs'} size="small" />}
-                </div>
-                <div className="flex gap-1">
-                  {getRole('logistics') && <RoleBox role={getRole('logistics')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'logistics'} size="small" />}
-                  {getRole('plans-programs') && <RoleBox role={getRole('plans-programs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'plans-programs'} size="small" />}
-                </div>
-                {getRole('comms') && <RoleBox role={getRole('comms')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'comms'} size="small" />}
+              
+              {/* Staff positions to the right of Deputy Support */}
+              <div className="flex gap-2 mb-2">
+                {getRole('finance') && <RoleBox role={getRole('finance')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'finance'} size="small" />}
+                {getRole('chaplain-cdi') && <RoleBox role={getRole('chaplain-cdi')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chaplain-cdi'} size="small" />}
               </div>
-            </div>
-          </div>
-          
-          {/* ROW 3: Under Commandant - Chief Instructor, Chief Training Officer */}
-          <div className="flex justify-start ml-[100px] gap-4 mb-2">
-            <div className="flex flex-col items-center">
-              {getRole('chief-instructor') && (
-                <RoleBox role={getRole('chief-instructor')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chief-instructor'} size="small" />
-              )}
-            </div>
-            <div className="flex flex-col items-center">
-              {getRole('chief-training-officer') && (
-                <RoleBox role={getRole('chief-training-officer')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chief-training-officer'} />
-              )}
-            </div>
-          </div>
-          
-          <Connector type="vertical" className="h-4 ml-[250px]" />
-          
-          {/* ROW 4: Training Officers */}
-          <div className="flex justify-center gap-16 mb-2">
-            {['to-sq1', 'to-sq2', 'to-sq3'].map(id => getRole(id) && (
-              <div key={id} className="flex flex-col items-center">
-                <RoleBox role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} size="small" />
-              </div>
-            ))}
-          </div>
-          
-          <Connector type="vertical" className="h-4" />
-          
-          {/* ROW 5: Assistant Training Officers */}
-          <div className="flex justify-center gap-16 mb-2">
-            {['ato-sq1', 'ato-sq2', 'ato-sq3'].map(id => getRole(id) && (
-              <div key={id} className="flex flex-col items-center">
-                <RoleBox role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} size="small" />
-              </div>
-            ))}
-          </div>
-          
-          <Connector type="vertical" className="h-4" />
-          
-          {/* ROW 6: Squadron Commanders + Support Squadron */}
-          <div className="flex justify-center gap-8 mb-2">
-            {['sq1-cc', 'sq2-cc', 'sq3-cc'].map(id => getRole(id) && (
-              <div key={id} className="flex flex-col items-center">
-                <RoleBox role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} />
-                <Connector type="vertical" />
-                <div className="flex flex-col gap-1">
-                  {/* Squadron staff */}
-                  {getRole(id.replace('-cc', '-super')) && (
-                    <RoleBox role={getRole(id.replace('-cc', '-super').replace('sq', 'sq').replace('-cc', '-super'))} onClick={handleRoleClick} size="small" />
-                  )}
-                </div>
-              </div>
-            ))}
-            
-            {/* Support Squadron */}
-            <div className="flex flex-col items-center">
+              
+              {/* Support Squadron Commander */}
               {getRole('support-sq-cc') && (
                 <RoleBox role={getRole('support-sq-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'support-sq-cc'} />
               )}
+              
               <Connector type="vertical" />
-              <div className="flex flex-col gap-1">
-                {['logistics-oic', 'word-oic', 'pa-ncoic', 'xp-oic', 'dfac'].map(id => getRole(id) && (
-                  <RoleBox key={id} role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} size="small" />
-                ))}
+              
+              {/* Support Squadron Staff - Row 1 */}
+              <div className="flex gap-2 mb-1">
+                {getRole('logistics') && <RoleBox role={getRole('logistics')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'logistics'} size="small" />}
+                {getRole('public-affairs') && <RoleBox role={getRole('public-affairs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'public-affairs'} size="small" />}
+                {getRole('health-services') && <RoleBox role={getRole('health-services')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'health-services'} size="small" />}
               </div>
+              
+              {/* Support Squadron Staff - Row 2 */}
+              <div className="flex gap-2">
+                {getRole('comms') && <RoleBox role={getRole('comms')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'comms'} size="small" />}
+                {getRole('word') && <RoleBox role={getRole('word')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'word'} size="small" />}
+              </div>
+            </div>
+          </div>
+          
+          {/* === COMMANDANT SECTION === */}
+          <div className="flex justify-center mb-2">
+            <div className="flex flex-col items-center">
+              {getRole('commandant') && (
+                <RoleBox role={getRole('commandant')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'commandant'} />
+              )}
+              <Connector type="vertical" />
+              {getRole('deputy-commander') && (
+                <RoleBox role={getRole('deputy-commander')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'deputy-commander'} size="small" />
+              )}
             </div>
           </div>
           
           <Connector type="vertical" className="h-4" />
           
-          {/* ROW 7: Flight Commanders */}
-          <div className="flex justify-center gap-4 mb-2">
-            {['alpha-fc', 'bravo-fc', 'charlie-fc', 'delta-fc', 'echo-fc', 'foxtrot-fc'].map(id => getRole(id) && (
-              <div key={id} className="flex flex-col items-center">
-                <RoleBox role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} size="small" />
-              </div>
-            ))}
+          {/* Chief Instructor & Chief Training Officer */}
+          <div className="flex justify-center gap-4 mb-4">
+            {getRole('chief-instructor') && (
+              <RoleBox role={getRole('chief-instructor')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chief-instructor'} />
+            )}
+            {getRole('chief-training-officer') && (
+              <RoleBox role={getRole('chief-training-officer')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'chief-training-officer'} />
+            )}
           </div>
           
-          <Connector type="vertical" className="h-4" />
+          <Connector type="vertical" className="h-6" />
           
-          {/* ROW 8: Flight Sergeants */}
-          <div className="flex justify-center gap-4 mb-2">
-            {['alpha-fs', 'bravo-fs', 'charlie-fs', 'delta-fs', 'echo-fs', 'foxtrot-fs'].map(id => getRole(id) && (
-              <div key={id} className="flex flex-col items-center">
-                <RoleBox role={getRole(id)} onClick={handleRoleClick} isSelected={selectedRole?.role_id === id} size="small" />
+          {/* === SQUADRON SECTION === */}
+          {/* Squadron Commanders Row */}
+          <div className="flex justify-center gap-12 mb-2">
+            {/* 6th CTS Squadron */}
+            <div className="flex flex-col items-center min-w-[280px]">
+              {getRole('sq1-cc') && (
+                <RoleBox role={getRole('sq1-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq1-cc'} />
+              )}
+              <Connector type="vertical" />
+              
+              {/* Training Officer & Superintendent */}
+              <div className="flex gap-2 mb-2">
+                {getRole('to-sq1') && <RoleBox role={getRole('to-sq1')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'to-sq1'} size="small" />}
+                {getRole('sq1-super') && <RoleBox role={getRole('sq1-super')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq1-super'} size="small" />}
               </div>
-            ))}
-          </div>
-          
-          {/* Flight Labels */}
-          <div className="flex justify-center gap-4 mt-2">
-            {['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot'].map(flight => (
-              <div key={flight} className="bg-red-600 text-white text-xs px-3 py-1 rounded text-center min-w-[100px]">
-                <div className="font-bold">{flight}</div>
-                <div className="text-[10px]">3 elements of 5</div>
+              
+              {/* Flight Labels */}
+              <div className="flex justify-center gap-1 mb-1">
+                <div className="text-[10px] font-bold text-sky-600 w-[100px] text-center">A</div>
+                <div className="text-[10px] font-bold text-sky-600 w-[100px] text-center">B</div>
               </div>
-            ))}
+              
+              {/* Flight Commanders */}
+              <div className="flex gap-2 mb-1">
+                {getRole('alpha-fc') && <RoleBox role={getRole('alpha-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'alpha-fc'} size="small" />}
+                {getRole('bravo-fc') && <RoleBox role={getRole('bravo-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'bravo-fc'} size="small" />}
+              </div>
+              
+              {/* Flight Sergeants */}
+              <div className="flex gap-2 mb-1">
+                {getRole('alpha-fs') && <RoleBox role={getRole('alpha-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'alpha-fs'} size="small" />}
+                {getRole('bravo-fs') && <RoleBox role={getRole('bravo-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'bravo-fs'} size="small" />}
+              </div>
+              
+              {/* Flight Training Officers */}
+              <div className="flex gap-2">
+                {getRole('ato-alpha') && <RoleBox role={getRole('ato-alpha')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-alpha'} size="small" />}
+                {getRole('ato-bravo') && <RoleBox role={getRole('ato-bravo')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-bravo'} size="small" />}
+              </div>
+            </div>
+            
+            {/* 21st CTS Squadron */}
+            <div className="flex flex-col items-center min-w-[280px]">
+              {getRole('sq2-cc') && (
+                <RoleBox role={getRole('sq2-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq2-cc'} />
+              )}
+              <Connector type="vertical" />
+              
+              {/* Training Officer & Superintendent */}
+              <div className="flex gap-2 mb-2">
+                {getRole('to-sq2') && <RoleBox role={getRole('to-sq2')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'to-sq2'} size="small" />}
+                {getRole('sq2-super') && <RoleBox role={getRole('sq2-super')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq2-super'} size="small" />}
+              </div>
+              
+              {/* Flight Labels */}
+              <div className="flex justify-center gap-1 mb-1">
+                <div className="text-[10px] font-bold text-red-700 w-[100px] text-center">C</div>
+                <div className="text-[10px] font-bold text-red-700 w-[100px] text-center">D</div>
+              </div>
+              
+              {/* Flight Commanders */}
+              <div className="flex gap-2 mb-1">
+                {getRole('charlie-fc') && <RoleBox role={getRole('charlie-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'charlie-fc'} size="small" />}
+                {getRole('delta-fc') && <RoleBox role={getRole('delta-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'delta-fc'} size="small" />}
+              </div>
+              
+              {/* Flight Sergeants */}
+              <div className="flex gap-2 mb-1">
+                {getRole('charlie-fs') && <RoleBox role={getRole('charlie-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'charlie-fs'} size="small" />}
+                {getRole('delta-fs') && <RoleBox role={getRole('delta-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'delta-fs'} size="small" />}
+              </div>
+              
+              {/* Flight Training Officers */}
+              <div className="flex gap-2">
+                {getRole('ato-charlie') && <RoleBox role={getRole('ato-charlie')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-charlie'} size="small" />}
+                {getRole('ato-delta') && <RoleBox role={getRole('ato-delta')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-delta'} size="small" />}
+              </div>
+            </div>
+            
+            {/* 22nd CTS Squadron */}
+            <div className="flex flex-col items-center min-w-[280px]">
+              {getRole('sq3-cc') && (
+                <RoleBox role={getRole('sq3-cc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq3-cc'} />
+              )}
+              <Connector type="vertical" />
+              
+              {/* Training Officer & Superintendent */}
+              <div className="flex gap-2 mb-2">
+                {getRole('to-sq3') && <RoleBox role={getRole('to-sq3')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'to-sq3'} size="small" />}
+                {getRole('sq3-super') && <RoleBox role={getRole('sq3-super')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'sq3-super'} size="small" />}
+              </div>
+              
+              {/* Flight Labels */}
+              <div className="flex justify-center gap-1 mb-1">
+                <div className="text-[10px] font-bold text-indigo-800 w-[100px] text-center">E</div>
+                <div className="text-[10px] font-bold text-indigo-800 w-[100px] text-center">F</div>
+              </div>
+              
+              {/* Flight Commanders */}
+              <div className="flex gap-2 mb-1">
+                {getRole('echo-fc') && <RoleBox role={getRole('echo-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'echo-fc'} size="small" />}
+                {getRole('foxtrot-fc') && <RoleBox role={getRole('foxtrot-fc')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'foxtrot-fc'} size="small" />}
+              </div>
+              
+              {/* Flight Sergeants */}
+              <div className="flex gap-2 mb-1">
+                {getRole('echo-fs') && <RoleBox role={getRole('echo-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'echo-fs'} size="small" />}
+                {getRole('foxtrot-fs') && <RoleBox role={getRole('foxtrot-fs')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'foxtrot-fs'} size="small" />}
+              </div>
+              
+              {/* Flight Training Officers */}
+              <div className="flex gap-2">
+                {getRole('ato-echo') && <RoleBox role={getRole('ato-echo')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-echo'} size="small" />}
+                {getRole('ato-foxtrot') && <RoleBox role={getRole('ato-foxtrot')} onClick={handleRoleClick} isSelected={selectedRole?.role_id === 'ato-foxtrot'} size="small" />}
+              </div>
+            </div>
           </div>
           
         </div>
