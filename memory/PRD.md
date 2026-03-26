@@ -70,8 +70,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Role-Based Roster Visibility (Sensitive data restricted)**
 - [x] **Logistics Module (10 sub-pages: Dashboard, Inventory, Lost & Found, Radios, Comms Log, Call Signs, Vehicles, Vehicle Log, Facilities, Supply Requests)**
 - [x] **Training Officer Module (Blister checks, counseling logs, cadre issues)**
+- [x] **Support Squadron Deep Hierarchical Org Chart (5 sections × 4 roles each: OIC, AOIC, NCOIC, Cadre)**
 
 ## What's Been Implemented
+
+### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
+- **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
+- **Sections**: Logistics, Communications, Public Affairs, Dining Services, Health Services
+- **Each Section**: OIC → AOIC, NCOIC, Cadre (OIC reports to Support Sq CC, subordinates report to OIC)
+- **Frontend**: Support Squadron rendered as 4th column with 5 vertical sub-sections side-by-side
+- **All positions shown even if vacant** (labeled "Vacant")
+- **Color**: Silver/slate theme for all support roles
+- **Total org chart roles**: 79 (21 support squadron roles)
+- **Testing**: 100% pass rate (33/33 backend + full frontend validation)
 
 ### Mar 26, 2026 - Auto-Assignment System
 - **Automatic Flight Assignment Triggers**:
