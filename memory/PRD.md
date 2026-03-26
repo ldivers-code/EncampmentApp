@@ -72,8 +72,10 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Training Officer Module (Blister checks, counseling logs, cadre issues)**
 - [x] **Support Squadron Deep Hierarchical Org Chart (5 sections x 4 roles each: OIC, AOIC, NCOIC, Cadre)**
 - [x] **Medical Roster on Health Services tab (cadet health tracking with detailed profiles)**
-- [x] **In-Processing Check-In System (multi-step: Arrival, Paperwork, Room Assignment, Gear Issue)**
+- [x] **In-Processing Check-In System (multi-step: Arrival, Paperwork, Bunk Assignment, Gear Issue)**
 - [x] **Support Cadre Roles (support_logistics, support_comms, support_pa, support_dining, support_health)**
+- [x] **Barracks & Bunk Assignment System (5 open bay barracks, 25 bunks each, visual layout)**
+- [x] **Admin Page: Support cadre roles in user creation/edit dropdown**
 
 ## What's Been Implemented
 
@@ -111,16 +113,17 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Access restricted**: Plans & Programs, Exec Staff, Logistics, Commander, DCP, and support_logistics
 - **Testing**: 100% pass rate (19/19 backend + full frontend validation)
 
-### Mar 26, 2026 - Support Cadre Roles
-- **5 new user roles**: support_logistics, support_comms, support_pa, support_dining, support_health
-- **Permissions mapping**:
-  - `support_logistics` → Logistics page + Check-In page (view + edit)
-  - `support_comms` → Standard dashboard/schedule/org chart access
-  - `support_pa` → Standard access + Analytics
-  - `support_dining` → Standard access + Meal Plan edit
-  - `support_health` → Standard access + Health Services view
-- **Sidebar updated**: Shows relevant pages for each support cadre role
-- **Routes updated**: Health, Logistics, Analytics, Check-In routes include support roles
+### Mar 26, 2026 - Barracks & Bunk Assignment System
+- **5 Open Bay Barracks**: TR-142B, TR-143A, TR-143B, TR-144A, TR-144B (25 bunks each, 50 capacity = 250 total)
+- **Visual open bay layout**: Left wall (13 bunks) and Right wall (12 bunks) with center aisle
+- **Bunk assignment**: Click empty slot → participant picker (search/filter by student/cadre) → assign top or bottom
+- **Conflict prevention**: Duplicate bunk spot and multi-bunk assignment both blocked (409)
+- **Unassign**: Hover to reveal remove button
+- **Backend**: 5 endpoints (list, detail, assign, unassign, unassigned-participants)
+- **Facility info**: All VTS-Catoosa buildings tracked (TR-3 Support, TR-100 DFAC, TR-105/106/107 Senior Barracks, TR-5/7 Classrooms, etc.)
+- **Check-in renamed**: "Room Assignment" → "Bunk Assignment"
+- **Admin page**: 5 support cadre roles added to user role dropdown
+- **Testing**: 100% pass rate (20/20 backend + full frontend validation)
 
 ### Mar 26, 2026 - Auto-Assignment System
 - **Automatic Flight Assignment Triggers**:
