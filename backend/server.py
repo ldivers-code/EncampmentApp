@@ -327,9 +327,13 @@ class ParticipantBase(BaseModel):
     shirt_size: Optional[str] = None
     member_type: Optional[str] = None  # SENIOR, CADET
     participant_type: str = "basic_student"  # basic_student, advanced_student, cadre, staff, senior_member
+    student_type: Optional[str] = None  # "First-Time Student", "Returning Student"
     squadron: Optional[str] = None
     flight: Optional[str] = None
     position: Optional[str] = None
+    # Conflicts/Scheduling
+    conflicts: Optional[str] = None
+    highest_oride: Optional[str] = None
     # Payment & Registration
     paid: bool = False
     paid_in_full: bool = False
@@ -344,6 +348,7 @@ class ParticipantBase(BaseModel):
     slotted: bool = False
     # Address
     address: Optional[str] = None
+    address2: Optional[str] = None  # Second address line
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
@@ -353,6 +358,11 @@ class ParticipantBase(BaseModel):
     # Parent Info (for cadets)
     cadet_parent_phone: Optional[str] = None
     cadet_parent_email: Optional[str] = None
+    # Extended parent contact info (for students)
+    cadet_parent_phone_secondary: Optional[str] = None
+    cadet_parent_phone_emergency: Optional[str] = None
+    cadet_parent_email_secondary: Optional[str] = None
+    cadet_parent_email_emergency: Optional[str] = None
     # Unit/Wing CC
     unit_cc_name: Optional[str] = None
     unit_cc_email: Optional[str] = None
@@ -2484,6 +2494,372 @@ async def import_participants(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+# ================= STUDENT UPLOAD WITH AUTO-ASSIGNMENT =================
+
+# Flight assignment constants
+STUDENT_FLIGHTS = {
+    "6th_cts": ["alpha", "bravo"],
+    "21st_cts": ["charlie", "delta"],
+    "22nd_cts": ["echo", "foxtrot"]
+}
+
+FLIGHT_TO_SQUADRON = {
+    "alpha": "6th_cts", "bravo": "6th_cts",
+    "charlie": "21st_cts", "delta": "21st_cts",
+    "echo": "22nd_cts", "foxtrot": "22nd_cts"
+}
+
+ALL_FLIGHTS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+MAX_STUDENTS_PER_FLIGHT = 15
+
+# Rank ordering for distribution (lower = junior)
+RANK_ORDER = {
+    "C/AB": 1, "C/Amn": 2, "C/A1C": 3, "C/SrA": 4,
+    "C/SSgt": 5, "C/TSgt": 6, "C/MSgt": 7, "C/SMSgt": 8, "C/CMSgt": 9
+}
+
+
+def get_rank_tier(rank: str) -> int:
+    """Get rank tier for distribution (1=junior, 2=mid, 3=senior)"""
+    order = RANK_ORDER.get(rank, 0)
+    if order <= 3:
+        return 1  # Junior (AB, Amn, A1C)
+    elif order <= 6:
+        return 2  # Mid (SrA, SSgt, TSgt)
+    else:
+        return 3  # Senior (MSgt, SMSgt, CMSgt)
+
+
+async def auto_assign_flights(students: list) -> dict:
+    """
+    Automatically assign students to flights using balanced distribution.
+    Rules:
+    1. Evenly distribute total students across 6 flights (max 15 per flight)
+    2. Balance male/female distribution
+    3. Spread ranks across flights (avoid grouping all senior ranks together)
+    4. Keep flights reasonably balanced by age
+    """
+    # Get current flight counts from database
+    flight_counts = {f: {"total": 0, "male": 0, "female": 0, "rank_tiers": {1: 0, 2: 0, 3: 0}} for f in ALL_FLIGHTS}
+    
+    existing = await db.participants.find(
+        {"participant_type": "basic_student", "is_removed": {"$ne": True}, "flight": {"$in": ALL_FLIGHTS}},
+        {"flight": 1, "gender": 1, "rank": 1}
+    ).to_list(1000)
+    
+    for p in existing:
+        f = p.get("flight", "").lower()
+        if f in flight_counts:
+            flight_counts[f]["total"] += 1
+            gender = (p.get("gender") or "").upper()
+            if gender == "MALE":
+                flight_counts[f]["male"] += 1
+            elif gender == "FEMALE":
+                flight_counts[f]["female"] += 1
+            rank_tier = get_rank_tier(p.get("rank", ""))
+            flight_counts[f]["rank_tiers"][rank_tier] += 1
+    
+    # Sort students by rank tier (distribute senior ranks first for better spread)
+    students_to_assign = []
+    for s in students:
+        if not s.get("flight"):  # Only assign if not already assigned
+            students_to_assign.append({
+                **s,
+                "rank_tier": get_rank_tier(s.get("rank", "")),
+                "gender": (s.get("gender") or "").upper()
+            })
+    
+    # Sort: senior ranks first, then by gender to alternate
+    students_to_assign.sort(key=lambda x: (-x["rank_tier"], x["gender"]))
+    
+    assignments = {}
+    
+    for student in students_to_assign:
+        capid = student.get("capid")
+        gender = student["gender"]
+        rank_tier = student["rank_tier"]
+        
+        # Find best flight: balance by total, gender, and rank tier
+        best_flight = None
+        best_score = float('inf')
+        
+        for flight in ALL_FLIGHTS:
+            fc = flight_counts[flight]
+            
+            # Skip if at capacity
+            if fc["total"] >= MAX_STUDENTS_PER_FLIGHT:
+                continue
+            
+            # Calculate score (lower is better)
+            # Prioritize: total balance, gender balance, rank tier balance
+            total_score = fc["total"] * 10  # Weight total count heavily
+            
+            # Gender balance score
+            if gender == "MALE":
+                gender_score = fc["male"] - fc["female"]
+            elif gender == "FEMALE":
+                gender_score = fc["female"] - fc["male"]
+            else:
+                gender_score = 0
+            
+            # Rank tier balance score
+            rank_score = fc["rank_tiers"].get(rank_tier, 0)
+            
+            score = total_score + gender_score + rank_score
+            
+            if score < best_score:
+                best_score = score
+                best_flight = flight
+        
+        if best_flight:
+            assignments[capid] = {
+                "flight": best_flight,
+                "squadron": FLIGHT_TO_SQUADRON[best_flight]
+            }
+            # Update counts
+            flight_counts[best_flight]["total"] += 1
+            if gender == "MALE":
+                flight_counts[best_flight]["male"] += 1
+            elif gender == "FEMALE":
+                flight_counts[best_flight]["female"] += 1
+            flight_counts[best_flight]["rank_tiers"][rank_tier] += 1
+    
+    return {
+        "assignments": assignments,
+        "flight_counts": {f: fc["total"] for f, fc in flight_counts.items()}
+    }
+
+
+@api_router.post("/students/upload")
+async def upload_students(
+    file: UploadFile = File(...),
+    auto_assign: bool = True,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+):
+    """
+    Upload student roster from Excel file.
+    - Creates student records (NOT user accounts)
+    - Optionally auto-assigns flights using balanced distribution
+    - All uploaded students are marked as "First-Time Student"
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = df.columns.str.strip()
+        
+        # Column mapping for CAP Event Admin Report format
+        column_map = {
+            'RegistrantsCAPID': 'capid',
+            'CAPID': 'capid',
+            'Rank': 'rank',
+            'NameLast': 'last_name',
+            'NameFirst': 'first_name',
+            'NameMiddle': 'middle_name',
+            'Unit': 'unit',
+            'Wing': 'wing',
+            'Region': 'region',
+            'Gender': 'gender',
+            'Age': 'age',
+            'AgeAtEventStart': 'age_at_event',
+            'Email': 'email',
+            'ShirtSize': 'shirt_size',
+            'RegistrationStatus': 'registration_status',
+            'Addr1': 'address',
+            'Addr2': 'address2',
+            'City': 'city',
+            'State': 'state',
+            'Zip': 'zip_code',
+            'EmergencyContactName': 'emergency_contact',
+            'EmergencyContactNumber': 'emergency_phone',
+            'CadetParentPhonePrimary': 'cadet_parent_phone',
+            'CadetParentPhoneSecondary': 'cadet_parent_phone_secondary',
+            'CadetParentPhoneEmergency': 'cadet_parent_phone_emergency',
+            'CadetParentEmailPrimary': 'cadet_parent_email',
+            'CadetParentEmailSecondary': 'cadet_parent_email_secondary',
+            'CadetParentEmailEmergency': 'cadet_parent_email_emergency',
+            'Comments': 'comments',
+            'Conflicts': 'conflicts',
+            'LastEncampment': 'last_encampment',
+            'HighestORide': 'highest_oride',
+        }
+        
+        df = df.rename(columns=column_map)
+        
+        now = datetime.now(timezone.utc).isoformat()
+        students_to_process = []
+        
+        # Helper functions
+        def get_val(row_dict, key, default=None):
+            val = row_dict.get(key)
+            if pd.isna(val) or val == '' or val == 'nan':
+                return default
+            return val
+        
+        def get_str(row_dict, key, default=''):
+            val = get_val(row_dict, key, default)
+            return str(val).strip() if val is not None else default
+        
+        def get_int(row_dict, key, default=None):
+            val = get_val(row_dict, key)
+            if val is None:
+                return default
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return default
+        
+        # Process each row as a student
+        for idx, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            capid = get_str(row_dict, 'capid')
+            if not capid or capid == 'nan':
+                continue  # Skip rows without CAPID
+            
+            students_to_process.append({
+                "capid": capid,
+                "rank": get_str(row_dict, 'rank'),
+                "last_name": get_str(row_dict, 'last_name'),
+                "first_name": get_str(row_dict, 'first_name'),
+                "middle_name": get_str(row_dict, 'middle_name') or None,
+                "unit": get_str(row_dict, 'unit'),
+                "wing": get_str(row_dict, 'wing') or None,
+                "region": get_str(row_dict, 'region') or None,
+                "gender": get_str(row_dict, 'gender') or None,
+                "age": get_int(row_dict, 'age'),
+                "age_at_event": get_int(row_dict, 'age_at_event'),
+                "email": get_str(row_dict, 'email') or None,
+                "shirt_size": get_str(row_dict, 'shirt_size') or None,
+                "registration_status": get_str(row_dict, 'registration_status') or None,
+                "address": get_str(row_dict, 'address') or None,
+                "address2": get_str(row_dict, 'address2') or None,
+                "city": get_str(row_dict, 'city') or None,
+                "state": get_str(row_dict, 'state') or None,
+                "zip_code": get_str(row_dict, 'zip_code') or None,
+                "emergency_contact": get_str(row_dict, 'emergency_contact') or None,
+                "emergency_phone": get_str(row_dict, 'emergency_phone') or None,
+                "cadet_parent_phone": get_str(row_dict, 'cadet_parent_phone') or None,
+                "cadet_parent_phone_secondary": get_str(row_dict, 'cadet_parent_phone_secondary') or None,
+                "cadet_parent_phone_emergency": get_str(row_dict, 'cadet_parent_phone_emergency') or None,
+                "cadet_parent_email": get_str(row_dict, 'cadet_parent_email') or None,
+                "cadet_parent_email_secondary": get_str(row_dict, 'cadet_parent_email_secondary') or None,
+                "cadet_parent_email_emergency": get_str(row_dict, 'cadet_parent_email_emergency') or None,
+                "comments": get_str(row_dict, 'comments') or None,
+                "conflicts": get_str(row_dict, 'conflicts') or None,
+                "last_encampment": get_str(row_dict, 'last_encampment') or None,
+                "highest_oride": get_str(row_dict, 'highest_oride') or None,
+                # Fixed values for student upload
+                "participant_type": "basic_student",
+                "student_type": "First-Time Student",
+                "member_type": "CADET",
+            })
+        
+        # Auto-assign flights if enabled
+        flight_assignments = {}
+        if auto_assign:
+            result = await auto_assign_flights(students_to_process)
+            flight_assignments = result["assignments"]
+        
+        # Insert/update students
+        imported_count = 0
+        updated_count = 0
+        
+        for student in students_to_process:
+            capid = student["capid"]
+            
+            # Apply flight assignment if available
+            if capid in flight_assignments:
+                student["flight"] = flight_assignments[capid]["flight"]
+                student["squadron"] = flight_assignments[capid]["squadron"]
+            
+            student["updated_at"] = now
+            
+            # Check if student already exists
+            existing = await db.participants.find_one({"capid": capid})
+            
+            if existing:
+                # Don't override manual squadron/flight assignments
+                if existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
+                    student["flight"] = existing["flight"]
+                    student["squadron"] = existing.get("squadron")
+                
+                await db.participants.update_one(
+                    {"capid": capid},
+                    {"$set": student}
+                )
+                updated_count += 1
+            else:
+                student["id"] = str(uuid.uuid4())
+                student["created_at"] = now
+                await db.participants.insert_one(student)
+                imported_count += 1
+        
+        # Get final counts
+        total_students = await db.participants.count_documents({"participant_type": "basic_student"})
+        
+        # Get flight distribution
+        flight_distribution = {}
+        for flight in ALL_FLIGHTS:
+            count = await db.participants.count_documents({
+                "participant_type": "basic_student",
+                "flight": flight,
+                "is_removed": {"$ne": True}
+            })
+            flight_distribution[flight] = count
+        
+        return {
+            "message": f"Student upload complete: {imported_count} new, {updated_count} updated",
+            "imported": imported_count,
+            "updated": updated_count,
+            "total_students": total_students,
+            "auto_assigned": len(flight_assignments),
+            "flight_distribution": flight_distribution
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+@api_router.get("/students/flight-distribution")
+async def get_flight_distribution(user: dict = Depends(get_current_user)):
+    """Get current student distribution across flights"""
+    distribution = {}
+    
+    for flight in ALL_FLIGHTS:
+        students = await db.participants.find(
+            {
+                "participant_type": "basic_student",
+                "flight": flight,
+                "is_removed": {"$ne": True}
+            },
+            {"gender": 1, "rank": 1}
+        ).to_list(100)
+        
+        male_count = sum(1 for s in students if (s.get("gender") or "").upper() == "MALE")
+        female_count = sum(1 for s in students if (s.get("gender") or "").upper() == "FEMALE")
+        
+        distribution[flight] = {
+            "total": len(students),
+            "male": male_count,
+            "female": female_count,
+            "squadron": FLIGHT_TO_SQUADRON.get(flight, ""),
+            "capacity": MAX_STUDENTS_PER_FLIGHT
+        }
+    
+    total_students = sum(d["total"] for d in distribution.values())
+    total_capacity = MAX_STUDENTS_PER_FLIGHT * len(ALL_FLIGHTS)
+    
+    return {
+        "flights": distribution,
+        "total_students": total_students,
+        "total_capacity": total_capacity,
+        "utilization": round(total_students / total_capacity * 100, 1) if total_capacity > 0 else 0
+    }
 
 
 async def sync_roster_to_budget():

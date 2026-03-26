@@ -113,6 +113,21 @@ export const importParticipants = async (file) => {
   return response.data;
 };
 
+// Student-specific upload (separate from staff/cadre)
+export const uploadStudents = async (file, autoAssign = true) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/students/upload?auto_assign=${autoAssign}`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const getFlightDistribution = async () => {
+  const response = await axios.get(`${API}/students/flight-distribution`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const getParticipantStats = async () => {
   const response = await axios.get(`${API}/participants/stats`, { headers: getAuthHeaders() });
   return response.data;

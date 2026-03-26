@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -36,7 +36,10 @@ import {
   RotateCcw,
   Eye,
   Edit3,
-  Check
+  Check,
+  GraduationCap,
+  Briefcase,
+  Star
 } from 'lucide-react';
 
 const RosterPage = () => {
@@ -57,8 +60,12 @@ const RosterPage = () => {
   const [showRemoved, setShowRemoved] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [rosterView, setRosterView] = useState('master'); // 'master' or 'full'
+  const [categoryTab, setCategoryTab] = useState('students'); // 'staff', 'cadre', 'students'
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Student upload state
+  const [uploadingStudents, setUploadingStudents] = useState(false);
+  const [flightDistribution, setFlightDistribution] = useState(null);
   // Inline editing state
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditFlight, setInlineEditFlight] = useState('');
@@ -113,6 +120,7 @@ const RosterPage = () => {
   useEffect(() => {
     loadParticipants();
     loadStats();
+    loadFlightDistribution();
   }, []);
 
   const loadParticipants = async () => {
@@ -135,11 +143,55 @@ const RosterPage = () => {
     }
   };
 
+  const loadFlightDistribution = async () => {
+    try {
+      const data = await getFlightDistribution();
+      setFlightDistribution(data);
+    } catch (error) {
+      console.error('Failed to load flight distribution');
+    }
+  };
+
+  // Handle student roster upload
+  const handleStudentUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingStudents(true);
+    try {
+      const result = await uploadStudents(file, true);
+      toast.success(`${result.message}`);
+      if (result.flight_distribution) {
+        const flightCounts = Object.entries(result.flight_distribution)
+          .map(([f, c]) => `${f.charAt(0).toUpperCase() + f.slice(1)}: ${c}`)
+          .join(', ');
+        toast.info(`Flight distribution: ${flightCounts}`);
+      }
+      loadParticipants();
+      loadStats();
+      loadFlightDistribution();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload student roster');
+    } finally {
+      setUploadingStudents(false);
+      e.target.value = '';
+    }
+  };
+
   const filteredParticipants = useMemo(() => {
     return participants.filter(p => {
       // Filter out removed participants unless showRemoved is true
       if (!showRemoved && p.is_removed) return false;
       if (showRemoved && !p.is_removed) return false;
+      
+      // Category tab filter (Staff | Cadre | Students)
+      if (categoryTab === 'students') {
+        if (p.participant_type !== 'basic_student' && p.participant_type !== 'advanced_student') return false;
+      } else if (categoryTab === 'cadre') {
+        if (p.participant_type !== 'cadre') return false;
+      } else if (categoryTab === 'staff') {
+        if (p.participant_type !== 'staff' && p.participant_type !== 'senior_member') return false;
+      }
       
       // Master vs Full roster view
       if (rosterView === 'master' && !isAccepted(p)) return false;
@@ -186,7 +238,17 @@ const RosterPage = () => {
       
       return matchesSearch && matchesType && matchesPaid && matchesFlight && matchesSquadron && matchesGender && matchesWing && matchesRank;
     });
-  }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved, rosterView]);
+  }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved, rosterView, categoryTab]);
+
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const active = participants.filter(p => !p.is_removed);
+    return {
+      students: active.filter(p => p.participant_type === 'basic_student' || p.participant_type === 'advanced_student').length,
+      cadre: active.filter(p => p.participant_type === 'cadre').length,
+      staff: active.filter(p => p.participant_type === 'staff' || p.participant_type === 'senior_member').length
+    };
+  }, [participants]);
 
   // Count accepted participants
   const acceptedCount = useMemo(() => {
@@ -473,46 +535,49 @@ const RosterPage = () => {
   return (
     <div className="p-6 lg:p-8 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4 mb-6">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4 mb-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              {rosterView === 'master' ? 'Master Roster' : 'Full Roster'}
+              Encampment Roster
             </h1>
-            {/* Roster View Toggle */}
-            <div className="flex bg-slate-100 rounded-sm p-0.5">
-              <button
-                onClick={() => { setRosterView('master'); setCurrentPage(1); }}
-                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                  rosterView === 'master' 
-                    ? 'bg-[#00205B] text-white' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Accepted ({acceptedCount})
-              </button>
-              <button
-                onClick={() => { setRosterView('full'); setCurrentPage(1); }}
-                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                  rosterView === 'full' 
-                    ? 'bg-[#00205B] text-white' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All ({participants.filter(p => !p.is_removed).length})
-              </button>
-            </div>
           </div>
           <p className="text-slate-500 text-sm mt-1">
-            {rosterView === 'master' 
-              ? `${filteredParticipants.length} accepted participants with assignments`
-              : `${filteredParticipants.length} of ${participants.filter(p => !p.is_removed).length} total participants`
-            }
+            {filteredParticipants.length} {categoryTab} • {rosterView === 'master' ? 'with assignments' : 'total'}
           </p>
         </div>
         
         {canEdit() && (
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Student Upload Button */}
+            {categoryTab === 'students' && (
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleStudentUpload}
+                  className="hidden"
+                  data-testid="upload-students-input"
+                />
+                <Button 
+                  variant="outline" 
+                  className="rounded-sm border-emerald-600 text-emerald-600 hover:bg-emerald-50" 
+                  asChild
+                  disabled={uploadingStudents}
+                >
+                  <span>
+                    {uploadingStudents ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <GraduationCap className="w-4 h-4 mr-2" />
+                    )}
+                    {uploadingStudents ? 'Uploading...' : 'Upload Students'}
+                  </span>
+                </Button>
+              </label>
+            )}
+            
+            {/* General Import */}
             <label className="cursor-pointer">
               <input
                 type="file"
@@ -788,6 +853,114 @@ const RosterPage = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Category Tabs: Staff | Cadre | Students */}
+      <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
+        <button
+          onClick={() => { setCategoryTab('students'); setCurrentPage(1); }}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            categoryTab === 'students'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="students-tab"
+        >
+          <GraduationCap className="w-4 h-4" />
+          Students
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            categoryTab === 'students' ? 'bg-[#00205B] text-white' : 'bg-slate-100 text-slate-600'
+          }`}>{categoryCounts.students}</span>
+        </button>
+        <button
+          onClick={() => { setCategoryTab('cadre'); setCurrentPage(1); }}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            categoryTab === 'cadre'
+              ? 'border-amber-600 text-amber-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="cadre-tab"
+        >
+          <Star className="w-4 h-4" />
+          Cadre
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            categoryTab === 'cadre' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>{categoryCounts.cadre}</span>
+        </button>
+        <button
+          onClick={() => { setCategoryTab('staff'); setCurrentPage(1); }}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            categoryTab === 'staff'
+              ? 'border-emerald-600 text-emerald-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="staff-tab"
+        >
+          <Briefcase className="w-4 h-4" />
+          Staff
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            categoryTab === 'staff' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>{categoryCounts.staff}</span>
+        </button>
+        
+        {/* Roster View Toggle - moved here */}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex bg-slate-100 rounded-sm p-0.5">
+            <button
+              onClick={() => { setRosterView('master'); setCurrentPage(1); }}
+              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                rosterView === 'master' 
+                  ? 'bg-[#00205B] text-white' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Assigned
+            </button>
+            <button
+              onClick={() => { setRosterView('full'); setCurrentPage(1); }}
+              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                rosterView === 'full' 
+                  ? 'bg-[#00205B] text-white' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Flight Distribution (Students tab only) */}
+      {categoryTab === 'students' && flightDistribution && (
+        <div className="bg-white border border-slate-200 rounded-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold uppercase tracking-tight text-[#00205B]">Flight Distribution</h3>
+            <span className="text-xs text-slate-500">
+              {flightDistribution.total_students} / {flightDistribution.total_capacity} ({flightDistribution.utilization}% capacity)
+            </span>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {Object.entries(flightDistribution.flights || {}).map(([flight, data]) => {
+              const flightColors = getFlightColors(flight.charAt(0).toUpperCase() + flight.slice(1));
+              return (
+                <div key={flight} className={`p-2 rounded-sm ${flightColors.bg} border ${flightColors.border}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold uppercase ${flightColors.text}`}>
+                      {flight.charAt(0).toUpperCase() + flight.slice(1)}
+                    </span>
+                    <span className={`text-xs ${flightColors.text}`}>
+                      {data.total}/{data.capacity}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 mt-1 text-xs text-slate-500">
+                    <span>M: {data.male}</span>
+                    <span>F: {data.female}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1370,180 +1543,169 @@ const RosterPage = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-6">
-                {/* Basic Info */}
-                <div className="space-y-4">
+              <div className="space-y-6 mt-4">
+                {/* SECTION 1: Basic Info */}
+                <div className="space-y-3">
                   <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
                     Basic Information
                   </h4>
-                  <div className="space-y-2 text-sm">
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Type:</span>
-                      <span className={`px-2 py-0.5 text-xs uppercase font-bold rounded-sm border ${getTypeBadgeColor(selectedParticipant.participant_type)}`}>
-                        {selectedParticipant.participant_type?.replace(/_/g, ' ')}
-                      </span>
+                      <span className="text-slate-500">CAPID:</span>
+                      <span className="font-mono font-medium">{selectedParticipant.capid}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Member Type:</span>
-                      <span className="font-medium">{selectedParticipant.member_type || '-'}</span>
+                      <span className="text-slate-500">Rank:</span>
+                      <span className="font-medium">{selectedParticipant.rank || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Unit:</span>
+                      <span className="font-mono font-medium">{selectedParticipant.unit || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Gender:</span>
+                      <span className="font-medium">{selectedParticipant.gender || '-'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Age:</span>
                       <span className="font-medium">{selectedParticipant.age || selectedParticipant.age_at_event || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Gender:</span>
-                      <span className="font-medium">{selectedParticipant.gender === 'M' ? 'Male' : selectedParticipant.gender === 'F' ? 'Female' : selectedParticipant.gender || '-'}</span>
+                      <span className="text-slate-500">Wing:</span>
+                      <span className="font-medium">{selectedParticipant.wing || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 2: Encampment Info */}
+                <div className="space-y-3">
+                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
+                    Encampment Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Squadron:</span>
+                      <span className="font-medium">{selectedParticipant.squadron?.replace('_', ' ').toUpperCase() || '-'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Flight:</span>
                       <span className="font-medium capitalize">{selectedParticipant.flight || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Squadron:</span>
-                      <span className="font-medium">{selectedParticipant.squadron?.replace('_', ' ').toUpperCase() || '-'}</span>
+                      <span className="text-slate-500">Registration Status:</span>
+                      <span className="font-medium">{selectedParticipant.registration_status || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Shirt Size:</span>
+                      <span className="font-medium">{selectedParticipant.shirt_size || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Student Type:</span>
+                      <span className={`px-2 py-0.5 text-xs uppercase font-bold rounded-sm border ${getTypeBadgeColor(selectedParticipant.participant_type)}`}>
+                        {selectedParticipant.student_type || selectedParticipant.participant_type?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Last Encampment:</span>
+                      <span className="font-medium">{selectedParticipant.last_encampment || '-'}</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Unit Info */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> CAP Unit
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Unit:</span>
-                      <span className="font-mono font-medium">{selectedParticipant.unit || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Wing:</span>
-                      <span className="font-medium">{selectedParticipant.wing || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Region:</span>
-                      <span className="font-medium">{selectedParticipant.region || '-'}</span>
-                    </div>
-                    {canViewSensitiveData() && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Unit Approved:</span>
-                          <span className={selectedParticipant.unit_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.unit_approved ? 'Yes' : 'No'}</span>
+                  {(selectedParticipant.conflicts || selectedParticipant.comments) && (
+                    <div className="mt-3 space-y-2">
+                      {selectedParticipant.conflicts && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-sm p-2">
+                          <p className="text-xs font-bold uppercase text-amber-700 mb-1">Conflicts</p>
+                          <p className="text-sm text-amber-800">{selectedParticipant.conflicts}</p>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Wing Approved:</span>
-                          <span className={selectedParticipant.wing_approved ? 'text-emerald-600' : 'text-slate-400'}>{selectedParticipant.wing_approved ? 'Yes' : 'No'}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Contact Info - Only for privileged roles */}
-                {canViewSensitiveData() ? (
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                      <Phone className="w-3 h-3" /> Contact Information
-                    </h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-slate-400" />
-                        <span>{selectedParticipant.email || '-'}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-slate-400" />
-                        <span>{selectedParticipant.phone || selectedParticipant.cell_phone || '-'}</span>
-                      </div>
-                      {selectedParticipant.cadet_parent_email && (
-                        <div className="pt-2 border-t border-slate-100">
-                          <p className="text-xs text-slate-500 mb-1">Parent/Guardian:</p>
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            <span>{selectedParticipant.cadet_parent_email}</span>
-                          </div>
-                          {selectedParticipant.cadet_parent_phone && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <Phone className="w-4 h-4 text-slate-400" />
-                              <span>{selectedParticipant.cadet_parent_phone}</span>
-                            </div>
-                          )}
+                      )}
+                      {selectedParticipant.comments && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-sm p-2">
+                          <p className="text-xs font-bold uppercase text-slate-600 mb-1">Comments</p>
+                          <p className="text-sm text-slate-700">{selectedParticipant.comments}</p>
                         </div>
                       )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                  )}
+                </div>
+
+                {/* SECTION 3: Emergency Contact */}
+                {canViewSensitiveData() && (
+                  <div className="space-y-3">
                     <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                      <Phone className="w-3 h-3" /> Contact Information
+                      <AlertCircle className="w-3 h-3" /> Emergency Contact
                     </h4>
-                    <div className="bg-slate-50 border border-slate-200 rounded-sm p-3 text-center">
-                      <Shield className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500">Restricted</p>
-                      <p className="text-xs text-slate-400">Contact info is only visible to authorized staff</p>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Name:</span>
+                        <span className="font-medium">{selectedParticipant.emergency_contact || '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Phone:</span>
+                        <span className="font-medium">{selectedParticipant.emergency_phone || '-'}</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Payment Info - Only for privileged roles */}
-                {canViewSensitiveData() ? (
-                  <div className="space-y-4">
+                {/* SECTION 4: Parent Contact */}
+                {canViewSensitiveData() && (
+                  <div className="space-y-3">
                     <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                      <DollarSign className="w-3 h-3" /> Payment Status
+                      <Users className="w-3 h-3" /> Parent/Guardian Contact
                     </h4>
-                    <div className="space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Paid:</span>
-                        <span className={selectedParticipant.paid || selectedParticipant.paid_in_full ? 'text-emerald-600 font-medium' : 'text-red-500'}>
-                          {selectedParticipant.paid || selectedParticipant.paid_in_full ? 'Yes' : 'No'}
-                        </span>
+                        <span className="text-slate-500">Primary Phone:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_phone || '-'}</span>
                       </div>
-                      {selectedParticipant.amount_paid > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-slate-500">Amount Paid:</span>
-                          <span className="font-mono font-medium text-emerald-600">${selectedParticipant.amount_paid}</span>
-                        </div>
-                      )}
                       <div className="flex justify-between">
-                        <span className="text-slate-500">Registration Status:</span>
-                        <span className="font-medium">{selectedParticipant.registration_status || '-'}</span>
+                        <span className="text-slate-500">Secondary Phone:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_phone_secondary || '-'}</span>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
-                      <DollarSign className="w-3 h-3" /> Payment Status
-                    </h4>
-                    <div className="bg-slate-50 border border-slate-200 rounded-sm p-3 text-center">
-                      <Shield className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500">Restricted</p>
-                      <p className="text-xs text-slate-400">Payment info is only visible to finance staff</p>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Emergency Phone:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_phone_emergency || '-'}</span>
+                      </div>
+                      <div className="col-span-2 flex justify-between">
+                        <span className="text-slate-500">Primary Email:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_email || '-'}</span>
+                      </div>
+                      <div className="col-span-2 flex justify-between">
+                        <span className="text-slate-500">Secondary Email:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_email_secondary || '-'}</span>
+                      </div>
+                      <div className="col-span-2 flex justify-between">
+                        <span className="text-slate-500">Emergency Email:</span>
+                        <span className="font-medium">{selectedParticipant.cadet_parent_email_emergency || '-'}</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Address - Only for privileged roles */}
+                {/* SECTION 5: Address */}
                 {canViewSensitiveData() && (selectedParticipant.address || selectedParticipant.city) && (
-                  <div className="col-span-2 space-y-4">
+                  <div className="space-y-3">
                     <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2 flex items-center gap-1">
                       <MapPin className="w-3 h-3" /> Address
                     </h4>
-                    <p className="text-sm">
-                      {selectedParticipant.address && <span>{selectedParticipant.address}<br/></span>}
-                      {selectedParticipant.city && <span>{selectedParticipant.city}, </span>}
-                      {selectedParticipant.state && <span>{selectedParticipant.state} </span>}
-                      {selectedParticipant.zip_code && <span>{selectedParticipant.zip_code}</span>}
-                    </p>
+                    <div className="text-sm space-y-1">
+                      {selectedParticipant.address && <p>{selectedParticipant.address}</p>}
+                      {selectedParticipant.address2 && <p>{selectedParticipant.address2}</p>}
+                      <p>
+                        {selectedParticipant.city && <span>{selectedParticipant.city}, </span>}
+                        {selectedParticipant.state && <span>{selectedParticipant.state} </span>}
+                        {selectedParticipant.zip_code && <span>{selectedParticipant.zip_code}</span>}
+                      </p>
+                    </div>
                   </div>
                 )}
 
-                {/* Notes - Only for privileged roles */}
-                {canViewSensitiveData() && (selectedParticipant.notes || selectedParticipant.comments) && (
-                  <div className="col-span-2 space-y-4">
-                    <h4 className="font-bold text-[#00205B] uppercase text-xs tracking-wide border-b border-slate-200 pb-2">
-                      Notes
-                    </h4>
-                    <p className="text-sm text-slate-600">{selectedParticipant.notes || selectedParticipant.comments}</p>
+                {/* Restricted Data Notice for non-privileged users */}
+                {!canViewSensitiveData() && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-sm p-4 text-center">
+                    <Shield className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <p className="text-sm text-slate-600 font-medium">Contact & Address Information Restricted</p>
+                    <p className="text-xs text-slate-500 mt-1">Emergency contact and parent information is only visible to authorized staff roles.</p>
                   </div>
                 )}
               </div>
