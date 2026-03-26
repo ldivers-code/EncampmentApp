@@ -73,6 +73,19 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 
 ## What's Been Implemented
 
+### Mar 26, 2026 - Role-Based Assignment Permissions
+- **New Endpoint**: `/api/participants/{id}/assignment`
+  - PUT endpoint for updating flight/squadron/position assignments
+  - Role-based permission checks before any update
+- **Permission Matrix**:
+  - **Full Access** (Commander, Executive Staff, Plans & Programs, DCP, Staff): Can edit BOTH students AND cadre assignments
+  - **Cadre Only** (Exec Cadre): Can ONLY edit cadre assignments, gets 403 for students with clear error message
+- **Frontend UI Updates**:
+  - Edit assignment button (pencil) only appears when user has permission
+  - Exec Cadre sees edit button on Cadre tab only, not on Students tab
+  - Commander/Staff see edit buttons on all tabs
+- **Auto Squadron Assignment**: Setting a student flight automatically sets the matching squadron
+
 ### Mar 26, 2026 - Student Upload Feature with Auto-Assignment
 - **Student Upload** (`/api/students/upload`):
   - Upload Excel files from CAP Event Admin Report
