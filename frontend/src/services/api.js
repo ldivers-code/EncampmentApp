@@ -86,6 +86,11 @@ export const deleteParticipant = async (id) => {
   return response.data;
 };
 
+export const updateParticipantAssignment = async (id, assignmentData) => {
+  const response = await axios.put(`${API}/participants/${id}/assignment`, assignmentData, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const removeParticipantFromEncampment = async (participantId, removalReason) => {
   const response = await axios.post(
     `${API}/participants/${participantId}/remove`,

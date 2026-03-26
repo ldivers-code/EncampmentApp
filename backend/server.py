@@ -2171,6 +2171,106 @@ async def delete_participant(
     return {"message": "Participant deleted successfully"}
 
 
+class ParticipantAssignmentUpdate(BaseModel):
+    """Model for updating participant flight/squadron assignment"""
+    flight: Optional[str] = None
+    squadron: Optional[str] = None
+    position: Optional[str] = None
+
+
+@api_router.put("/participants/{participant_id}/assignment")
+async def update_participant_assignment(
+    participant_id: str,
+    assignment: ParticipantAssignmentUpdate,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Update participant flight/squadron/position assignment with role-based restrictions:
+    - Exec Cadre: Can ONLY assign Cadre to roles (not students)
+    - Plans & Programs, Executive Staff, Commander, DCP: Can assign BOTH students and cadre
+    """
+    # Get the participant to check their type
+    participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    user_role = user.get("role")
+    participant_type = participant.get("participant_type", "")
+    
+    # Define roles that can edit ALL participant types (students + cadre)
+    full_access_roles = [
+        UserRole.DCP,
+        UserRole.COMMANDER,
+        UserRole.EXECUTIVE_STAFF,
+        UserRole.PLANS_PROGRAMS,
+        UserRole.STAFF
+    ]
+    
+    # Define roles that can ONLY edit cadre
+    cadre_only_roles = [UserRole.EXEC_CADRE]
+    
+    # Check permissions
+    is_student = participant_type in ["basic_student", "advanced_student"]
+    
+    if user_role in full_access_roles:
+        # Full access - can edit both students and cadre
+        pass
+    elif user_role in cadre_only_roles:
+        # Exec Cadre can ONLY edit cadre assignments
+        if is_student:
+            raise HTTPException(
+                status_code=403,
+                detail="Exec Cadre can only assign Cadre members, not students. Contact Plans & Programs or Executive Staff for student assignments."
+            )
+    else:
+        # No permission to edit assignments
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to modify participant assignments"
+        )
+    
+    # Validate flight/squadron combinations
+    valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "6th_cts", "21st_cts", "22nd_cts"]
+    
+    if assignment.flight and assignment.flight.lower() not in [f.lower() if f else f for f in valid_flights]:
+        raise HTTPException(status_code=400, detail=f"Invalid flight: {assignment.flight}")
+    
+    if assignment.squadron and assignment.squadron.lower() not in [s.lower() if s else s for s in valid_squadrons]:
+        raise HTTPException(status_code=400, detail=f"Invalid squadron: {assignment.squadron}")
+    
+    # Auto-set squadron based on flight if flight is provided
+    flight_squadron_map = {
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
+    }
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if assignment.flight is not None:
+        flight_lower = assignment.flight.lower() if assignment.flight else None
+        update_data["flight"] = flight_lower
+        
+        # Auto-assign squadron for student flights
+        if flight_lower and flight_lower in flight_squadron_map:
+            update_data["squadron"] = flight_squadron_map[flight_lower]
+    
+    if assignment.squadron is not None:
+        update_data["squadron"] = assignment.squadron.lower() if assignment.squadron else None
+    
+    if assignment.position is not None:
+        update_data["position"] = assignment.position
+    
+    await db.participants.update_one(
+        {"id": participant_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.participants.find_one({"id": participant_id}, {"_id": 0})
+    return ParticipantResponse(**updated)
+
+
 @api_router.post("/participants/{participant_id}/remove")
 async def remove_participant_from_encampment(
     participant_id: str,

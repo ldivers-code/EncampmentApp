@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -316,20 +316,10 @@ const RosterPage = () => {
   // Save inline edit
   const saveInlineEdit = async (participantId) => {
     try {
-      // Auto-set squadron based on flight
-      let squadron = inlineEditSquadron;
-      if (inlineEditFlight && inlineEditFlight !== 'None') {
-        const flightToSquadron = {
-          'Alpha': '6th CTS', 'Bravo': '6th CTS',
-          'Charlie': '21st CTS', 'Delta': '21st CTS',
-          'Echo': '22nd CTS', 'Foxtrot': '22nd CTS'
-        };
-        squadron = flightToSquadron[inlineEditFlight] || inlineEditSquadron;
-      }
-      
-      await updateParticipant(participantId, {
+      // Use the new assignment endpoint with role-based permissions
+      await updateParticipantAssignment(participantId, {
         flight: inlineEditFlight || null,
-        squadron: squadron || null
+        squadron: inlineEditSquadron || null
       });
       toast.success('Assignment updated');
       cancelInlineEdit();
@@ -337,6 +327,31 @@ const RosterPage = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to update assignment');
     }
+  };
+
+  // Check if user can edit assignments for a specific participant type
+  const canEditAssignment = (participant) => {
+    if (!user) return false;
+    
+    const participantType = participant?.participant_type || '';
+    const isStudent = participantType === 'basic_student' || participantType === 'advanced_student';
+    const isCadre = participantType === 'cadre';
+    
+    // Full access roles - can edit both students and cadre
+    const fullAccessRoles = ['dcp', 'commander', 'executive_staff', 'plans_programs', 'staff'];
+    
+    // Cadre-only edit roles
+    const cadreOnlyRoles = ['exec_cadre'];
+    
+    if (fullAccessRoles.includes(user.role)) {
+      return true; // Can edit all
+    }
+    
+    if (cadreOnlyRoles.includes(user.role)) {
+      return isCadre; // Can only edit cadre, not students
+    }
+    
+    return false;
   };
 
   const handleViewParticipant = (participant) => {
@@ -1420,46 +1435,54 @@ const RosterPage = () => {
                               >
                                 <RotateCcw className="w-4 h-4" />
                               </Button>
-                            ) : canEdit() && (
+                            ) : (
                               <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startInlineEdit(p);
-                                  }}
-                                  className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                  title="Edit Assignment"
-                                  data-testid={`edit-assignment-${p.capid}`}
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit(p);
-                                  }}
-                                  className="h-8 w-8 p-0"
-                                  title="Edit All Details"
-                                  data-testid={`edit-participant-${p.capid}`}
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(p.id);
-                                  }}
-                                  className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
-                                  data-testid={`delete-participant-${p.capid}`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {/* Edit Assignment button - uses role-based permission check */}
+                                {canEditAssignment(p) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startInlineEdit(p);
+                                    }}
+                                    className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                    title={`Edit Assignment${user?.role === 'exec_cadre' && (p.participant_type === 'basic_student' || p.participant_type === 'advanced_student') ? ' (Students: Contact Plans & Programs)' : ''}`}
+                                    data-testid={`edit-assignment-${p.capid}`}
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {/* Edit All Details - only for full edit roles */}
+                                {canEdit() && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEdit(p);
+                                      }}
+                                      className="h-8 w-8 p-0"
+                                      title="Edit All Details"
+                                      data-testid={`edit-participant-${p.capid}`}
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(p.id);
+                                      }}
+                                      className="h-8 w-8 p-0 text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50"
+                                      data-testid={`delete-participant-${p.capid}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                )}
                               </>
                             )}
                           </>
