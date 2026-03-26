@@ -1026,6 +1026,11 @@ async def assign_user_unit(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """Assign a user to a squadron and flight"""
+    # Get target user to check their role
+    target_user = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1})
+    target_role = target_user.get("role", "") if target_user else ""
+    is_support_role = target_role.startswith("support_") or target_role == "squadron_commander"
+    
     # Updated valid units: Staff, Support Cadre, Exec Cadre, Ops Cadre, and CTS Squadrons
     valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "6th_cts", "21st_cts", "22nd_cts"]
     valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
@@ -1038,8 +1043,8 @@ async def assign_user_unit(
     # Units that don't need flight assignments (support_cadre CAN have flights now)
     no_flight_units = ["staff", "exec_cadre"]
     
-    # Clear flight if unit doesn't need one
-    if assignment.squadron in no_flight_units:
+    # Clear flight if unit doesn't need one (except support roles)
+    if assignment.squadron in no_flight_units and not is_support_role:
         assignment.flight = None
     
     # Validate flight belongs to squadron (only for 6th_cts, 21st_cts, 22nd_cts, ops_cadre)
@@ -1051,9 +1056,9 @@ async def assign_user_unit(
     
     if assignment.flight and assignment.flight in flight_squadron_map:
         expected_squadron = flight_squadron_map[assignment.flight]
-        # For ops_cadre, allow any flight
-        if assignment.squadron == "ops_cadre":
-            pass  # Allow any flight in ops_cadre
+        # For ops_cadre, support_cadre, or support_* role users, allow any flight (dual assignment)
+        if assignment.squadron in ("ops_cadre", "support_cadre") or is_support_role:
+            pass  # Allow any flight as sub-assignment
         elif assignment.squadron and assignment.squadron != expected_squadron:
             raise HTTPException(
                 status_code=400, 

@@ -76,6 +76,9 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Support Cadre Roles (support_logistics, support_comms, support_pa, support_dining, support_health)**
 - [x] **Barracks & Bunk Assignment System (5 open bay barracks, 25 bunks each, visual layout)**
 - [x] **Admin Page: Support cadre roles in user creation/edit dropdown**
+- [x] **Support Cadre Dual Assignment (section job + flight sub-assignment)**
+- [x] **Squadron Commander Role (with squadron/flight options)**
+- [x] **Individual Access Control (permission toggles + page visibility checkboxes)**
 
 ## What's Been Implemented
 
@@ -113,7 +116,16 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Access restricted**: Plans & Programs, Exec Staff, Logistics, Commander, DCP, and support_logistics
 - **Testing**: 100% pass rate (19/19 backend + full frontend validation)
 
-### Mar 26, 2026 - Barracks & Bunk Assignment System
+### Mar 26, 2026 - Support Cadre Dual Assignment & Individual Access Control
+- **6 Support Sections**: Plans & Programs, Logistics, WORD, Public Affairs, DFAC, Comms
+- **Dual Assignment**: Support cadre members can be assigned to both a support section job AND sub-assigned to a flight
+- **Squadron Commander Role**: New role with broad page access, squadron/flight assignment capability
+- **Individual Access Control**: Enhanced permissions panel with two tiers:
+  - **Access Level**: 18 permission toggles (dashboard, roster view/edit, schedule, budget, analytics, health view/full, check-in view/edit, meal plan view/edit, etc.)
+  - **Page Visibility**: 7 page-specific checkboxes (Health Services, Check-In, Barracks, Logistics, Meal Plan, Training Officer, Status Board)
+- **Sidebar**: Respects both role-based and individual page_* visibility permissions
+- **Admin Page**: Section column for support cadre, flight enabled for support roles
+- **Testing**: Validated via API (role update, dual assignment, page permissions save/reset)
 - **5 Open Bay Barracks**: TR-142B, TR-143A, TR-143B, TR-144A, TR-144B (25 bunks each, 50 capacity = 250 total)
 - **Visual open bay layout**: Left wall (13 bunks) and Right wall (12 bunks) with center aisle
 - **Bunk assignment**: Click empty slot → participant picker (search/filter by student/cadre) → assign top or bottom
