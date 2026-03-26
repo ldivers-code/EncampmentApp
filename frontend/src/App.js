@@ -24,6 +24,7 @@ import TrainingOfficerPage from "./pages/TrainingOfficerPage";
 import LogisticsPage from "./pages/LogisticsPage";
 import StatusBoardControl from "./pages/StatusBoardControl";
 import StatusBoardDisplay from "./pages/StatusBoardDisplay";
+import CheckInPage from "./pages/CheckInPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -167,7 +168,7 @@ function AppRoutes() {
       <Route
         path="/analytics"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'staff', 'finance']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'staff', 'finance', 'support_pa']}>
             <AnalyticsPage />
           </ProtectedRoute>
         }
@@ -199,7 +200,7 @@ function AppRoutes() {
       <Route
         path="/health"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'health_services', 'staff']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health']}>
             <HealthServicesDashboard />
           </ProtectedRoute>
         }
@@ -207,7 +208,7 @@ function AppRoutes() {
       <Route
         path="/training"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'training_officer', 'staff']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'training_officer', 'staff']}>
             <TrainingOfficerPage />
           </ProtectedRoute>
         }
@@ -215,8 +216,16 @@ function AppRoutes() {
       <Route
         path="/logistics"
         element={
-          <ProtectedRoute allowedRoles={['commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'support_logistics']}>
             <LogisticsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/check-in"
+        element={
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics']}>
+            <CheckInPage />
           </ProtectedRoute>
         }
       />

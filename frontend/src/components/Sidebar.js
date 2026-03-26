@@ -24,7 +24,8 @@ import {
   Package,
   Monitor,
   UtensilsCrossed,
-  DollarSign
+  DollarSign,
+  UserCheck
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -88,13 +89,13 @@ const Sidebar = ({ children }) => {
     { path: '/documents', icon: FileText, label: 'Official Documents' },
   );
 
-  // Analytics visible to commander, executive_staff, exec_cadre, staff, finance, and dining_facility
-  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility'].includes(user?.role)) {
+  // Analytics visible to commander, executive_staff, exec_cadre, staff, finance, dining_facility, and support_pa
+  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa'].includes(user?.role)) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
-  // Health Services visible to commander, executive_staff, health_services, and staff (NOT dining_facility)
-  if (['dcp', 'commander', 'executive_staff', 'health_services', 'staff'].includes(user?.role)) {
+  // Health Services visible to commander, executive_staff, health_services, staff, and support_health
+  if (['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health'].includes(user?.role)) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
 
@@ -103,7 +104,12 @@ const Sidebar = ({ children }) => {
     navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
   }
 
-  // Logistics visible to all roles
+  // Check-In visible to Plans & Programs, Exec Staff, Logistics, and support_logistics
+  if (['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics'].includes(user?.role)) {
+    navItems.push({ path: '/check-in', icon: UserCheck, label: 'Check-In' });
+  }
+
+  // Logistics visible to all roles + support_logistics
   navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
 
   // Status Board visible to all roles

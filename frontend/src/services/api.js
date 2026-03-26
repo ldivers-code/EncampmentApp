@@ -1022,6 +1022,38 @@ export const getCadetFullHealthProfile = async (cadetId) => {
   return response.data;
 };
 
+// ============ Check-In System ============
+export const getCheckInRoster = async (category = 'all') => {
+  const response = await axios.get(`${API}/check-in/roster?category=${category}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getCheckInSummary = async () => {
+  const response = await axios.get(`${API}/check-in/summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const checkInStep = async (participantId, step, notes = '') => {
+  const response = await axios.post(`${API}/check-in/${participantId}/step`, { step, notes }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const undoCheckInStep = async (participantId, step) => {
+  const response = await axios.delete(`${API}/check-in/${participantId}/step/${step}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const checkInAll = async (participantId) => {
+  const response = await axios.post(`${API}/check-in/${participantId}/check-all`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const undoAllCheckIn = async (participantId) => {
+  const response = await axios.delete(`${API}/check-in/${participantId}/undo-all`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
 
 // ============ Training Officer ============
 

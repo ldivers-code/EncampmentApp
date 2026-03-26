@@ -74,6 +74,12 @@ class UserRole:
     CADRE = "cadre"
     HEALTH_SERVICES = "health_services"  # Full access to health data
     DINING_FACILITY = "dining_facility"  # Meal plan management, view access to most pages
+    # Support Cadre Section Roles (OIC/AOIC = edit, NCOIC/Cadre = view within their section)
+    SUPPORT_LOGISTICS = "support_logistics"  # Support Sq Logistics section cadre
+    SUPPORT_COMMS = "support_comms"  # Support Sq Communications section cadre
+    SUPPORT_PA = "support_pa"  # Support Sq Public Affairs section cadre
+    SUPPORT_DINING = "support_dining"  # Support Sq Dining Services section cadre
+    SUPPORT_HEALTH = "support_health"  # Support Sq Health Services section cadre
 
 class UserUnit:
     STAFF = "staff"
@@ -100,6 +106,9 @@ class AccessPermissions(BaseModel):
     # Health Services permissions
     health_view: bool = False  # View health summaries (basic info)
     health_full: bool = False  # Full health services access (medications, incidents)
+    # Check-in permissions
+    check_in_view: bool = False  # View check-in roster
+    check_in_edit: bool = False  # Can check-in/undo participants
 
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
@@ -110,7 +119,8 @@ DEFAULT_PERMISSIONS = {
         budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
-        health_view=True, health_full=True
+        health_view=True, health_full=True,
+        check_in_view=True, check_in_edit=True
     ),
     UserRole.COMMANDER: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
@@ -119,7 +129,8 @@ DEFAULT_PERMISSIONS = {
         budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
-        health_view=True, health_full=True
+        health_view=True, health_full=True,
+        check_in_view=True, check_in_edit=True
     ),
     UserRole.EXECUTIVE_STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
@@ -128,7 +139,8 @@ DEFAULT_PERMISSIONS = {
         budget_view=True, budget_edit=True,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
-        health_view=True, health_full=True
+        health_view=True, health_full=True,
+        check_in_view=True, check_in_edit=True
     ),
     UserRole.FINANCE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
@@ -146,7 +158,8 @@ DEFAULT_PERMISSIONS = {
         budget_view=False, budget_edit=False,
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
-        health_view=False, health_full=False
+        health_view=False, health_full=False,
+        check_in_view=True, check_in_edit=True
     ),
     UserRole.EXEC_CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
@@ -200,7 +213,8 @@ DEFAULT_PERMISSIONS = {
         budget_view=False, budget_edit=False,
         analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
-        health_view=False, health_full=False
+        health_view=False, health_full=False,
+        check_in_view=True, check_in_edit=True
     ),
     UserRole.DINING_FACILITY: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
@@ -210,7 +224,54 @@ DEFAULT_PERMISSIONS = {
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
-    )
+    ),
+    # Support Cadre Section Roles - view + usage of their section pages, no admin
+    UserRole.SUPPORT_LOGISTICS: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False,
+        check_in_view=True, check_in_edit=True
+    ),
+    UserRole.SUPPORT_COMMS: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.SUPPORT_PA: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.SUPPORT_DINING: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=True,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.SUPPORT_HEALTH: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=True, health_full=False
+    ),
 }
 
 class UserBase(BaseModel):
@@ -8558,6 +8619,276 @@ async def get_import_summary(user: dict = Depends(require_health_view())):
         "otc_with_approvals": otc_approved
     }
 
+
+
+
+# ================= CHECK-IN SYSTEM =================
+
+CHECK_IN_STEPS = ["arrival", "paperwork", "room_assignment", "gear_issue"]
+CHECK_IN_STEP_LABELS = {
+    "arrival": "Arrival",
+    "paperwork": "Paperwork",
+    "room_assignment": "Room Assignment",
+    "gear_issue": "Gear Issue"
+}
+
+CHECK_IN_ALLOWED_ROLES = [
+    UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+    UserRole.PLANS_PROGRAMS, UserRole.LOGISTICS, UserRole.SUPPORT_LOGISTICS
+]
+
+def require_check_in_access():
+    async def checker(user: dict = Depends(get_current_user)):
+        perms = get_user_permissions(user)
+        has_view = perms.get('check_in_view', False) if isinstance(perms, dict) else getattr(perms, 'check_in_view', False)
+        if not has_view and user["role"] not in CHECK_IN_ALLOWED_ROLES:
+            raise HTTPException(status_code=403, detail="No check-in access")
+        return user
+    return checker
+
+def require_check_in_edit():
+    async def checker(user: dict = Depends(get_current_user)):
+        perms = get_user_permissions(user)
+        has_edit = perms.get('check_in_edit', False) if isinstance(perms, dict) else getattr(perms, 'check_in_edit', False)
+        if not has_edit and user["role"] not in CHECK_IN_ALLOWED_ROLES:
+            raise HTTPException(status_code=403, detail="No check-in edit access")
+        return user
+    return checker
+
+
+@api_router.get("/check-in/roster")
+async def get_check_in_roster(
+    category: str = None,
+    user: dict = Depends(require_check_in_access())
+):
+    """Get all participants with their check-in status"""
+    query = {}
+    if category and category != "all":
+        if category == "student":
+            query["participant_type"] = {"$in": ["basic_student", "student"]}
+        elif category == "staff":
+            query["participant_type"] = "staff"
+        elif category == "cadre":
+            query["participant_type"] = {"$in": ["cadre", "exec_cadre"]}
+    
+    participants = await db.participants.find(
+        query,
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "rank": 1,
+         "capid": 1, "flight": 1, "squadron": 1, "participant_type": 1,
+         "gender": 1, "age": 1, "wing": 1, "unit": 1}
+    ).to_list(1000)
+    
+    # Get all check-in records
+    check_ins = {}
+    async for ci in db.check_ins.find({}, {"_id": 0}):
+        check_ins[ci["participant_id"]] = ci
+    
+    roster = []
+    for p in participants:
+        ci = check_ins.get(p["id"], {})
+        steps = ci.get("steps", {})
+        
+        completed_count = sum(1 for s in CHECK_IN_STEPS if steps.get(s, {}).get("completed", False))
+        
+        entry = {
+            "participant_id": p["id"],
+            "name": f"{p.get('last_name', '')}, {p.get('first_name', '')}",
+            "rank": p.get("rank", ""),
+            "capid": p.get("capid", ""),
+            "flight": p.get("flight", ""),
+            "squadron": p.get("squadron", ""),
+            "category": "student" if p.get("participant_type") in ["basic_student", "student"] else p.get("participant_type", ""),
+            "gender": p.get("gender", ""),
+            "wing": p.get("wing", ""),
+            "unit": p.get("unit", ""),
+            "steps": {},
+            "completed_steps": completed_count,
+            "total_steps": len(CHECK_IN_STEPS),
+            "fully_checked_in": completed_count == len(CHECK_IN_STEPS)
+        }
+        
+        for step in CHECK_IN_STEPS:
+            step_data = steps.get(step, {})
+            entry["steps"][step] = {
+                "completed": step_data.get("completed", False),
+                "completed_at": step_data.get("completed_at"),
+                "completed_by_name": step_data.get("completed_by_name"),
+                "notes": step_data.get("notes", "")
+            }
+        
+        roster.append(entry)
+    
+    roster.sort(key=lambda x: x["name"])
+    return roster
+
+
+@api_router.get("/check-in/summary")
+async def get_check_in_summary(user: dict = Depends(require_check_in_access())):
+    """Get check-in summary stats"""
+    total_participants = await db.participants.count_documents({})
+    total_students = await db.participants.count_documents({"participant_type": {"$in": ["basic_student", "student"]}})
+    total_staff = await db.participants.count_documents({"participant_type": "staff"})
+    total_cadre = await db.participants.count_documents({"participant_type": {"$in": ["cadre", "exec_cadre"]}})
+    
+    check_ins = await db.check_ins.find({}, {"_id": 0}).to_list(1000)
+    
+    fully_checked = 0
+    step_counts = {s: 0 for s in CHECK_IN_STEPS}
+    
+    # Get participant type lookup
+    p_types = {}
+    async for p in db.participants.find({}, {"_id": 0, "id": 1, "participant_type": 1}):
+        p_types[p["id"]] = p.get("participant_type", "")
+    
+    cat_checked = {"student": 0, "staff": 0, "cadre": 0}
+    
+    for ci in check_ins:
+        steps = ci.get("steps", {})
+        completed = sum(1 for s in CHECK_IN_STEPS if steps.get(s, {}).get("completed", False))
+        if completed == len(CHECK_IN_STEPS):
+            fully_checked += 1
+            pt = p_types.get(ci["participant_id"], "")
+            if pt in ["basic_student", "student"]:
+                cat_checked["student"] += 1
+            elif pt == "staff":
+                cat_checked["staff"] += 1
+            elif pt in ["cadre", "exec_cadre"]:
+                cat_checked["cadre"] += 1
+        for s in CHECK_IN_STEPS:
+            if steps.get(s, {}).get("completed", False):
+                step_counts[s] += 1
+    
+    return {
+        "total_participants": total_participants,
+        "total_students": total_students,
+        "total_staff": total_staff,
+        "total_cadre": total_cadre,
+        "fully_checked_in": fully_checked,
+        "not_checked_in": total_participants - fully_checked,
+        "category_checked": cat_checked,
+        "step_counts": step_counts,
+        "step_labels": CHECK_IN_STEP_LABELS
+    }
+
+
+class CheckInStepRequest(BaseModel):
+    step: str
+    notes: str = ""
+
+
+@api_router.post("/check-in/{participant_id}/step")
+async def check_in_step(
+    participant_id: str,
+    request: CheckInStepRequest,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Check-in a participant for a specific step"""
+    if request.step not in CHECK_IN_STEPS:
+        raise HTTPException(status_code=400, detail=f"Invalid step. Must be one of: {CHECK_IN_STEPS}")
+    
+    participant = await db.participants.find_one({"id": participant_id}, {"_id": 0, "id": 1})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    existing = await db.check_ins.find_one({"participant_id": participant_id})
+    
+    step_data = {
+        "completed": True,
+        "completed_at": now,
+        "completed_by": user["id"],
+        "completed_by_name": user.get("name", user.get("email", "")),
+        "notes": request.notes
+    }
+    
+    if existing:
+        await db.check_ins.update_one(
+            {"participant_id": participant_id},
+            {"$set": {
+                f"steps.{request.step}": step_data,
+                "updated_at": now
+            }}
+        )
+    else:
+        doc = {
+            "participant_id": participant_id,
+            "steps": {request.step: step_data},
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.check_ins.insert_one(doc)
+    
+    return {"status": "success", "step": request.step, "completed_at": now}
+
+
+@api_router.delete("/check-in/{participant_id}/step/{step}")
+async def undo_check_in_step(
+    participant_id: str,
+    step: str,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Undo a check-in step for a participant"""
+    if step not in CHECK_IN_STEPS:
+        raise HTTPException(status_code=400, detail=f"Invalid step. Must be one of: {CHECK_IN_STEPS}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.check_ins.update_one(
+        {"participant_id": participant_id},
+        {"$set": {
+            f"steps.{step}": {"completed": False},
+            "updated_at": now
+        }}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="No check-in record found")
+    
+    return {"status": "success", "step": step, "undone": True}
+
+
+@api_router.post("/check-in/{participant_id}/check-all")
+async def check_in_all_steps(
+    participant_id: str,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Check-in all steps at once for a participant"""
+    participant = await db.participants.find_one({"id": participant_id}, {"_id": 0, "id": 1})
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    steps = {}
+    for step in CHECK_IN_STEPS:
+        steps[step] = {
+            "completed": True,
+            "completed_at": now,
+            "completed_by": user["id"],
+            "completed_by_name": user.get("name", user.get("email", "")),
+            "notes": ""
+        }
+    
+    await db.check_ins.update_one(
+        {"participant_id": participant_id},
+        {"$set": {"steps": steps, "updated_at": now}},
+        upsert=True
+    )
+    
+    return {"status": "success", "all_checked": True}
+
+
+@api_router.delete("/check-in/{participant_id}/undo-all")
+async def undo_all_check_in(
+    participant_id: str,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Undo all check-in steps for a participant"""
+    result = await db.check_ins.delete_one({"participant_id": participant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No check-in record found")
+    
+    return {"status": "success", "all_undone": True}
 
 
 # ================= MEDICAL ROSTER & CADET FULL PROFILE =================
