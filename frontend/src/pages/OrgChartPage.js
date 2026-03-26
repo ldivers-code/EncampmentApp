@@ -31,51 +31,51 @@ import {
   Check
 } from 'lucide-react';
 
-// Color mapping based on role type (matching the reference image)
+// Color mapping based on role type - matching flight/squadron colors
 const getRoleColor = (roleId) => {
-  // Green - Senior Member Command positions
-  if (['enc-commander', 'cadet-commander', 'deputy-support'].includes(roleId)) {
-    return 'bg-emerald-600 text-white border-emerald-700';
+  // Executive Cadre & All Staff = #008651 (Emerald Green)
+  if (['enc-commander', 'cadet-commander', 'deputy-support', 'commandant', 'sm-superintendent', 
+       'deputy-commander', 'dean-academics', 'chief-instructor', 'finance', 'chaplain-cdi', 
+       'health-services', 'safety', 'word', 'public-affairs', 'logistics', 'plans-programs', 'comms'].includes(roleId)) {
+    return 'bg-[#008651] text-white border-[#006b41]';
   }
-  // Dark Red/Maroon - Commandant and senior SM staff
-  if (['commandant', 'sm-superintendent'].includes(roleId)) {
-    return 'bg-red-800 text-white border-red-900';
+  
+  // Support Cadre = Silver (Support Squadron Commander and support staff)
+  if (roleId === 'support-sq-cc' || roleId === 'support-squadron-commander' || 
+      roleId.includes('support-sq') || roleId.includes('-super') || roleId.includes('-oic') || 
+      roleId.includes('ncoic') || roleId === 'dfac') {
+    return 'bg-slate-400 text-slate-900 border-slate-500';
   }
-  // Blue - Staff support positions (Finance, Health, Safety, etc)
-  if (['finance', 'chaplain-cdi', 'health-services', 'safety'].includes(roleId)) {
-    return 'bg-blue-600 text-white border-blue-700';
+  
+  // 6th CTS (Alpha, Bravo) - Sky Blue - including squadron commander, training officers, flight roles
+  if (roleId.includes('6th') || roleId.includes('1sq') || 
+      roleId === 'alpha-fc' || roleId === 'alpha-fs' || roleId === 'bravo-fc' || roleId === 'bravo-fs' || 
+      roleId === 'ato-alpha' || roleId === 'ato-bravo' ||
+      roleId.includes('6th-cts') || roleId.includes('6thcts') || roleId.includes('sq1')) {
+    return 'bg-sky-500 text-white border-sky-600';
   }
-  // Orange - Training positions
-  if (roleId.startsWith('to-') || roleId === 'chief-training-officer') {
+  
+  // 21st CTS (Charlie, Delta) - Dark Red - including squadron commander, training officers, flight roles
+  if (roleId.includes('21st') || roleId.includes('2sq') || 
+      roleId === 'charlie-fc' || roleId === 'charlie-fs' || roleId === 'delta-fc' || roleId === 'delta-fs' || 
+      roleId === 'ato-charlie' || roleId === 'ato-delta' ||
+      roleId.includes('21st-cts') || roleId.includes('21stcts') || roleId.includes('sq2')) {
+    return 'bg-red-700 text-white border-red-800';
+  }
+  
+  // 22nd CTS (Echo, Foxtrot) - Indigo/Dark Blue - including squadron commander, training officers, flight roles
+  if (roleId.includes('22nd') || roleId.includes('3sq') || 
+      roleId === 'echo-fc' || roleId === 'echo-fs' || roleId === 'foxtrot-fc' || roleId === 'foxtrot-fs' || 
+      roleId === 'ato-echo' || roleId === 'ato-foxtrot' ||
+      roleId.includes('22nd-cts') || roleId.includes('22ndcts') || roleId.includes('sq3')) {
+    return 'bg-indigo-800 text-white border-indigo-900';
+  }
+  
+  // Chief Training Officer - Orange (neutral, oversees all squadrons)
+  if (roleId === 'chief-training-officer') {
     return 'bg-amber-500 text-white border-amber-600';
   }
-  // Red - Cadet leadership (Flight Commanders, Flight Sergeants, Assistant TOs)
-  if (roleId.includes('-fc') || roleId.includes('-fs') || roleId.startsWith('ato-')) {
-    return 'bg-red-600 text-white border-red-700';
-  }
-  // Green - Dean of Academics, Deputy Commander
-  if (['dean-academics', 'deputy-commander'].includes(roleId)) {
-    return 'bg-emerald-500 text-white border-emerald-600';
-  }
-  // Pink/Magenta - Support section staff
-  if (['word', 'public-affairs', 'logistics', 'plans-programs', 'comms'].includes(roleId)) {
-    return 'bg-pink-500 text-white border-pink-600';
-  }
-  // Yellow/Gold - Squadron Commanders and Support Squadron
-  if (roleId.includes('sq') && roleId.includes('-cc')) {
-    return 'bg-yellow-500 text-black border-yellow-600';
-  }
-  if (roleId === 'support-sq-cc') {
-    return 'bg-slate-200 text-slate-800 border-slate-300';
-  }
-  // Gray - Squadron support staff
-  if (roleId.includes('-super') || roleId.includes('-oic') || roleId.includes('ncoic') || roleId === 'dfac') {
-    return 'bg-slate-100 text-slate-800 border-slate-300';
-  }
-  // Light green - Chief Instructor
-  if (roleId === 'chief-instructor') {
-    return 'bg-teal-600 text-white border-teal-700';
-  }
+  
   // Default - light gray
   return 'bg-slate-100 text-slate-800 border-slate-300';
 };
