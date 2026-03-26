@@ -10,15 +10,27 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 4. **Finance** - Full budget access, manage expenses/income, upload receipts, food expense planning
 5. **Cadet** - View-only access, sees only their unit's schedule, no budget access
 6. **Health Services** - Full access to medication tracking, incident logging, custody management
+7. **Dining Facility** - Meal plan management, view access to most pages
+
+## System Structure (IMPORTANT)
+**Two distinct types of records:**
+1. **Users (Staff and Cadre)** - Created through account signup, have login access, NOT from spreadsheet
+2. **Students** - Created ONLY from spreadsheet uploads, NO accounts, data records only
+
+**Pre-defined Structure (DO NOT MODIFY):**
+- Squadrons: 6th CTS, 21st CTS, 22nd CTS
+- Flights: Alpha, Bravo (6th CTS), Charlie, Delta (21st CTS), Echo, Foxtrot (22nd CTS)
+- Capacity: 15 students per flight, 90 total
 
 ## Core Requirements
 - [x] Master Roster management with participant CRUD
 - [x] Excel import for roster data
+- [x] **Student Upload with Auto-Assignment** (NEW)
 - [x] Schedule calendar with event management
 - [x] Financial budget tracker with estimated vs actual
 - [x] Handbooks document repository with file upload & object storage
 - [x] Official documents section with file upload & object storage
-- [x] Role-based access control (Commander/Executive Staff/Staff/Finance/Cadet/Health Services)
+- [x] Role-based access control (Commander/Executive Staff/Staff/Finance/Cadet/Health Services/Dining Facility)
 - [x] Civil Air Patrol branding (blue #00205B, white, red accents)
 - [x] Org Chart with role descriptions and assignments
 - [x] Schedule import from Excel with date correction (July 17-24, 2026)
@@ -30,7 +42,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] Push notifications for schedule updates
 - [x] Custom Tennessee Wing and 60th CTG branding
 - [x] Enhanced Financial Tracker with Finance role restriction
-- [x] Food expense planner (editable cost per person per day)
+- [x] Meal Plan Schedule (separate from Financial Tracker)
 - [x] Receipt upload functionality
 - [x] **Analytics Dashboard with detailed attendee metrics**
 - [x] **Export functionality (CSV, Excel, Full Report)**
@@ -38,7 +50,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Profile photo upload**
 - [x] **User approval workflow for new accounts**
 - [x] **Link users to roster participants by CAPID**
-- [x] **Expanded role system (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre, Health Services)**
+- [x] **Expanded role system (Commander, Finance, Plans & Programs, Executive Cadre, Staff, Cadre, Health Services, Dining Facility)**
 - [x] **Updated unit structure (Staff, Support/Exec/Ops Cadre, Squadrons 1-3)**
 - [x] **Granular permissions system (14 access types per user including health_view/health_full)**
 - [x] **Admin inline permissions editor**
@@ -48,7 +60,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Individual Awards Tracking System**
 - [x] **My Flight Page with Flight Roster and Documents**
 - [x] **Active Users / Who's Online Feature**
-- [x] **Password Reset (Self-Service & Admin)**
+- [x] **Password Reset (Self-Service & Admin, 1-hour token expiry)**
+- [x] **Profile Change Password**
 - [x] **My Flight Points Tab (Flight-specific point tracking)**
 - [x] **Receipt Repository (Finance Page)**
 - [x] **Squadron Name Standardization (6th CTS, 21st CTS, 22nd CTS)**
@@ -59,6 +72,37 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Training Officer Module (Blister checks, counseling logs, cadre issues)**
 
 ## What's Been Implemented
+
+### Mar 26, 2026 - Student Upload Feature with Auto-Assignment
+- **Student Upload** (`/api/students/upload`):
+  - Upload Excel files from CAP Event Admin Report
+  - All uploaded records are marked as "First-Time Student"
+  - Participant type set to "basic_student"
+  - Creates student records, NOT user accounts
+- **Auto-Flight Assignment**:
+  - Balances students across 6 flights (max 15 per flight)
+  - Considers gender balance (M/F distribution)
+  - Spreads ranks to avoid grouping senior cadets
+  - Manual assignments are preserved (not overridden)
+- **Roster Page Tabs** (Staff | Cadre | Students):
+  - Category tabs filter participants by type
+  - Each tab shows count
+  - Upload Students button only on Students tab
+- **Flight Distribution Panel**:
+  - Shows capacity per flight (e.g., "9/15")
+  - Male/Female breakdown
+  - Total utilization percentage
+- **Student Detail View** (5 Sections):
+  1. Basic Info: CAPID, Rank, Unit, Gender, Age, Wing
+  2. Encampment Info: Squadron, Flight, Registration Status, Shirt Size, Conflicts, Comments
+  3. Emergency Contact: Name, Phone
+  4. Parent/Guardian Contact: Primary/Secondary/Emergency phones and emails
+  5. Address: Full address with Addr2 support
+
+### Mar 26, 2026 - Password Reset Feature (Updated)
+- Token expiry changed from 24 hours to 1 hour per user request
+- Profile page now has "Change Password" section
+- Current password verification required for profile change
 
 ### Mar 9, 2026 - Role-Based Roster Data Visibility
 - **Public Data (visible to everyone)**: Rank, Name, Flight, Squadron, Gender, Age, Type
