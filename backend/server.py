@@ -80,6 +80,7 @@ class UserRole:
     SUPPORT_PA = "support_pa"  # Support Sq Public Affairs section cadre
     SUPPORT_DINING = "support_dining"  # Support Sq Dining Services section cadre
     SUPPORT_HEALTH = "support_health"  # Support Sq Health Services section cadre
+    SQUADRON_COMMANDER = "squadron_commander"  # Squadron Commander assigned to a specific CTS squadron
 
 class UserUnit:
     STAFF = "staff"
@@ -109,6 +110,14 @@ class AccessPermissions(BaseModel):
     # Check-in permissions
     check_in_view: bool = False  # View check-in roster
     check_in_edit: bool = False  # Can check-in/undo participants
+    # Page visibility permissions (for individual access control)
+    page_health: bool = False  # Can see Health Services page
+    page_check_in: bool = False  # Can see Check-In page
+    page_barracks: bool = False  # Can see Barracks page
+    page_logistics: bool = False  # Can see Logistics page
+    page_meal_plan: bool = False  # Can see Meal Plan page
+    page_training: bool = False  # Can see Training Officer page
+    page_status_board: bool = False  # Can see Status Board page
 
 # Default permissions by role
 DEFAULT_PERMISSIONS = {
@@ -272,6 +281,16 @@ DEFAULT_PERMISSIONS = {
         documents=True, admin_panel=False,
         health_view=True, health_full=False
     ),
+    UserRole.SQUADRON_COMMANDER: AccessPermissions(
+        dashboard=True, roster_view=True, roster_edit=True,
+        schedule_view=True, schedule_edit=True,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=True, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=True, health_full=False,
+        check_in_view=True, check_in_edit=True
+    ),
 }
 
 class UserBase(BaseModel):
@@ -292,6 +311,7 @@ class UserLogin(BaseModel):
 class UserUnitAssignment(BaseModel):
     squadron: Optional[str] = None
     flight: Optional[str] = None
+    support_section: Optional[str] = None  # plans_programs, logistics, word, public_affairs, dfac, comms
 
 # Extended user profile model
 class UserProfile(BaseModel):
@@ -362,6 +382,8 @@ class UserResponse(BaseModel):
     approved_by: Optional[str] = None
     approved_at: Optional[str] = None
     linked_participant_id: Optional[str] = None
+    # Support cadre section assignment
+    support_section: Optional[str] = None
     # Granular permissions
     permissions: Optional[dict] = None
 
@@ -982,7 +1004,9 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
         UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
         UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES,
-        UserRole.DINING_FACILITY
+        UserRole.DINING_FACILITY, UserRole.SUPPORT_LOGISTICS, UserRole.SUPPORT_COMMS,
+        UserRole.SUPPORT_PA, UserRole.SUPPORT_DINING, UserRole.SUPPORT_HEALTH,
+        UserRole.SQUADRON_COMMANDER
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -1011,8 +1035,8 @@ async def assign_user_unit(
     if assignment.flight and assignment.flight not in valid_flights:
         raise HTTPException(status_code=400, detail="Invalid flight")
     
-    # Units that don't need flight assignments
-    no_flight_units = ["staff", "support_cadre", "exec_cadre"]
+    # Units that don't need flight assignments (support_cadre CAN have flights now)
+    no_flight_units = ["staff", "exec_cadre"]
     
     # Clear flight if unit doesn't need one
     if assignment.squadron in no_flight_units:
@@ -1041,7 +1065,11 @@ async def assign_user_unit(
     
     result = await db.users.update_one(
         {"id": user_id}, 
-        {"$set": {"squadron": assignment.squadron, "flight": assignment.flight}}
+        {"$set": {
+            "squadron": assignment.squadron,
+            "flight": assignment.flight,
+            "support_section": assignment.support_section
+        }}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")

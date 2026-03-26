@@ -201,7 +201,7 @@ function AppRoutes() {
       <Route
         path="/health"
         element={
-          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health', 'squadron_commander']}>
             <HealthServicesDashboard />
           </ProtectedRoute>
         }
@@ -225,7 +225,7 @@ function AppRoutes() {
       <Route
         path="/check-in"
         element={
-          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander']}>
             <CheckInPage />
           </ProtectedRoute>
         }
@@ -233,7 +233,7 @@ function AppRoutes() {
       <Route
         path="/barracks"
         element={
-          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander']}>
             <BarracksPage />
           </ProtectedRoute>
         }

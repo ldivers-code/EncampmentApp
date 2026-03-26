@@ -80,7 +80,18 @@ const AdminPage = () => {
     { value: 'support_comms', label: 'Support - Comms', color: 'bg-slate-200 text-slate-800 border-slate-300' },
     { value: 'support_pa', label: 'Support - Public Affairs', color: 'bg-slate-200 text-slate-800 border-slate-300' },
     { value: 'support_dining', label: 'Support - Dining', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'support_health', label: 'Support - Health Svc', color: 'bg-slate-200 text-slate-800 border-slate-300' }
+    { value: 'support_health', label: 'Support - Health Svc', color: 'bg-slate-200 text-slate-800 border-slate-300' },
+    { value: 'squadron_commander', label: 'Squadron Commander', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
+  ];
+
+  const supportSections = [
+    { value: '', label: 'No Section' },
+    { value: 'plans_programs', label: 'Plans & Programs' },
+    { value: 'logistics', label: 'Logistics' },
+    { value: 'word', label: 'WORD' },
+    { value: 'public_affairs', label: 'Public Affairs' },
+    { value: 'dfac', label: 'DFAC' },
+    { value: 'comms', label: 'Comms' }
   ];
 
   const squadrons = [
@@ -116,7 +127,23 @@ const AdminPage = () => {
     org_chart: 'Org Chart',
     handbooks: 'Handbooks',
     documents: 'Documents',
-    admin_panel: 'Admin Panel'
+    admin_panel: 'Admin Panel',
+    health_view: 'Health (View)',
+    health_full: 'Health (Full)',
+    check_in_view: 'Check-In (View)',
+    check_in_edit: 'Check-In (Edit)',
+    meal_plan_view: 'Meal Plan (View)',
+    meal_plan_edit: 'Meal Plan (Edit)'
+  };
+
+  const pageVisibilityLabels = {
+    page_health: 'Health Services',
+    page_check_in: 'Check-In',
+    page_barracks: 'Barracks',
+    page_logistics: 'Logistics',
+    page_meal_plan: 'Meal Plan',
+    page_training: 'Training Officer',
+    page_status_board: 'Status Board'
   };
 
   useEffect(() => {
@@ -268,7 +295,20 @@ const AdminPage = () => {
       org_chart: true,
       handbooks: true,
       documents: true,
-      admin_panel: false
+      admin_panel: false,
+      health_view: false,
+      health_full: false,
+      check_in_view: false,
+      check_in_edit: false,
+      meal_plan_view: false,
+      meal_plan_edit: false,
+      page_health: false,
+      page_check_in: false,
+      page_barracks: false,
+      page_logistics: false,
+      page_meal_plan: false,
+      page_training: false,
+      page_status_board: false
     });
   };
 
@@ -331,9 +371,9 @@ const AdminPage = () => {
     }
   };
 
-  const handleUnitChange = async (userId, squadron, flight) => {
+  const handleUnitChange = async (userId, squadron, flight, supportSection) => {
     try {
-      await assignUserUnit(userId, squadron || null, flight || null);
+      await assignUserUnit(userId, squadron || null, flight || null, supportSection || null);
       toast.success('Unit assignment updated');
       loadUsers();
     } catch (error) {
@@ -344,18 +384,24 @@ const AdminPage = () => {
   const handleSquadronChange = (userId, squadron) => {
     const user = users.find(u => u.id === userId);
     const actualSquadron = squadron === 'none' ? null : squadron;
-    // Clear flight if squadron changes and flight doesn't belong to new squadron
     const currentFlight = user?.flight;
     const flightInfo = flights.find(f => f.value === currentFlight);
     const newFlight = (flightInfo && flightInfo.squadron === actualSquadron) ? currentFlight : null;
-    handleUnitChange(userId, actualSquadron, newFlight);
+    handleUnitChange(userId, actualSquadron, newFlight, user?.support_section);
   };
 
   const handleFlightChange = (userId, flight) => {
+    const user = users.find(u => u.id === userId);
     const actualFlight = flight === 'none' ? null : flight;
     const flightInfo = flights.find(f => f.value === actualFlight);
-    const squadron = flightInfo?.squadron || null;
-    handleUnitChange(userId, squadron, actualFlight);
+    const squadron = flightInfo?.squadron || user?.squadron || null;
+    handleUnitChange(userId, squadron, actualFlight, user?.support_section);
+  };
+
+  const handleSupportSectionChange = (userId, section) => {
+    const user = users.find(u => u.id === userId);
+    const actualSection = section === 'none' ? null : section;
+    handleUnitChange(userId, user?.squadron, user?.flight, actualSection);
   };
 
   const handleDelete = async (userId) => {
@@ -384,7 +430,9 @@ const AdminPage = () => {
   };
 
   // Check if unit requires flight assignment
-  const unitRequiresFlight = (squadron) => {
+  const unitRequiresFlight = (squadron, role) => {
+    // Support cadre can optionally have flight sub-assignments
+    if (role?.startsWith('support_') || role === 'squadron_commander') return true;
     const noFlightUnits = ['staff', 'support_cadre', 'exec_cadre', null, undefined, 'none'];
     return !noFlightUnits.includes(squadron);
   };
@@ -603,6 +651,7 @@ const AdminPage = () => {
                 <th className="text-left">Role</th>
                 <th className="text-left">Unit</th>
                 <th className="text-left">Flight</th>
+                <th className="text-left">Section</th>
                 <th className="text-left">Access</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -663,12 +712,12 @@ const AdminPage = () => {
                       <Select
                         value={user.flight || 'none'}
                         onValueChange={(value) => handleFlightChange(user.id, value)}
-                        disabled={!unitRequiresFlight(user.squadron)}
+                        disabled={!unitRequiresFlight(user.squadron, user.role)}
                       >
                         <SelectTrigger 
                           className="w-24 rounded-sm text-xs" 
                           data-testid={`flight-select-${user.id}`}
-                          disabled={!unitRequiresFlight(user.squadron)}
+                          disabled={!unitRequiresFlight(user.squadron, user.role)}
                         >
                           <SelectValue placeholder="N/A" />
                         </SelectTrigger>
@@ -678,6 +727,23 @@ const AdminPage = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td>
+                      {(user.role?.startsWith('support_') || user.role === 'squadron_commander') && (
+                        <Select
+                          value={user.support_section || 'none'}
+                          onValueChange={(value) => handleSupportSectionChange(user.id, value)}
+                        >
+                          <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`support-section-select-${user.id}`}>
+                            <SelectValue placeholder="Section" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {supportSections.map(s => (
+                              <SelectItem key={s.value || 'none'} value={s.value || 'none'}>{s.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </td>
                     <td>
                       <Button
@@ -718,11 +784,11 @@ const AdminPage = () => {
                   {/* Permissions Edit Row */}
                   {editingPermissions === user.id && (
                     <tr className="bg-blue-50/50">
-                      <td colSpan={7} className="p-4">
+                      <td colSpan={8} className="p-4">
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <h4 className="font-bold text-sm text-[#00205B] uppercase tracking-tight">
-                              Edit Access Permissions for {user.name}
+                              Edit Access for {user.name}
                             </h4>
                             <div className="flex gap-2">
                               <Button
@@ -732,7 +798,7 @@ const AdminPage = () => {
                                 className="rounded-sm text-xs"
                               >
                                 <RotateCcw className="w-3 h-3 mr-1" />
-                                Reset to Role Defaults
+                                Reset to Defaults
                               </Button>
                               <Button
                                 variant="outline"
@@ -749,22 +815,47 @@ const AdminPage = () => {
                                 className="rounded-sm text-xs bg-[#00205B] hover:bg-[#001540]"
                               >
                                 <CheckCircle className="w-3 h-3 mr-1" />
-                                Save Permissions
+                                Save
                               </Button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
-                            {Object.entries(permissionLabels).map(([key, label]) => (
-                              <label key={key} className="flex items-center gap-2 p-2 bg-white rounded border cursor-pointer hover:bg-slate-50">
-                                <input
-                                  type="checkbox"
-                                  checked={permissionsForm[key] || false}
-                                  onChange={(e) => setPermissionsForm(prev => ({ ...prev, [key]: e.target.checked }))}
-                                  className="w-4 h-4 rounded border-slate-300"
-                                />
-                                <span className="text-xs text-slate-700">{label}</span>
-                              </label>
-                            ))}
+                          
+                          {/* Access Level Toggles */}
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Access Level</p>
+                            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                              {Object.entries(permissionLabels).map(([key, label]) => (
+                                <label key={key} className="flex items-center gap-2 p-2 bg-white rounded border cursor-pointer hover:bg-slate-50">
+                                  <input
+                                    type="checkbox"
+                                    checked={permissionsForm[key] || false}
+                                    onChange={(e) => setPermissionsForm(prev => ({ ...prev, [key]: e.target.checked }))}
+                                    className="w-4 h-4 rounded border-slate-300"
+                                    data-testid={`perm-${key}`}
+                                  />
+                                  <span className="text-xs text-slate-700">{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Page Visibility Toggles */}
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Page Visibility</p>
+                            <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
+                              {Object.entries(pageVisibilityLabels).map(([key, label]) => (
+                                <label key={key} className="flex items-center gap-2 p-2 bg-white rounded border cursor-pointer hover:bg-slate-50">
+                                  <input
+                                    type="checkbox"
+                                    checked={permissionsForm[key] || false}
+                                    onChange={(e) => setPermissionsForm(prev => ({ ...prev, [key]: e.target.checked }))}
+                                    className="w-4 h-4 rounded border-slate-300"
+                                    data-testid={`page-${key}`}
+                                  />
+                                  <span className="text-xs text-slate-700">{label}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </td>

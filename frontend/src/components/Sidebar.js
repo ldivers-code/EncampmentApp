@@ -90,32 +90,47 @@ const Sidebar = ({ children }) => {
     { path: '/documents', icon: FileText, label: 'Official Documents' },
   );
 
-  // Analytics visible to commander, executive_staff, exec_cadre, staff, finance, dining_facility, and support_pa
-  if (['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa'].includes(user?.role)) {
+  // Helper to check page access (role-based OR individual page visibility permission)
+  const canAccessPage = (pageKey, defaultRoles) => {
+    if (defaultRoles.includes(user?.role)) return true;
+    if (user?.role === 'squadron_commander') return true; // Squadron commanders get broad access
+    if (user?.permissions?.[pageKey]) return true;
+    return false;
+  };
+
+  // Analytics
+  if (canAccessPage('page_analytics', ['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa'])) {
     navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
   }
 
-  // Health Services visible to commander, executive_staff, health_services, staff, and support_health
-  if (['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health'].includes(user?.role)) {
+  // Health Services
+  if (canAccessPage('page_health', ['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health'])) {
     navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
   }
 
-  // Training Officer visible to commander, executive_staff, training_officer, and staff
-  if (['dcp', 'commander', 'executive_staff', 'training_officer', 'staff'].includes(user?.role)) {
+  // Training Officer
+  if (canAccessPage('page_training', ['dcp', 'commander', 'executive_staff', 'training_officer', 'staff'])) {
     navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
   }
 
-  // Check-In visible to Plans & Programs, Exec Staff, Logistics, and support_logistics
-  if (['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics'].includes(user?.role)) {
+  // Check-In & Barracks
+  if (canAccessPage('page_check_in', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
     navItems.push({ path: '/check-in', icon: UserCheck, label: 'Check-In' });
+  }
+  if (canAccessPage('page_barracks', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
     navItems.push({ path: '/barracks', icon: BedDouble, label: 'Barracks' });
   }
 
-  // Logistics visible to all roles + support_logistics
-  navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
+  // Logistics
+  if (canAccessPage('page_logistics', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'support_logistics', 'squadron_commander'])) {
+    navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
+  }
 
-  // Status Board visible to all roles
-  navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
+  // Status Board
+  if (canAccessPage('page_status_board', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'dining_facility', 'squadron_commander',
+    'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health'])) {
+    navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
+  }
 
   // Admin - NOT visible to dining_facility
   if (['dcp', 'commander', 'executive_staff'].includes(user?.role)) {

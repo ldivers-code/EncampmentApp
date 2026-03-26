@@ -436,8 +436,8 @@ export const updateUserRole = async (userId, role) => {
   return response.data;
 };
 
-export const assignUserUnit = async (userId, squadron, flight) => {
-  const response = await axios.put(`${API}/users/${userId}/unit`, { squadron, flight }, { headers: getAuthHeaders() });
+export const assignUserUnit = async (userId, squadron, flight, supportSection) => {
+  const response = await axios.put(`${API}/users/${userId}/unit`, { squadron, flight, support_section: supportSection }, { headers: getAuthHeaders() });
   return response.data;
 };
 
