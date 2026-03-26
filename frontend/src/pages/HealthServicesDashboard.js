@@ -1,23 +1,617 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   getHealthDashboardSummary, getMedsDue, getOverdueMeds, getOpenIncidents,
   searchHealthCadets, getHealthReferenceLists, getHealthAuditLog, 
-  getHealthSettings, updateHealthSettings, importMedicalData, getImportSummary
+  getHealthSettings, updateHealthSettings, importMedicalData, getImportSummary,
+  getMedicalRoster, getCadetFullHealthProfile
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { 
   Heart, Pill, AlertTriangle, Clock, Search, Users, Activity,
   CheckCircle, XCircle, AlertCircle, ChevronRight, RefreshCw,
-  Thermometer, Filter, Save, Upload, FileSpreadsheet
+  Thermometer, Filter, Save, Upload, FileSpreadsheet,
+  Shield, Eye, Syringe, ClipboardList, ChevronDown, ChevronUp, 
+  Phone, Mail, User, BadgeAlert
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// ==================== CADET HEALTH DETAIL SHEET ====================
+const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    allergies: true, otc: true, medications: true, incidents: true, medLog: false, custody: false
+  });
+
+  useEffect(() => {
+    if (isOpen && cadetId) {
+      loadProfile();
+    }
+  }, [isOpen, cadetId]);
+
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const data = await getCadetFullHealthProfile(cadetId);
+      setProfile(data);
+    } catch (error) {
+      toast.error('Failed to load cadet health profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const SectionHeader = ({ title, icon: Icon, count, section, color = "text-[#00205B]", badge }) => (
+    <button
+      onClick={() => toggleSection(section)}
+      className="w-full flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-sm hover:bg-slate-100 transition-colors"
+      data-testid={`section-toggle-${section}`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <span className={`font-bold text-sm uppercase tracking-wide ${color}`}>{title}</span>
+        {count !== undefined && (
+          <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{count}</span>
+        )}
+        {badge && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-bold">{badge}</span>
+        )}
+      </div>
+      {expandedSections[section] ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+    </button>
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto" data-testid="cadet-health-detail-sheet">
+        <SheetHeader>
+          <SheetTitle className="text-[#00205B] uppercase font-bold flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            <Heart className="w-5 h-5 text-red-500" />
+            Health Profile
+          </SheetTitle>
+        </SheetHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+          </div>
+        ) : profile ? (
+          <div className="mt-4 space-y-4">
+            {/* Cadet Header */}
+            <div className="bg-[#00205B] text-white rounded-sm p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold">{profile.name}</h3>
+                  <p className="text-blue-200 text-sm">CAPID: {profile.capid}</p>
+                  <p className="text-blue-200 text-xs mt-1">
+                    {profile.rank && `${profile.rank} | `}
+                    {profile.flight && `Flight: ${profile.flight} | `}
+                    {profile.squadron && `Sqdn: ${profile.squadron}`}
+                    {profile.gender && ` | ${profile.gender}`}
+                    {profile.age && ` | Age: ${profile.age}`}
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded font-bold ${
+                  profile.hs_status === 'cleared' ? 'bg-emerald-500 text-white' :
+                  profile.hs_status === 'medical_hold' ? 'bg-red-500 text-white' :
+                  'bg-amber-500 text-white'
+                }`} data-testid="cadet-hs-status">
+                  {(profile.hs_status || 'cleared').replace(/_/g, ' ').toUpperCase()}
+                </span>
+              </div>
+              {/* Critical Flags */}
+              {(profile.has_anaphylaxis || profile.has_epipen || profile.has_inhaler || profile.has_rescue_med) && (
+                <div className="flex flex-wrap gap-1 mt-3">
+                  {profile.has_anaphylaxis && <span className="text-[10px] px-2 py-0.5 bg-red-600 text-white rounded font-bold">ANAPHYLAXIS RISK</span>}
+                  {profile.has_epipen && <span className="text-[10px] px-2 py-0.5 bg-orange-500 text-white rounded font-bold">EPIPEN</span>}
+                  {profile.has_inhaler && <span className="text-[10px] px-2 py-0.5 bg-blue-400 text-white rounded font-bold">INHALER</span>}
+                  {profile.has_rescue_med && <span className="text-[10px] px-2 py-0.5 bg-purple-500 text-white rounded font-bold">RESCUE MED</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Allergies Section */}
+            <div>
+              <SectionHeader 
+                title="Allergies" 
+                icon={AlertTriangle} 
+                count={profile.allergy_count} 
+                section="allergies"
+                color="text-rose-600"
+                badge={profile.has_anaphylaxis ? "ANAPHYLAXIS" : null}
+              />
+              {expandedSections.allergies && (
+                <div className="mt-2 space-y-2">
+                  {profile.allergies?.length === 0 ? (
+                    <p className="text-sm text-slate-500 italic p-3">No allergies on file</p>
+                  ) : (
+                    profile.allergies?.map((a, idx) => (
+                      <div key={idx} className={`p-3 border rounded-sm ${a.is_anaphylaxis ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`} data-testid={`allergy-item-${idx}`}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-bold text-sm">{a.allergy_name}</p>
+                            <p className="text-xs text-slate-500">{a.allergy_type}</p>
+                          </div>
+                          <div className="flex gap-1">
+                            {a.is_anaphylaxis && <span className="text-[9px] px-1.5 py-0.5 bg-red-600 text-white rounded font-bold">ANAPHYLAXIS</span>}
+                            {a.has_epipen && <span className="text-[9px] px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">EPIPEN</span>}
+                            {a.has_albuterol_inhaler && <span className="text-[9px] px-1.5 py-0.5 bg-blue-500 text-white rounded font-bold">INHALER</span>}
+                          </div>
+                        </div>
+                        {a.typical_reactions && <p className="text-xs mt-1"><span className="font-medium text-slate-600">Reactions:</span> {a.typical_reactions}</p>}
+                        {a.other_reactions && <p className="text-xs mt-0.5"><span className="font-medium text-slate-600">Other:</span> {a.other_reactions}</p>}
+                        {a.treatments && <p className="text-xs mt-0.5"><span className="font-medium text-slate-600">Treatment:</span> {a.treatments}</p>}
+                        {a.other_medications && <p className="text-xs mt-0.5"><span className="font-medium text-slate-600">Medications:</span> {a.other_medications}</p>}
+                        {(a.emergency_contact || a.contact_name) && (
+                          <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap gap-3">
+                            {a.contact_name && (
+                              <span className="text-xs flex items-center gap-1 text-slate-500">
+                                <User className="w-3 h-3" /> {a.contact_name}
+                              </span>
+                            )}
+                            {a.emergency_contact && (
+                              <span className="text-xs flex items-center gap-1 text-slate-500">
+                                <Phone className="w-3 h-3" /> {a.emergency_contact}
+                              </span>
+                            )}
+                            {a.commander_name && (
+                              <span className="text-xs flex items-center gap-1 text-slate-500">
+                                <Shield className="w-3 h-3" /> CC: {a.commander_name} {a.commander_contact ? `(${a.commander_contact})` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* OTC Approvals Section */}
+            <div>
+              <SectionHeader 
+                title="OTC Medication Approvals" 
+                icon={Pill} 
+                count={profile.otc_approvals?.approved_list?.length || 0}
+                section="otc"
+                color="text-teal-600"
+              />
+              {expandedSections.otc && (
+                <div className="mt-2">
+                  {!profile.otc_approvals ? (
+                    <p className="text-sm text-slate-500 italic p-3">No OTC data on file</p>
+                  ) : (
+                    <div className="p-3 border border-slate-200 rounded-sm bg-white">
+                      {profile.otc_approvals.organization && (
+                        <p className="text-xs text-slate-500 mb-2">Organization: {profile.otc_approvals.organization}</p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {Object.entries(profile.otc_approvals.medications || {}).map(([med, approved]) => (
+                          <div key={med} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+                            approved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'
+                          }`} data-testid={`otc-${med}`}>
+                            {approved ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                            <span className="capitalize">{med}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Prescription Medications Section */}
+            {hasFullAccess && (
+              <div>
+                <SectionHeader 
+                  title="Prescription Medications" 
+                  icon={Syringe}
+                  count={profile.medication_count}
+                  section="medications"
+                  color="text-blue-600"
+                  badge={profile.has_rescue_med ? "RESCUE" : null}
+                />
+                {expandedSections.medications && (
+                  <div className="mt-2 space-y-2">
+                    {profile.medications?.length === 0 ? (
+                      <p className="text-sm text-slate-500 italic p-3">No prescription medications on file</p>
+                    ) : (
+                      profile.medications?.map((m, idx) => (
+                        <div key={idx} className={`p-3 border rounded-sm bg-white ${m.rescue_med_flag ? 'border-orange-300 bg-orange-50' : 'border-slate-200'}`} data-testid={`medication-item-${idx}`}>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-bold text-sm">{m.medication_name}</p>
+                              <p className="text-xs text-slate-500">{m.dose} - {m.route}</p>
+                            </div>
+                            {m.rescue_med_flag && <span className="text-[9px] px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">RESCUE</span>}
+                          </div>
+                          <p className="text-xs mt-1"><span className="font-medium text-slate-600">Schedule:</span> {m.schedule_text}</p>
+                          {m.due_times && <p className="text-xs mt-0.5"><span className="font-medium text-slate-600">Due Times:</span> {m.due_times}</p>}
+                          {m.special_instructions && <p className="text-xs mt-0.5"><span className="font-medium text-slate-600">Instructions:</span> {m.special_instructions}</p>}
+                          {m.refrigeration_required && <span className="text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded mt-1 inline-block">REFRIGERATE</span>}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Incidents Section */}
+            <div>
+              <SectionHeader 
+                title="Incidents" 
+                icon={Activity}
+                count={profile.incidents?.length || 0}
+                section="incidents"
+                color="text-amber-600"
+                badge={profile.open_incident_count > 0 ? `${profile.open_incident_count} OPEN` : null}
+              />
+              {expandedSections.incidents && (
+                <div className="mt-2 space-y-2">
+                  {profile.incidents?.length === 0 ? (
+                    <p className="text-sm text-slate-500 italic p-3">No incidents on file</p>
+                  ) : (
+                    profile.incidents?.map((inc, idx) => (
+                      <div key={idx} className={`p-3 border rounded-sm bg-white ${
+                        inc.resolution_status === 'open' ? 'border-red-300' :
+                        inc.resolution_status === 'monitoring' ? 'border-amber-300' :
+                        'border-slate-200'
+                      }`} data-testid={`incident-item-${idx}`}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-bold text-sm capitalize">{inc.incident_type?.replace(/_/g, ' ')}</p>
+                            <p className="text-xs text-slate-500">{inc.incident_date} at {inc.incident_time}</p>
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                            inc.resolution_status === 'open' ? 'bg-red-100 text-red-700' :
+                            inc.resolution_status === 'monitoring' ? 'bg-amber-100 text-amber-700' :
+                            inc.resolution_status === 'escalated' ? 'bg-red-200 text-red-800' :
+                            'bg-emerald-100 text-emerald-700'
+                          }`}>{inc.resolution_status?.toUpperCase()}</span>
+                        </div>
+                        <p className="text-xs mt-1">{inc.description}</p>
+                        <div className="flex gap-2 mt-1">
+                          {inc.parent_contacted && <span className="text-[9px] text-amber-600">Parent Contacted</span>}
+                          {inc.command_notified && <span className="text-[9px] text-blue-600">Command Notified</span>}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Medication Administration Log */}
+            {hasFullAccess && profile.medication_log?.length > 0 && (
+              <div>
+                <SectionHeader 
+                  title="Medication Log" 
+                  icon={ClipboardList}
+                  count={profile.medication_log?.length}
+                  section="medLog"
+                  color="text-indigo-600"
+                />
+                {expandedSections.medLog && (
+                  <div className="mt-2 max-h-60 overflow-y-auto border border-slate-200 rounded-sm">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 font-medium text-slate-600">Date</th>
+                          <th className="text-left p-2 font-medium text-slate-600">Medication</th>
+                          <th className="text-left p-2 font-medium text-slate-600">Due</th>
+                          <th className="text-left p-2 font-medium text-slate-600">Taken</th>
+                          <th className="text-left p-2 font-medium text-slate-600">Result</th>
+                          <th className="text-left p-2 font-medium text-slate-600">Observer</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {profile.medication_log.map((log, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-2">{log.date}</td>
+                            <td className="p-2 font-medium">{log.medication_name}</td>
+                            <td className="p-2">{log.time_due}</td>
+                            <td className="p-2">{log.time_taken || '-'}</td>
+                            <td className="p-2">
+                              <span className={`px-1.5 py-0.5 rounded ${
+                                log.result === 'taken' ? 'bg-emerald-100 text-emerald-700' :
+                                log.result === 'refused' ? 'bg-red-100 text-red-700' :
+                                'bg-amber-100 text-amber-700'
+                              }`}>{log.result}</span>
+                            </td>
+                            <td className="p-2">{log.observer_initials}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Health Notes */}
+            {(profile.health_notes || profile.shared_notes) && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm">
+                <p className="text-xs font-bold text-amber-700 uppercase mb-1">Health Notes</p>
+                {profile.health_notes && <p className="text-sm text-amber-800">{profile.health_notes}</p>}
+                {profile.shared_notes && <p className="text-sm text-amber-700 mt-1 italic">{profile.shared_notes}</p>}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-center text-slate-500 py-8">No profile data available</p>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+};
+
+// ==================== MEDICAL ROSTER TAB ====================
+const MedicalRosterTab = ({ hasFullAccess }) => {
+  const [roster, setRoster] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterFlight, setFilterFlight] = useState('all');
+  const [selectedCadetId, setSelectedCadetId] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  useEffect(() => {
+    loadRoster();
+  }, []);
+
+  const loadRoster = async () => {
+    try {
+      setLoading(true);
+      const data = await getMedicalRoster();
+      setRoster(data);
+    } catch (error) {
+      toast.error('Failed to load medical roster');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openCadetDetail = (participantId) => {
+    setSelectedCadetId(participantId);
+    setIsDetailOpen(true);
+  };
+
+  // Compute filter options from roster data
+  const flights = [...new Set(roster.map(r => r.flight).filter(Boolean))].sort();
+
+  // Filter roster
+  const filtered = roster.filter(r => {
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      if (!r.name.toLowerCase().includes(q) && !r.capid?.includes(q)) return false;
+    }
+    if (filterFlight !== 'all' && r.flight !== filterFlight) return false;
+    if (filterType === 'allergies' && !r.has_allergies) return false;
+    if (filterType === 'otc' && !r.has_otc_data) return false;
+    if (filterType === 'medications' && !r.has_medications) return false;
+    if (filterType === 'incidents' && r.open_incidents === 0) return false;
+    if (filterType === 'critical' && r.critical_flags.length === 0) return false;
+    if (filterType === 'anaphylaxis' && !r.has_anaphylaxis) return false;
+    return true;
+  });
+
+  // Stats
+  const stats = {
+    total: roster.length,
+    withAllergies: roster.filter(r => r.has_allergies).length,
+    withAnaphylaxis: roster.filter(r => r.has_anaphylaxis).length,
+    withOtc: roster.filter(r => r.has_otc_data).length,
+    withMeds: roster.filter(r => r.has_medications).length,
+    withIncidents: roster.filter(r => r.open_incidents > 0).length,
+    critical: roster.filter(r => r.critical_flags.length > 0).length
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <RefreshCw className="w-5 h-5 animate-spin text-slate-400 mr-2" />
+        <span className="text-slate-500">Loading medical roster...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="medical-roster-tab">
+      {/* Quick Stats */}
+      <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 mb-4">
+        {[
+          { label: 'Total', value: stats.total, color: 'bg-slate-100 text-slate-700', filter: 'all' },
+          { label: 'Allergies', value: stats.withAllergies, color: 'bg-rose-50 text-rose-700 border-rose-200', filter: 'allergies' },
+          { label: 'Anaphylaxis', value: stats.withAnaphylaxis, color: 'bg-red-50 text-red-700 border-red-200', filter: 'anaphylaxis' },
+          { label: 'OTC Data', value: stats.withOtc, color: 'bg-teal-50 text-teal-700 border-teal-200', filter: 'otc' },
+          { label: 'Rx Meds', value: stats.withMeds, color: 'bg-blue-50 text-blue-700 border-blue-200', filter: 'medications' },
+          { label: 'Incidents', value: stats.withIncidents, color: 'bg-amber-50 text-amber-700 border-amber-200', filter: 'incidents' },
+          { label: 'Critical', value: stats.critical, color: 'bg-red-100 text-red-800 border-red-300', filter: 'critical' },
+        ].map(s => (
+          <button
+            key={s.label}
+            onClick={() => setFilterType(s.filter)}
+            className={`p-2 rounded-sm border text-center transition-all ${s.color} ${filterType === s.filter ? 'ring-2 ring-[#00205B] ring-offset-1' : ''}`}
+            data-testid={`filter-${s.filter}`}
+          >
+            <p className="text-lg font-bold">{s.value}</p>
+            <p className="text-[10px] uppercase tracking-wide">{s.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Search by name or CAPID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 rounded-sm"
+            data-testid="medical-roster-search"
+          />
+        </div>
+        <Select value={filterFlight} onValueChange={setFilterFlight}>
+          <SelectTrigger className="w-40 rounded-sm" data-testid="flight-filter">
+            <SelectValue placeholder="All Flights" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Flights</SelectItem>
+            {flights.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" onClick={loadRoster} className="rounded-sm">
+          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+        </Button>
+      </div>
+
+      {/* Results count */}
+      <p className="text-xs text-slate-500 mb-2">{filtered.length} of {roster.length} cadets shown</p>
+
+      {/* Roster Table */}
+      {filtered.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-sm p-12 text-center">
+          <Users className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+          <p className="text-slate-500">No cadets match your filters</p>
+          <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filter criteria</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="medical-roster-table">
+              <thead>
+                <tr className="bg-[#00205B] text-white text-xs uppercase tracking-wide">
+                  <th className="text-left p-3">Cadet</th>
+                  <th className="text-left p-3">Flight</th>
+                  <th className="text-center p-3">Allergies</th>
+                  <th className="text-center p-3">OTC</th>
+                  <th className="text-center p-3">Meds</th>
+                  <th className="text-center p-3">Incidents</th>
+                  <th className="text-center p-3">Flags</th>
+                  <th className="text-center p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((cadet) => (
+                  <tr
+                    key={cadet.participant_id}
+                    onClick={() => openCadetDetail(cadet.participant_id)}
+                    className={`hover:bg-blue-50 cursor-pointer transition-colors ${
+                      cadet.critical_flags.length > 0 ? 'bg-red-50/30' : ''
+                    }`}
+                    data-testid={`roster-row-${cadet.capid}`}
+                  >
+                    <td className="p-3">
+                      <p className="font-medium text-[#00205B]">{cadet.name}</p>
+                      <p className="text-[10px] text-slate-500">CAPID: {cadet.capid}</p>
+                    </td>
+                    <td className="p-3">
+                      <span className="text-xs capitalize">{cadet.flight || '-'}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      {cadet.has_allergies ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
+                            cadet.has_anaphylaxis ? 'bg-red-100 text-red-700 font-bold' : 'bg-rose-50 text-rose-600'
+                          }`}>
+                            <AlertTriangle className="w-3 h-3" />
+                            {cadet.allergy_count}
+                          </span>
+                          <span className="text-[9px] text-slate-400 max-w-[120px] truncate">{cadet.allergy_names?.join(', ')}</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {cadet.has_otc_data ? (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          cadet.otc_any_approved ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                        }`}>
+                          {cadet.otc_approved_count} approved
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {cadet.has_medications ? (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          cadet.has_rescue_med ? 'bg-orange-100 text-orange-700 font-bold' : 'bg-blue-50 text-blue-700'
+                        }`}>
+                          <Pill className="w-3 h-3 inline mr-0.5" />
+                          {cadet.medication_count}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {cadet.open_incidents > 0 ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">
+                          {cadet.open_incidents}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {cadet.critical_flags.length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-0.5">
+                          {cadet.critical_flags.map((flag, i) => (
+                            <span key={i} className="text-[8px] px-1 py-0.5 bg-red-600 text-white rounded font-bold">{flag}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        cadet.hs_status === 'cleared' ? 'bg-emerald-50 text-emerald-700' :
+                        cadet.hs_status === 'medical_hold' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-50 text-amber-700'
+                      }`}>
+                        {(cadet.hs_status || 'cleared').replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Cadet Health Detail Sheet */}
+      <CadetHealthDetail
+        cadetId={selectedCadetId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        hasFullAccess={hasFullAccess}
+      />
+    </div>
+  );
+};
+
+// ==================== MAIN DASHBOARD ====================
 const HealthServicesDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -58,6 +652,7 @@ const HealthServicesDashboard = () => {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Check if user has full health access
   const hasFullAccess = () => {
@@ -267,6 +862,42 @@ const HealthServicesDashboard = () => {
           </label>
         </div>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-200 mb-6" data-testid="health-tabs">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors border-b-2 -mb-px ${
+            activeTab === 'dashboard'
+              ? 'text-[#00205B] border-[#00205B]'
+              : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+          }`}
+          data-testid="tab-dashboard"
+        >
+          <Activity className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+          Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab('medical-roster')}
+          className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors border-b-2 -mb-px ${
+            activeTab === 'medical-roster'
+              ? 'text-[#00205B] border-[#00205B]'
+              : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+          }`}
+          data-testid="tab-medical-roster"
+        >
+          <ClipboardList className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+          Medical Roster
+        </button>
+      </div>
+
+      {/* Medical Roster Tab */}
+      {activeTab === 'medical-roster' && (
+        <MedicalRosterTab hasFullAccess={hasFullAccess()} />
+      )}
+
+      {/* Dashboard Tab */}
+      {activeTab === 'dashboard' && (<>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
@@ -611,6 +1242,8 @@ const HealthServicesDashboard = () => {
           </div>
         </div>
       </div>
+
+      </>)}
 
       {/* Search Results Modal */}
       <Dialog open={showSearchResults} onOpenChange={setShowSearchResults}>

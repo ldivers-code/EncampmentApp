@@ -1010,6 +1010,19 @@ export const getCadetOtcApprovals = async (capid) => {
 };
 
 
+// Medical Roster
+export const getMedicalRoster = async () => {
+  const response = await axios.get(`${API}/health/medical-roster`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// Cadet Full Health Profile
+export const getCadetFullHealthProfile = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/full-profile`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
 // ============ Training Officer ============
 
 export const getTrainingSummary = async () => {
