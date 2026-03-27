@@ -1,0 +1,134 @@
+{
+  "summary": "Participant Count Consistency Bug Fix - All tests passed. Verified is_removed filter is correctly applied across all participant query endpoints. Counts are consistent: Total=115, Students=40, Cadre=64, Staff=11 across Roster, Check-In, and API endpoints.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_participant_count_consistency.py",
+    "/app/test_reports/pytest/participant_count_consistency_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_participant_count_consistency.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": {"email": "testadmin@cap.gov", "password": "TestPass123!"}
+  },
+  "seed_data_creation": "None - used existing database with 115 active participants",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Participant count consistency bug fix verified. Database has 115 active participants (40 basic_student, 64 cadre, 11 staff). All endpoints now correctly filter out is_removed=True records. Sync endpoint is idempotent.",
+  "verified_features": [
+    {
+      "feature": "GET /api/participants/stats returns consistent counts",
+      "status": "PASS",
+      "details": "Total=115, Students=40, Cadre=64, Staff=11"
+    },
+    {
+      "feature": "GET /api/check-in/summary returns matching counts",
+      "status": "PASS",
+      "details": "total_participants=115, total_students=40, total_cadre=64, total_staff=11"
+    },
+    {
+      "feature": "GET /api/check-in/roster returns correct total",
+      "status": "PASS",
+      "details": "115 participants with proper category assignments"
+    },
+    {
+      "feature": "GET /api/check-in/roster?category=student returns only students",
+      "status": "PASS",
+      "details": "40 participants with category=student"
+    },
+    {
+      "feature": "GET /api/check-in/roster?category=cadre returns only cadre",
+      "status": "PASS",
+      "details": "64 participants with category=cadre or exec_cadre"
+    },
+    {
+      "feature": "GET /api/check-in/roster?category=staff returns only staff",
+      "status": "PASS",
+      "details": "11 participants with category=staff"
+    },
+    {
+      "feature": "GET /api/participants returns 115 active participants",
+      "status": "PASS",
+      "details": "No removed records in response"
+    },
+    {
+      "feature": "GET /api/barracks/unassigned-participants excludes removed",
+      "status": "PASS",
+      "details": "Only students and cadre included, no removed records"
+    },
+    {
+      "feature": "POST /api/sync/users-participants is idempotent",
+      "status": "PASS",
+      "details": "Second sync creates 0 new records, all already_linked"
+    },
+    {
+      "feature": "Roster page tab counts match expected",
+      "status": "PASS",
+      "details": "Students=40, Cadre=64, Staff=11, Total=115"
+    },
+    {
+      "feature": "Check-in page tab counts match Roster",
+      "status": "PASS",
+      "details": "ALL=115, STUDENTS=40, STAFF=11, CADRE=64"
+    },
+    {
+      "feature": "Org Chart loads correctly with participant names",
+      "status": "PASS",
+      "details": "79 positions defined, Encampment Commander shows Maj Lauren Divers"
+    },
+    {
+      "feature": "Barracks page shows correct capacity",
+      "status": "PASS",
+      "details": "Total Capacity=250, Assigned=1, Available=249"
+    }
+  ],
+  "backend_tests": {
+    "total": 20,
+    "passed": 20,
+    "skipped": 0,
+    "failed": 0,
+    "test_file": "/app/backend/tests/test_participant_count_consistency.py"
+  },
+  "frontend_verification": {
+    "roster_page": {
+      "total": 115,
+      "students_tab": 40,
+      "cadre_tab": 64,
+      "staff_tab": 11,
+      "status": "PASS"
+    },
+    "checkin_page": {
+      "all_tab": 115,
+      "students_tab": 40,
+      "staff_tab": 11,
+      "cadre_tab": 64,
+      "total_expected": 115,
+      "status": "PASS"
+    },
+    "orgchart_page": {
+      "positions_defined": 79,
+      "commander_name": "Maj Lauren Divers",
+      "status": "PASS"
+    },
+    "barracks_page": {
+      "total_capacity": 250,
+      "assigned": 1,
+      "available": 249,
+      "status": "PASS"
+    }
+  }
+}

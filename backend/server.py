@@ -1658,10 +1658,13 @@ async def sync_users_to_participants(
 ):
     """Auto-link users to participants by CAPID, and auto-create participant records for unmatched users"""
     all_users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
-    all_participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    all_participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     p_by_capid = {p["capid"]: p for p in all_participants if p.get("capid")}
     p_ids = {p["id"] for p in all_participants}
+    
+    # Track CAPIDs we've already created participants for in this run to prevent duplicates
+    created_capids = set()
     
     linked = 0
     created = 0
@@ -1670,10 +1673,10 @@ async def sync_users_to_participants(
     now = datetime.now(timezone.utc).isoformat()
     
     for u in all_users:
-        user_capid = u.get("capid", "")
+        user_capid = (u.get("capid") or "").strip()
         user_id = u["id"]
         
-        # Already linked
+        # Already linked to a valid participant
         if u.get("linked_participant_id") and u["linked_participant_id"] in p_ids:
             already_linked += 1
             continue
@@ -1696,14 +1699,34 @@ async def sync_users_to_participants(
             skipped += 1
             continue
         
+        # Skip if we already created a participant for this CAPID in this batch
+        if user_capid in created_capids:
+            # Just link to the existing one we already created
+            existing = await db.participants.find_one({"capid": user_capid, "is_removed": {"$ne": True}}, {"_id": 0, "id": 1})
+            if existing:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"linked_participant_id": existing["id"], "updated_at": now}}
+                )
+                linked += 1
+            else:
+                skipped += 1
+            continue
+        
         # Auto-create a participant record for this user
         role = u.get("role", "cadre")
         if role in ["dcp", "commander", "executive_staff", "staff", "finance", "plans_programs", "logistics", "training_officer", "health_services", "dining_facility"]:
             ptype = "staff"
-        elif role in ["squadron_commander"]:
+            mtype = "SENIOR"
+        elif role in ["squadron_commander", "exec_cadre"]:
             ptype = "cadre"
+            mtype = "CADET"
+        elif role.startswith("support_"):
+            ptype = "cadre"
+            mtype = "CADET"
         else:
             ptype = "cadre"
+            mtype = "CADET"
         
         name_parts = (u.get("name") or "").split()
         first_name = name_parts[0] if name_parts else ""
@@ -1724,7 +1747,7 @@ async def sync_users_to_participants(
             "phone": u.get("phone", ""),
             "cell_phone": u.get("cell_phone", ""),
             "participant_type": ptype,
-            "member_type": "SENIOR" if ptype == "staff" else "CADET",
+            "member_type": mtype,
             "flight": u.get("flight", ""),
             "squadron": u.get("squadron", ""),
             "registration_status": "user_synced",
@@ -1734,6 +1757,7 @@ async def sync_users_to_participants(
         }
         
         await db.participants.insert_one(new_participant)
+        created_capids.add(user_capid)
         
         # Link user to new participant
         await db.users.update_one(
@@ -1760,7 +1784,7 @@ async def sync_users_to_participants(
 
 @api_router.get("/participants", response_model=List[ParticipantResponse])
 async def get_participants(user: dict = Depends(get_current_user)):
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     # Define roles that can see all data
     privileged_roles = [
@@ -1808,7 +1832,7 @@ async def get_participants(user: dict = Depends(get_current_user)):
 @api_router.get("/participants/stats")
 async def get_participant_stats(user: dict = Depends(get_current_user)):
     """Get participant statistics for dashboard"""
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     stats = {
         'total': len(participants),
@@ -1877,7 +1901,7 @@ async def get_participant_stats(user: dict = Depends(get_current_user)):
 @api_router.get("/participants/analytics/detailed")
 async def get_detailed_analytics(user: dict = Depends(get_current_user)):
     """Get comprehensive analytics for encampment attendees"""
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     # Return empty analytics structure when no participants
     if not participants:
@@ -2118,7 +2142,7 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
 async def get_pending_payments(user: dict = Depends(get_current_user)):
     """Get list of participants with pending payments for follow-up"""
     participants = await db.participants.find(
-        {"$or": [{"paid": False}, {"paid": None}, {"paid_in_full": False}, {"paid_in_full": None}]},
+        {"is_removed": {"$ne": True}, "$or": [{"paid": False}, {"paid": None}, {"paid_in_full": False}, {"paid_in_full": None}]},
         {"_id": 0}
     ).to_list(1000)
     
@@ -2155,7 +2179,7 @@ async def export_analytics(
     user: dict = Depends(get_current_user)
 ):
     """Export analytics data as CSV or Excel"""
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     if not participants:
         raise HTTPException(status_code=404, detail="No participants found")
@@ -2203,7 +2227,7 @@ async def export_analytics_summary(
     user: dict = Depends(get_current_user)
 ):
     """Export analytics summary report as Excel with multiple sheets"""
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     
     if not participants:
         raise HTTPException(status_code=404, detail="No participants found")
@@ -2789,7 +2813,7 @@ async def import_participants(
                 imported_count += 1
         
         # Get the final total participant count
-        total_participant_count = await db.participants.count_documents({})
+        total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
         
         # Update food settings with participant count
         await db.food_expense_settings.update_one(
@@ -3308,7 +3332,7 @@ async def upload_students(
                 imported_count += 1
         
         # Get final counts
-        total_students = await db.participants.count_documents({"participant_type": "basic_student"})
+        total_students = await db.participants.count_documents({"participant_type": "basic_student", "is_removed": {"$ne": True}})
         
         # Get flight distribution
         flight_distribution = {}
@@ -4705,7 +4729,7 @@ async def get_food_expense_settings(user: dict = Depends(require_finance_access(
     settings = await db.food_expense_settings.find_one({"_id": "settings"})
     
     # Get participant count from roster
-    participant_count = await db.participants.count_documents({})
+    participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
     
     # Default cost from 2026 TNWG Encampment Budget: $13.15 per person per day
     default_cost = 13.15
@@ -8800,7 +8824,7 @@ async def get_check_in_roster(
     user: dict = Depends(require_check_in_access())
 ):
     """Get all participants with their check-in status"""
-    query = {}
+    query = {"is_removed": {"$ne": True}}
     if category and category != "all":
         if category == "student":
             query["participant_type"] = {"$in": ["basic_student", "student"]}
@@ -8863,10 +8887,11 @@ async def get_check_in_roster(
 @api_router.get("/check-in/summary")
 async def get_check_in_summary(user: dict = Depends(require_check_in_access())):
     """Get check-in summary stats"""
-    total_participants = await db.participants.count_documents({})
-    total_students = await db.participants.count_documents({"participant_type": {"$in": ["basic_student", "student"]}})
-    total_staff = await db.participants.count_documents({"participant_type": "staff"})
-    total_cadre = await db.participants.count_documents({"participant_type": {"$in": ["cadre", "exec_cadre"]}})
+    base_filter = {"is_removed": {"$ne": True}}
+    total_participants = await db.participants.count_documents(base_filter)
+    total_students = await db.participants.count_documents({**base_filter, "participant_type": {"$in": ["basic_student", "student"]}})
+    total_staff = await db.participants.count_documents({**base_filter, "participant_type": "staff"})
+    total_cadre = await db.participants.count_documents({**base_filter, "participant_type": {"$in": ["cadre", "exec_cadre"]}})
     
     check_ins = await db.check_ins.find({}, {"_id": 0}).to_list(1000)
     
@@ -9124,7 +9149,7 @@ async def get_unassigned_participants(user: dict = Depends(get_current_user)):
     assigned_ids = await db.bunk_assignments.distinct("participant_id")
     
     participants = await db.participants.find(
-        {"id": {"$nin": assigned_ids}, "participant_type": {"$in": ["basic_student", "student", "cadre", "exec_cadre"]}},
+        {"id": {"$nin": assigned_ids}, "is_removed": {"$ne": True}, "participant_type": {"$in": ["basic_student", "student", "cadre", "exec_cadre"]}},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "capid": 1,
          "flight": 1, "squadron": 1, "participant_type": 1, "gender": 1}
     ).to_list(500)
