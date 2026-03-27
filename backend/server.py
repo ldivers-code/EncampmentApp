@@ -8850,6 +8850,71 @@ async def get_cadet_allergies(
     return allergies
 
 
+@api_router.post("/health/cadet/{cadet_id}/allergies")
+async def add_cadet_allergy(
+    cadet_id: str,
+    allergy: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Add an allergy record for a cadet"""
+    settings = await get_event_settings(db)
+    now = datetime.now(timezone.utc).isoformat()
+    allergy_doc = {
+        "id": str(uuid.uuid4()),
+        "event_id": settings["event_id"],
+        "capid": cadet_id,
+        "allergy_name": allergy.get("allergy_name", ""),
+        "allergy_type": allergy.get("allergy_type", "Other"),
+        "is_anaphylaxis": allergy.get("is_anaphylaxis", False),
+        "has_epipen": allergy.get("has_epipen", False),
+        "has_albuterol_inhaler": allergy.get("has_albuterol_inhaler", False),
+        "typical_reactions": allergy.get("typical_reactions", ""),
+        "other_reactions": allergy.get("other_reactions", ""),
+        "treatments": allergy.get("treatments", ""),
+        "other_medications": allergy.get("other_medications", ""),
+        "contact_name": allergy.get("contact_name", ""),
+        "emergency_contact": allergy.get("emergency_contact", ""),
+        "commander_name": allergy.get("commander_name", ""),
+        "commander_contact": allergy.get("commander_contact", ""),
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.hs_allergies.insert_one(allergy_doc)
+    allergy_doc.pop("_id", None)
+    return allergy_doc
+
+
+@api_router.put("/health/allergies/{allergy_id}")
+async def update_allergy(
+    allergy_id: str,
+    allergy: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update an allergy record"""
+    now = datetime.now(timezone.utc).isoformat()
+    update_fields = {k: v for k, v in allergy.items() if k not in ["id", "event_id", "capid", "_id"]}
+    update_fields["updated_at"] = now
+    update_fields["updated_by"] = user["id"]
+    result = await db.hs_allergies.update_one({"id": allergy_id}, {"$set": update_fields})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Allergy record not found")
+    updated = await db.hs_allergies.find_one({"id": allergy_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/health/allergies/{allergy_id}")
+async def delete_allergy(
+    allergy_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Delete an allergy record"""
+    result = await db.hs_allergies.delete_one({"id": allergy_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Allergy record not found")
+    return {"message": "Allergy record deleted"}
+
+
 @api_router.get("/health/cadet/{cadet_id}/otc-approvals")
 async def get_cadet_otc_approvals(
     cadet_id: str,
@@ -8863,6 +8928,44 @@ async def get_cadet_otc_approvals(
     if approval:
         approval.pop("_id", None)
     return approval or {}
+
+
+@api_router.put("/health/cadet/{cadet_id}/otc-approvals")
+async def update_cadet_otc_approvals(
+    cadet_id: str,
+    otc_data: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Create or update OTC medication approvals for a cadet"""
+    settings = await get_event_settings(db)
+    now = datetime.now(timezone.utc).isoformat()
+    
+    medications = otc_data.get("medications", {})
+    approved_list = [med for med, approved in medications.items() if approved]
+    denied_list = [med for med, approved in medications.items() if not approved]
+    
+    update_doc = {
+        "event_id": settings["event_id"],
+        "capid": cadet_id,
+        "medications": medications,
+        "approved_list": approved_list,
+        "denied_list": denied_list,
+        "has_any_approval": len(approved_list) > 0,
+        "organization": otc_data.get("organization", ""),
+        "updated_at": now,
+        "updated_by": user["id"]
+    }
+    
+    result = await db.hs_otc_approvals.update_one(
+        {"event_id": settings["event_id"], "capid": cadet_id},
+        {"$set": update_doc, "$setOnInsert": {"created_at": now, "id": str(uuid.uuid4())}},
+        upsert=True
+    )
+    
+    updated = await db.hs_otc_approvals.find_one(
+        {"event_id": settings["event_id"], "capid": cadet_id}, {"_id": 0}
+    )
+    return updated
 
 
 @api_router.get("/health/import/summary")

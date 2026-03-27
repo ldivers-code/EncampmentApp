@@ -1032,6 +1032,27 @@ export const getCadetFullHealthProfile = async (cadetId) => {
   return response.data;
 };
 
+// Health inline CRUD
+export const addCadetAllergy = async (cadetId, allergyData) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/allergies`, allergyData, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateAllergy = async (allergyId, allergyData) => {
+  const response = await axios.put(`${API}/health/allergies/${allergyId}`, allergyData, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const deleteAllergy = async (allergyId) => {
+  const response = await axios.delete(`${API}/health/allergies/${allergyId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateCadetOtcApprovals = async (cadetId, otcData) => {
+  const response = await axios.put(`${API}/health/cadet/${cadetId}/otc-approvals`, otcData, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // ============ Check-In System ============
 export const getCheckInRoster = async (category = 'all') => {
   const response = await axios.get(`${API}/check-in/roster?category=${category}`, { headers: getAuthHeaders() });

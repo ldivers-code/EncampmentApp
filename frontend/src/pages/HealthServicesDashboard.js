@@ -4,7 +4,8 @@ import {
   getHealthDashboardSummary, getMedsDue, getOverdueMeds, getOpenIncidents,
   searchHealthCadets, getHealthReferenceLists, getHealthAuditLog, 
   getHealthSettings, updateHealthSettings, importMedicalData, getImportSummary,
-  getMedicalRoster, getCadetFullHealthProfile
+  getMedicalRoster, getCadetFullHealthProfile,
+  addCadetAllergy, updateAllergy, deleteAllergy, updateCadetOtcApprovals
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,13 +13,14 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 import { 
   Heart, Pill, AlertTriangle, Clock, Search, Users, Activity,
   CheckCircle, XCircle, AlertCircle, ChevronRight, RefreshCw,
   Thermometer, Filter, Save, Upload, FileSpreadsheet,
   Shield, Eye, Syringe, ClipboardList, ChevronDown, ChevronUp, 
-  Phone, Mail, User, BadgeAlert
+  Phone, Mail, User, BadgeAlert, Plus, Edit2, Trash2, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -29,6 +31,28 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
   const [expandedSections, setExpandedSections] = useState({
     allergies: true, otc: true, medications: true, incidents: true, medLog: false, custody: false
   });
+  
+  // Inline editing state
+  const [addAllergyOpen, setAddAllergyOpen] = useState(false);
+  const [editAllergyId, setEditAllergyId] = useState(null);
+  const [allergyForm, setAllergyForm] = useState({});
+  const [savingAllergy, setSavingAllergy] = useState(false);
+  const [editingOtc, setEditingOtc] = useState(false);
+  const [otcForm, setOtcForm] = useState({});
+  const [savingOtc, setSavingOtc] = useState(false);
+
+  const blankAllergy = {
+    allergy_name: '', allergy_type: 'Other', is_anaphylaxis: false,
+    has_epipen: false, has_albuterol_inhaler: false, typical_reactions: '',
+    other_reactions: '', treatments: '', other_medications: '',
+    contact_name: '', emergency_contact: '', commander_name: '', commander_contact: ''
+  };
+
+  const OTC_MEDICATIONS = [
+    'acetaminophen', 'ibuprofen', 'antacids', 'cough_drops', 'throat_lozenges',
+    'antihistamine', 'decongestant', 'hydrocortisone', 'triple_antibiotic',
+    'calamine', 'sunscreen', 'insect_repellent', 'aloe_vera'
+  ];
 
   useEffect(() => {
     if (isOpen && cadetId) {
@@ -50,6 +74,76 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // ─── Allergy handlers ───
+  const handleAddAllergy = () => {
+    setAllergyForm({ ...blankAllergy });
+    setEditAllergyId(null);
+    setAddAllergyOpen(true);
+  };
+
+  const handleEditAllergy = (allergy) => {
+    setAllergyForm({ ...allergy });
+    setEditAllergyId(allergy.id);
+    setAddAllergyOpen(true);
+  };
+
+  const handleSaveAllergy = async () => {
+    if (!allergyForm.allergy_name?.trim()) {
+      toast.error('Allergy name is required');
+      return;
+    }
+    setSavingAllergy(true);
+    try {
+      if (editAllergyId) {
+        await updateAllergy(editAllergyId, allergyForm);
+        toast.success('Allergy updated');
+      } else {
+        await addCadetAllergy(cadetId, allergyForm);
+        toast.success('Allergy added');
+      }
+      setAddAllergyOpen(false);
+      loadProfile();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to save allergy');
+    } finally {
+      setSavingAllergy(false);
+    }
+  };
+
+  const handleDeleteAllergy = async (allergyId) => {
+    if (!window.confirm('Delete this allergy record?')) return;
+    try {
+      await deleteAllergy(allergyId);
+      toast.success('Allergy deleted');
+      loadProfile();
+    } catch (error) {
+      toast.error('Failed to delete allergy');
+    }
+  };
+
+  // ─── OTC handlers ───
+  const startEditOtc = () => {
+    const meds = profile?.otc_approvals?.medications || {};
+    const fullMeds = {};
+    OTC_MEDICATIONS.forEach(m => { fullMeds[m] = meds[m] || false; });
+    setOtcForm({ medications: fullMeds, organization: profile?.otc_approvals?.organization || '' });
+    setEditingOtc(true);
+  };
+
+  const handleSaveOtc = async () => {
+    setSavingOtc(true);
+    try {
+      await updateCadetOtcApprovals(cadetId, otcForm);
+      toast.success('OTC approvals updated');
+      setEditingOtc(false);
+      loadProfile();
+    } catch (error) {
+      toast.error('Failed to update OTC approvals');
+    } finally {
+      setSavingOtc(false);
+    }
   };
 
   const SectionHeader = ({ title, icon: Icon, count, section, color = "text-[#00205B]", badge }) => (
@@ -125,14 +219,23 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
 
             {/* Allergies Section */}
             <div>
-              <SectionHeader 
-                title="Allergies" 
-                icon={AlertTriangle} 
-                count={profile.allergy_count} 
-                section="allergies"
-                color="text-rose-600"
-                badge={profile.has_anaphylaxis ? "ANAPHYLAXIS" : null}
-              />
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <SectionHeader 
+                    title="Allergies" 
+                    icon={AlertTriangle} 
+                    count={profile.allergy_count} 
+                    section="allergies"
+                    color="text-rose-600"
+                    badge={profile.has_anaphylaxis ? "ANAPHYLAXIS" : null}
+                  />
+                </div>
+                {hasFullAccess && (
+                  <Button size="sm" variant="outline" onClick={handleAddAllergy} className="rounded-sm h-9" data-testid="add-allergy-btn">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                  </Button>
+                )}
+              </div>
               {expandedSections.allergies && (
                 <div className="mt-2 space-y-2">
                   {profile.allergies?.length === 0 ? (
@@ -145,10 +248,20 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
                             <p className="font-bold text-sm">{a.allergy_name}</p>
                             <p className="text-xs text-slate-500">{a.allergy_type}</p>
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 items-center">
                             {a.is_anaphylaxis && <span className="text-[9px] px-1.5 py-0.5 bg-red-600 text-white rounded font-bold">ANAPHYLAXIS</span>}
                             {a.has_epipen && <span className="text-[9px] px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">EPIPEN</span>}
                             {a.has_albuterol_inhaler && <span className="text-[9px] px-1.5 py-0.5 bg-blue-500 text-white rounded font-bold">INHALER</span>}
+                            {hasFullAccess && (
+                              <>
+                                <button onClick={() => handleEditAllergy(a)} className="ml-2 p-1 text-slate-400 hover:text-[#00205B] transition-colors" data-testid={`edit-allergy-${idx}`}>
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => handleDeleteAllergy(a.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" data-testid={`delete-allergy-${idx}`}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                         {a.typical_reactions && <p className="text-xs mt-1"><span className="font-medium text-slate-600">Reactions:</span> {a.typical_reactions}</p>}
@@ -183,16 +296,50 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
 
             {/* OTC Approvals Section */}
             <div>
-              <SectionHeader 
-                title="OTC Medication Approvals" 
-                icon={Pill} 
-                count={profile.otc_approvals?.approved_list?.length || 0}
-                section="otc"
-                color="text-teal-600"
-              />
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <SectionHeader 
+                    title="OTC Medication Approvals" 
+                    icon={Pill} 
+                    count={profile.otc_approvals?.approved_list?.length || 0}
+                    section="otc"
+                    color="text-teal-600"
+                  />
+                </div>
+                {hasFullAccess && (
+                  <Button size="sm" variant="outline" onClick={startEditOtc} className="rounded-sm h-9" data-testid="edit-otc-btn">
+                    <Edit2 className="w-3.5 h-3.5 mr-1" /> Edit
+                  </Button>
+                )}
+              </div>
               {expandedSections.otc && (
                 <div className="mt-2">
-                  {!profile.otc_approvals ? (
+                  {editingOtc ? (
+                    <div className="p-3 border border-teal-200 rounded-sm bg-teal-50/50" data-testid="otc-edit-form">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                        {OTC_MEDICATIONS.map((med) => (
+                          <label key={med} className="flex items-center gap-2 px-2 py-1.5 rounded border bg-white border-slate-200 cursor-pointer hover:border-teal-300 transition-colors">
+                            <Switch
+                              checked={otcForm.medications?.[med] || false}
+                              onCheckedChange={(checked) => setOtcForm(prev => ({
+                                ...prev,
+                                medications: { ...prev.medications, [med]: checked }
+                              }))}
+                              className="scale-75"
+                              data-testid={`otc-toggle-${med}`}
+                            />
+                            <span className="text-xs capitalize">{med.replace(/_/g, ' ')}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t border-teal-200">
+                        <Button size="sm" onClick={handleSaveOtc} disabled={savingOtc} className="bg-[#00205B] rounded-sm" data-testid="save-otc-btn">
+                          <Save className="w-3.5 h-3.5 mr-1" />{savingOtc ? 'Saving...' : 'Save OTC'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingOtc(false)} className="rounded-sm">Cancel</Button>
+                      </div>
+                    </div>
+                  ) : !profile.otc_approvals ? (
                     <p className="text-sm text-slate-500 italic p-3">No OTC data on file</p>
                   ) : (
                     <div className="p-3 border border-slate-200 rounded-sm bg-white">
@@ -356,6 +503,75 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
         ) : (
           <p className="text-center text-slate-500 py-8">No profile data available</p>
         )}
+
+        {/* Add/Edit Allergy Dialog */}
+        <Dialog open={addAllergyOpen} onOpenChange={setAddAllergyOpen}>
+          <DialogContent className="max-w-lg" data-testid="allergy-form-dialog">
+            <DialogHeader>
+              <DialogTitle className="text-[#00205B]">{editAllergyId ? 'Edit Allergy' : 'Add Allergy'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Allergy Name *</Label>
+                  <Input value={allergyForm.allergy_name || ''} onChange={(e) => setAllergyForm(p => ({ ...p, allergy_name: e.target.value }))} placeholder="e.g., Peanuts" className="rounded-sm mt-1" data-testid="allergy-name-input" />
+                </div>
+                <div>
+                  <Label className="text-xs">Type</Label>
+                  <Select value={allergyForm.allergy_type || 'Other'} onValueChange={(v) => setAllergyForm(p => ({ ...p, allergy_type: v }))}>
+                    <SelectTrigger className="rounded-sm mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Food">Food</SelectItem>
+                      <SelectItem value="Drug">Drug</SelectItem>
+                      <SelectItem value="Environmental">Environmental</SelectItem>
+                      <SelectItem value="Insect">Insect</SelectItem>
+                      <SelectItem value="Latex">Latex</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={allergyForm.is_anaphylaxis || false} onChange={(e) => setAllergyForm(p => ({ ...p, is_anaphylaxis: e.target.checked }))} className="rounded" />
+                  <span className="text-red-600 font-medium">Anaphylaxis Risk</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={allergyForm.has_epipen || false} onChange={(e) => setAllergyForm(p => ({ ...p, has_epipen: e.target.checked }))} className="rounded" />
+                  <span className="text-orange-600 font-medium">EpiPen</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={allergyForm.has_albuterol_inhaler || false} onChange={(e) => setAllergyForm(p => ({ ...p, has_albuterol_inhaler: e.target.checked }))} className="rounded" />
+                  <span className="text-blue-600 font-medium">Inhaler</span>
+                </label>
+              </div>
+              <div>
+                <Label className="text-xs">Typical Reactions</Label>
+                <Input value={allergyForm.typical_reactions || ''} onChange={(e) => setAllergyForm(p => ({ ...p, typical_reactions: e.target.value }))} placeholder="e.g., Hives, swelling" className="rounded-sm mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">Treatments</Label>
+                <Input value={allergyForm.treatments || ''} onChange={(e) => setAllergyForm(p => ({ ...p, treatments: e.target.value }))} placeholder="e.g., Administer EpiPen, call 911" className="rounded-sm mt-1" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Emergency Contact Name</Label>
+                  <Input value={allergyForm.contact_name || ''} onChange={(e) => setAllergyForm(p => ({ ...p, contact_name: e.target.value }))} className="rounded-sm mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs">Emergency Phone</Label>
+                  <Input value={allergyForm.emergency_contact || ''} onChange={(e) => setAllergyForm(p => ({ ...p, emergency_contact: e.target.value }))} className="rounded-sm mt-1" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <Button variant="outline" size="sm" onClick={() => setAddAllergyOpen(false)} className="rounded-sm">Cancel</Button>
+                <Button size="sm" onClick={handleSaveAllergy} disabled={savingAllergy} className="bg-[#00205B] rounded-sm" data-testid="save-allergy-btn">
+                  <Save className="w-3.5 h-3.5 mr-1" />{savingAllergy ? 'Saving...' : (editAllergyId ? 'Update' : 'Add Allergy')}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   );

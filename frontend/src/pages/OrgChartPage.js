@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import RichTextEditor, { RichTextDisplay, plainTextToHtml } from '../components/RichTextEditor';
 import { 
   Users, 
   User,
@@ -609,13 +610,13 @@ const OrgChartPage = () => {
                   </div>
                   <div>
                     <Label className="text-xs uppercase tracking-wide text-slate-600">Responsibilities</Label>
-                    <Textarea
-                      value={newRoleData.responsibilities}
-                      onChange={(e) => setNewRoleData({ ...newRoleData, responsibilities: e.target.value })}
-                      placeholder="- Responsibility 1&#10;- Responsibility 2"
-                      className="mt-1 rounded-sm font-mono text-sm"
-                      rows={4}
-                    />
+                    <div className="mt-1">
+                      <RichTextEditor
+                        value={newRoleData.responsibilities}
+                        onChange={(val) => setNewRoleData({ ...newRoleData, responsibilities: val })}
+                        placeholder="Enter responsibilities..."
+                      />
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setIsAddModalOpen(false)} className="rounded-sm">Cancel</Button>
@@ -742,28 +743,17 @@ const OrgChartPage = () => {
               <div>
                 <Label className="text-xs uppercase tracking-wide text-slate-500">Responsibilities</Label>
                 {isEditing ? (
-                  <Textarea
-                    value={editFormData.responsibilities}
-                    onChange={(e) => setEditFormData({ ...editFormData, responsibilities: e.target.value })}
-                    className="mt-1 rounded-sm font-mono text-sm"
-                    rows={6}
-                    placeholder="- Responsibility 1&#10;- Responsibility 2"
-                  />
+                  <div className="mt-1">
+                    <RichTextEditor
+                      value={plainTextToHtml(editFormData.responsibilities)}
+                      onChange={(val) => setEditFormData({ ...editFormData, responsibilities: val })}
+                      placeholder="Enter responsibilities..."
+                    />
+                  </div>
                 ) : (
                   <div className="mt-1 p-3 bg-slate-50 rounded-sm border border-slate-200">
                     {selectedRole.responsibilities ? (
-                      <div className="prose prose-sm prose-slate max-w-none">
-                        {selectedRole.responsibilities.split('\n').map((line, i) => (
-                          <p key={i} className="my-1">
-                            {line.startsWith('- ') ? (
-                              <span className="flex items-start gap-2">
-                                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                                <span>{line.substring(2)}</span>
-                              </span>
-                            ) : line}
-                          </p>
-                        ))}
-                      </div>
+                      <RichTextDisplay html={plainTextToHtml(selectedRole.responsibilities)} />
                     ) : (
                       <p className="text-slate-400 italic">No responsibilities defined</p>
                     )}
