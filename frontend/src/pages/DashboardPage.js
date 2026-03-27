@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getDashboardStats, getDailySettings, updateUniformOfDay, updateWeatherFlag, getSchedule } from '../services/api';
+import { getDashboardStats, getDailySettings, updateUniformOfDay, updateWeatherFlag, getSchedule, getDashboardQuickview } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
@@ -26,17 +26,40 @@ import {
   Clock,
   Info,
   ChevronRight,
-  MapPin
+  MapPin,
+  ClipboardCheck,
+  Heart,
+  Package,
+  BedDouble,
+  FileText,
+  GraduationCap,
+  UtensilsCrossed,
+  Shield,
+  Link,
+  Activity,
+  Truck
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const ROLE_LABELS = {
+  dcp: 'Director of Cadet Programs',
   commander: 'Commander',
+  executive_staff: 'Executive Staff',
   finance: 'Finance',
   plans_programs: 'Plans & Programs',
   exec_cadre: 'Executive Cadre',
   staff: 'Staff',
-  cadre: 'Cadre'
+  cadre: 'Cadre',
+  health_services: 'Health Services',
+  dining_facility: 'Dining Facility',
+  logistics: 'Logistics',
+  training_officer: 'Training Officer',
+  squadron_commander: 'Squadron Commander',
+  support_logistics: 'Support - Logistics',
+  support_comms: 'Support - Communications',
+  support_pa: 'Support - Public Affairs',
+  support_dining: 'Support - Dining',
+  support_health: 'Support - Health Services'
 };
 
 const SM_UNIFORM_DESC = {
@@ -58,25 +81,47 @@ const CADET_UNIFORM_DESC = {
   'Civilian': 'Civilian Attire',
 };
 
+// ─── Quick-View Card Component ───
+const QuickCard = ({ icon: Icon, title, value, subtitle, color, onClick, testId }) => (
+  <button
+    onClick={onClick}
+    className="bg-white border border-slate-200 rounded-sm p-4 text-left hover:border-slate-300 hover:shadow-sm transition-all group w-full"
+    data-testid={testId}
+  >
+    <div className="flex items-start justify-between">
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1">{title}</p>
+        <p className={`text-2xl font-black font-mono ${color || 'text-[#00205B]'}`}>{value}</p>
+        {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
+      </div>
+      <div className={`p-2 rounded-sm ${color === 'text-[#BF0D3E]' ? 'bg-red-50' : color === 'text-emerald-600' ? 'bg-emerald-50' : color === 'text-amber-600' ? 'bg-amber-50' : 'bg-[#00205B]/5'} group-hover:scale-105 transition-transform`}>
+        <Icon className={`w-5 h-5 ${color === 'text-[#BF0D3E]' ? 'text-[#BF0D3E]' : color === 'text-emerald-600' ? 'text-emerald-600' : color === 'text-amber-600' ? 'text-amber-600' : 'text-[#00205B]'}`} />
+      </div>
+    </div>
+    <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-400 group-hover:text-[#00205B] transition-colors">
+      <span>View details</span>
+      <ChevronRight className="w-3 h-3" />
+    </div>
+  </button>
+);
+
 const DashboardPage = () => {
   const { user, activeUsers } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [quickview, setQuickview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dailySettings, setDailySettings] = useState(null);
   const [todayEvents, setTodayEvents] = useState([]);
   
-  // Admin edit dialogs
   const [uniformDialogOpen, setUniformDialogOpen] = useState(false);
   const [weatherDialogOpen, setWeatherDialogOpen] = useState(false);
   const [uniformForm, setUniformForm] = useState({ uniform_code: '', description: '', special_instructions: '' });
   const [weatherForm, setWeatherForm] = useState({ flag_color: 'green', heat_index: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
-  // Check if user can edit daily settings
   const canEditSettings = ['dcp', 'commander', 'executive_staff', 'plans_programs', 'staff', 'executive_cadre'].includes(user?.role);
 
-  // Event type colors
   const eventTypeColors = {
     general: { bg: 'bg-slate-500', light: 'bg-slate-100', text: 'text-slate-700', border: 'border-l-slate-500' },
     training: { bg: 'bg-blue-600', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-l-blue-600' },
@@ -93,6 +138,7 @@ const DashboardPage = () => {
     loadStats();
     loadDailySettings();
     loadTodaySchedule();
+    loadQuickview();
   }, []);
 
   const loadStats = async () => {
@@ -103,6 +149,15 @@ const DashboardPage = () => {
       console.error('Failed to load stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadQuickview = async () => {
+    try {
+      const data = await getDashboardQuickview();
+      setQuickview(data);
+    } catch (error) {
+      console.error('Failed to load quickview:', error);
     }
   };
 
@@ -136,8 +191,6 @@ const DashboardPage = () => {
   const loadTodaySchedule = async () => {
     try {
       const allEvents = await getSchedule();
-      // Get today's date (using encampment date range: July 17-24, 2026)
-      // For demo purposes, we'll show day 1 events if current date is outside encampment
       const today = new Date();
       const encampmentStart = new Date('2026-07-17');
       const encampmentEnd = new Date('2026-07-24');
@@ -146,21 +199,15 @@ const DashboardPage = () => {
       if (today >= encampmentStart && today <= encampmentEnd) {
         targetDate = today.toISOString().split('T')[0];
       } else {
-        // Show first day of encampment for demo
         targetDate = '2026-07-17';
       }
       
-      // Filter events for today and sort by start time
       const todaysEvents = allEvents
         .filter(event => {
           const eventDate = event.date?.split('T')[0];
           return eventDate === targetDate && event.is_published !== false;
         })
-        .sort((a, b) => {
-          const timeA = a.start_time || '00:00';
-          const timeB = b.start_time || '00:00';
-          return timeA.localeCompare(timeB);
-        });
+        .sort((a, b) => (a.start_time || '00:00').localeCompare(b.start_time || '00:00'));
       
       setTodayEvents(todaysEvents);
     } catch (error) {
@@ -181,22 +228,11 @@ const DashboardPage = () => {
     if (todayEvents.length === 0) return null;
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
     return todayEvents.find(event => {
       const start = event.start_time || '00:00';
       const end = event.end_time || '23:59';
       return currentTime >= start && currentTime <= end;
     });
-  };
-
-  const getUpcomingEvents = () => {
-    const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
-    return todayEvents.filter(event => {
-      const start = event.start_time || '00:00';
-      return start > currentTime;
-    }).slice(0, 5);
   };
 
   const handleSaveUniform = async () => {
@@ -230,7 +266,6 @@ const DashboardPage = () => {
     }
   };
 
-  // Weather flag colors
   const flagColors = {
     green: { bg: 'bg-green-500', text: 'text-green-700', bgLight: 'bg-green-50', border: 'border-green-200' },
     yellow: { bg: 'bg-yellow-400', text: 'text-yellow-700', bgLight: 'bg-yellow-50', border: 'border-yellow-200' },
@@ -240,28 +275,139 @@ const DashboardPage = () => {
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      style: 'currency', currency: 'USD',
+      minimumFractionDigits: 0, maximumFractionDigits: 0
     }).format(value);
   };
 
-  const participantTypeData = stats?.participants?.by_type 
-    ? Object.entries(stats.participants.by_type).map(([name, value]) => ({
-        name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        value
-      }))
-    : [];
-
-  const genderData = stats?.participants?.by_gender
-    ? Object.entries(stats.participants.by_gender).map(([name, value]) => ({
-        name: name === 'M' ? 'Male' : name === 'F' ? 'Female' : 'Other',
-        value
-      }))
-    : [];
-
   const COLORS = ['#00205B', '#BF0D3E', '#475569', '#94A3B8'];
+
+  // ─── Build quick-view cards based on role ───
+  const buildQuickCards = () => {
+    if (!quickview) return [];
+    const cards = [];
+
+    // Admin: Pending approvals
+    if (quickview.admin) {
+      if (quickview.admin.pending_approvals > 0) {
+        cards.push(
+          <QuickCard key="pending" icon={UserCheck} title="Pending Approvals" 
+            value={quickview.admin.pending_approvals} subtitle="Users awaiting approval"
+            color="text-amber-600" onClick={() => navigate('/admin')} testId="qv-pending-approvals" />
+        );
+      }
+      if (quickview.admin.unlinked_users > 0) {
+        cards.push(
+          <QuickCard key="unlinked" icon={Link} title="Unlinked Users"
+            value={quickview.admin.unlinked_users} subtitle="Not linked to roster"
+            color="text-amber-600" onClick={() => navigate('/admin')} testId="qv-unlinked-users" />
+        );
+      }
+    }
+
+    // Check-in progress
+    if (quickview.check_in) {
+      const pct = quickview.check_in.total > 0 ? Math.round((quickview.check_in.checked_in / quickview.check_in.total) * 100) : 0;
+      cards.push(
+        <QuickCard key="checkin" icon={ClipboardCheck} title="Check-In Progress"
+          value={`${pct}%`} subtitle={`${quickview.check_in.checked_in}/${quickview.check_in.total} checked in`}
+          color={pct === 100 ? 'text-emerald-600' : 'text-[#00205B]'} onClick={() => navigate('/check-in')} testId="qv-checkin" />
+      );
+    }
+
+    // Health
+    if (quickview.health) {
+      cards.push(
+        <QuickCard key="health-incidents" icon={Heart} title="Open Incidents"
+          value={quickview.health.open_incidents}
+          subtitle={`${quickview.health.active_medications} active Rx, ${quickview.health.critical_flags} critical`}
+          color={quickview.health.open_incidents > 0 ? 'text-[#BF0D3E]' : 'text-emerald-600'}
+          onClick={() => navigate('/health')} testId="qv-health" />
+      );
+    }
+
+    // Budget
+    if (quickview.budget) {
+      const isOver = quickview.budget.variance < 0;
+      cards.push(
+        <QuickCard key="budget" icon={DollarSign} title="Budget Variance"
+          value={formatCurrency(quickview.budget.variance)}
+          subtitle={`${quickview.budget.unpaid_items} unpaid items`}
+          color={isOver ? 'text-[#BF0D3E]' : 'text-emerald-600'}
+          onClick={() => navigate('/budget')} testId="qv-budget" />
+      );
+    }
+
+    // Logistics
+    if (quickview.logistics) {
+      const total = quickview.logistics.open_supply_requests + quickview.logistics.lost_items;
+      cards.push(
+        <QuickCard key="logistics" icon={Package} title="Logistics"
+          value={total}
+          subtitle={`${quickview.logistics.open_supply_requests} supply req, ${quickview.logistics.radios_checked_out} radios out, ${quickview.logistics.lost_items} lost`}
+          color={total > 0 ? 'text-amber-600' : 'text-emerald-600'}
+          onClick={() => navigate('/logistics')} testId="qv-logistics" />
+      );
+    }
+
+    // Barracks
+    if (quickview.barracks) {
+      const pct = Math.round((quickview.barracks.assigned / quickview.barracks.total_capacity) * 100);
+      cards.push(
+        <QuickCard key="barracks" icon={BedDouble} title="Bunk Assignment"
+          value={`${pct}%`}
+          subtitle={`${quickview.barracks.assigned}/${quickview.barracks.total_capacity} bunks assigned`}
+          onClick={() => navigate('/barracks')} testId="qv-barracks" />
+      );
+    }
+
+    // Training
+    if (quickview.training) {
+      cards.push(
+        <QuickCard key="training" icon={GraduationCap} title="Training Issues"
+          value={quickview.training.open_cadre_issues}
+          subtitle={`${quickview.training.counseling_logs} counseling logs`}
+          color={quickview.training.open_cadre_issues > 0 ? 'text-amber-600' : 'text-emerald-600'}
+          onClick={() => navigate('/training')} testId="qv-training" />
+      );
+    }
+
+    // Reports
+    if (quickview.reports) {
+      const total = quickview.reports.pending_review + quickview.reports.escalated;
+      if (total > 0) {
+        cards.push(
+          <QuickCard key="reports" icon={FileText} title="Flight Reports"
+            value={total}
+            subtitle={`${quickview.reports.pending_review} pending, ${quickview.reports.escalated} escalated`}
+            color="text-amber-600"
+            onClick={() => navigate('/my-flight')} testId="qv-reports" />
+        );
+      }
+    }
+
+    // Dining
+    if (quickview.dining) {
+      cards.push(
+        <QuickCard key="dining" icon={UtensilsCrossed} title="Meal Planning"
+          value={quickview.dining.total_headcount}
+          subtitle={`${quickview.dining.meal_plans_set} meal plans set`}
+          onClick={() => navigate('/meal-plan')} testId="qv-dining" />
+      );
+    }
+
+    // My Unit (cadre/support roles)
+    if (quickview.my_unit && quickview.my_unit.flight) {
+      cards.push(
+        <QuickCard key="myunit" icon={Shield} title="My Flight"
+          value={quickview.my_unit.flight}
+          subtitle={`${quickview.my_unit.flight_count || 0} members`}
+          onClick={() => navigate('/my-flight')} testId="qv-my-unit" />
+      );
+    }
+
+    return cards;
+  };
 
   if (loading) {
     return (
@@ -272,6 +418,8 @@ const DashboardPage = () => {
       </div>
     );
   }
+
+  const quickCards = buildQuickCards();
 
   return (
     <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
@@ -285,14 +433,26 @@ const DashboardPage = () => {
       </div>
 
       {/* Welcome Message */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
           Welcome back, {user?.name?.split(' ')[0]}
         </h1>
         <p className="text-slate-500 text-sm mt-1">
-          July 17-24, 2026 • VTS Catoosa, GA
+          {ROLE_LABELS[user?.role] || user?.role} &bull; July 17-24, 2026 &bull; VTS Catoosa, GA
         </p>
       </div>
+
+      {/* ─── Role-Specific Quick View Cards ─── */}
+      {quickCards.length > 0 && (
+        <div className="mb-8" data-testid="quickview-section">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            Your Quick View
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {quickCards}
+          </div>
+        </div>
+      )}
 
       {/* Daily Info Cards - Uniform & Weather */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -337,11 +497,9 @@ const DashboardPage = () => {
                     </div>
                     <div>
                       <Label>Description</Label>
-                      <Input
-                        value={uniformForm.description}
+                      <Input value={uniformForm.description}
                         onChange={(e) => setUniformForm(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="e.g., With boots"
-                      />
+                        placeholder="e.g., With boots" />
                     </div>
                     <div className="border-t border-slate-200 pt-4">
                       <p className="text-xs font-bold uppercase text-slate-400 tracking-wide mb-3">Senior Member — Option 2 (optional)</p>
@@ -373,11 +531,9 @@ const DashboardPage = () => {
                     {uniformForm.uniform_code_2 && uniformForm.uniform_code_2 !== 'none' && (
                       <div>
                         <Label>Description</Label>
-                        <Input
-                          value={uniformForm.description_2 || ''}
+                        <Input value={uniformForm.description_2 || ''}
                           onChange={(e) => setUniformForm(prev => ({ ...prev, description_2: e.target.value }))}
-                          placeholder="e.g., Alternate option"
-                        />
+                          placeholder="e.g., Alternate option" />
                       </div>
                     )}
                     <div className="border-t border-slate-200 pt-4">
@@ -402,19 +558,15 @@ const DashboardPage = () => {
                     </div>
                     <div>
                       <Label>Cadet Description</Label>
-                      <Input
-                        value={uniformForm.cadet_description || ''}
+                      <Input value={uniformForm.cadet_description || ''}
                         onChange={(e) => setUniformForm(prev => ({ ...prev, cadet_description: e.target.value }))}
-                        placeholder="e.g., With patrol cap"
-                      />
+                        placeholder="e.g., With patrol cap" />
                     </div>
                     <div className="border-t border-slate-200 pt-4">
                       <Label>Special Instructions (optional)</Label>
-                      <Input
-                        value={uniformForm.special_instructions}
+                      <Input value={uniformForm.special_instructions}
                         onChange={(e) => setUniformForm(prev => ({ ...prev, special_instructions: e.target.value }))}
-                        placeholder="e.g., Bring rain gear"
-                      />
+                        placeholder="e.g., Bring rain gear" />
                     </div>
                     <Button onClick={handleSaveUniform} disabled={saving} className="w-full bg-[#00205B]">
                       {saving ? 'Saving...' : 'Save Uniform'}
@@ -430,18 +582,12 @@ const DashboardPage = () => {
                 <p className="text-[10px] uppercase tracking-wide text-slate-400 font-medium mb-1">Senior Member</p>
                 <div className="text-2xl font-black text-[#00205B]">
                   {dailySettings?.uniform?.uniform_code || 'ABU'}
-                  {dailySettings?.uniform?.uniform_code_2 && (
-                    <span className="text-slate-400 font-normal text-lg mx-1">/</span>
-                  )}
-                  {dailySettings?.uniform?.uniform_code_2 && (
-                    <span>{dailySettings.uniform.uniform_code_2}</span>
-                  )}
+                  {dailySettings?.uniform?.uniform_code_2 && <span className="text-slate-400 font-normal text-lg mx-1">/</span>}
+                  {dailySettings?.uniform?.uniform_code_2 && <span>{dailySettings.uniform.uniform_code_2}</span>}
                 </div>
                 <p className="text-slate-600 text-sm">
                   {dailySettings?.uniform?.description || 'Airman Battle Uniform'}
-                  {dailySettings?.uniform?.uniform_code_2 && dailySettings?.uniform?.description_2 && (
-                    <span> / {dailySettings.uniform.description_2}</span>
-                  )}
+                  {dailySettings?.uniform?.uniform_code_2 && dailySettings?.uniform?.description_2 && <span> / {dailySettings.uniform.description_2}</span>}
                 </p>
               </div>
               <div>
@@ -491,15 +637,9 @@ const DashboardPage = () => {
                       <Label>Flag Color</Label>
                       <div className="grid grid-cols-4 gap-2 mt-2">
                         {['green', 'yellow', 'red', 'black'].map((color) => (
-                          <button
-                            key={color}
+                          <button key={color}
                             onClick={() => setWeatherForm(prev => ({ ...prev, flag_color: color }))}
-                            className={`p-3 rounded-sm border-2 transition-all ${
-                              weatherForm.flag_color === color 
-                                ? 'ring-2 ring-[#00205B] ring-offset-2' 
-                                : 'border-transparent'
-                            }`}
-                          >
+                            className={`p-3 rounded-sm border-2 transition-all ${weatherForm.flag_color === color ? 'ring-2 ring-[#00205B] ring-offset-2' : 'border-transparent'}`}>
                             <div className={`h-8 rounded ${flagColors[color].bg}`} />
                             <p className="text-xs mt-1 capitalize font-medium">{color}</p>
                           </button>
@@ -508,23 +648,16 @@ const DashboardPage = () => {
                     </div>
                     <div>
                       <Label>Heat Index (°F)</Label>
-                      <Input
-                        type="number"
-                        value={weatherForm.heat_index}
+                      <Input type="number" value={weatherForm.heat_index}
                         onChange={(e) => setWeatherForm(prev => ({ ...prev, heat_index: e.target.value }))}
-                        placeholder="e.g., 95"
-                      />
-                      <p className="text-xs text-slate-400 mt-1">
-                        Green: &lt;85° | Yellow: 85-90° | Red: 91-102° | Black: &gt;103°
-                      </p>
+                        placeholder="e.g., 95" />
+                      <p className="text-xs text-slate-400 mt-1">Green: &lt;85° | Yellow: 85-90° | Red: 91-102° | Black: &gt;103°</p>
                     </div>
                     <div>
                       <Label>Notes (optional)</Label>
-                      <Input
-                        value={weatherForm.notes}
+                      <Input value={weatherForm.notes}
                         onChange={(e) => setWeatherForm(prev => ({ ...prev, notes: e.target.value }))}
-                        placeholder="e.g., Expected to cool down after 1600"
-                      />
+                        placeholder="e.g., Expected to cool down after 1600" />
                     </div>
                     <Button onClick={handleSaveWeather} disabled={saving} className="w-full bg-[#00205B]">
                       {saving ? 'Saving...' : 'Update Flag Status'}
@@ -545,80 +678,49 @@ const DashboardPage = () => {
                 </div>
                 {dailySettings?.weather_flag?.heat_index && (
                   <div className="flex items-center gap-1 text-slate-600 text-sm">
-                    <Thermometer className="w-4 h-4" />
-                    Heat Index: {dailySettings.weather_flag.heat_index}°F
+                    <Thermometer className="w-4 h-4" />Heat Index: {dailySettings.weather_flag.heat_index}°F
                   </div>
                 )}
                 <p className="text-sm text-slate-600 mt-1">
                   {dailySettings?.weather_flag?.guidelines?.water_intake && (
-                    <span className="flex items-center gap-1">
-                      <Droplets className="w-3 h-3" />
-                      Water: {dailySettings.weather_flag.guidelines.water_intake}
-                    </span>
+                    <span className="flex items-center gap-1"><Droplets className="w-3 h-3" />Water: {dailySettings.weather_flag.guidelines.water_intake}</span>
                   )}
                 </p>
               </div>
             </div>
-            
-            {/* Guidelines */}
             {dailySettings?.weather_flag?.guidelines && (
               <div className="mt-4 pt-4 border-t border-slate-200">
                 <p className="text-xs font-bold uppercase text-slate-500 mb-2">Activity Guidelines</p>
                 <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                  <div className="bg-white p-2 rounded text-xs">
-                    <p className="text-slate-500">Low</p>
-                    <p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.low}</p>
-                  </div>
-                  <div className="bg-white p-2 rounded text-xs">
-                    <p className="text-slate-500">Medium</p>
-                    <p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.medium}</p>
-                  </div>
-                  <div className="bg-white p-2 rounded text-xs">
-                    <p className="text-slate-500">High</p>
-                    <p className={`font-bold ${dailySettings.weather_flag.guidelines.rest_schedule?.high === 'PROHIBITED' ? 'text-red-600' : ''}`}>
-                      {dailySettings.weather_flag.guidelines.rest_schedule?.high}
-                    </p>
-                  </div>
+                  <div className="bg-white p-2 rounded text-xs"><p className="text-slate-500">Low</p><p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.low}</p></div>
+                  <div className="bg-white p-2 rounded text-xs"><p className="text-slate-500">Medium</p><p className="font-bold">{dailySettings.weather_flag.guidelines.rest_schedule?.medium}</p></div>
+                  <div className="bg-white p-2 rounded text-xs"><p className="text-slate-500">High</p><p className={`font-bold ${dailySettings.weather_flag.guidelines.rest_schedule?.high === 'PROHIBITED' ? 'text-red-600' : ''}`}>{dailySettings.weather_flag.guidelines.rest_schedule?.high}</p></div>
                 </div>
                 <ul className="text-xs text-slate-600 space-y-1">
                   {dailySettings.weather_flag.guidelines.instructions?.slice(0, 3).map((instruction, idx) => (
-                    <li key={idx} className="flex items-start gap-1">
-                      <span className="text-slate-400">•</span>
-                      {instruction}
-                    </li>
+                    <li key={idx} className="flex items-start gap-1"><span className="text-slate-400">•</span>{instruction}</li>
                   ))}
                 </ul>
               </div>
             )}
-            
             {dailySettings?.weather_flag?.notes && (
               <p className="text-amber-700 text-sm mt-3 flex items-center gap-1 bg-amber-50 p-2 rounded">
-                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                {dailySettings.weather_flag.notes}
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />{dailySettings.weather_flag.notes}
               </p>
             )}
             {dailySettings?.weather_flag?.updated_at && (
-              <p className="text-xs text-slate-400 mt-2">
-                Updated {new Date(dailySettings.weather_flag.updated_at).toLocaleString()}
-              </p>
+              <p className="text-xs text-slate-400 mt-2">Updated {new Date(dailySettings.weather_flag.updated_at).toLocaleString()}</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Today's Schedule - Full Width */}
+      {/* Today's Schedule */}
       <div className="mb-8">
         <div className="bg-white border border-slate-200 rounded-sm" data-testid="todays-schedule">
           <div className="border-b border-slate-100 p-4 flex items-center justify-between">
-            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Today's Schedule
-            </h2>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => navigate('/schedule')}
-              className="text-[#00205B] hover:bg-[#00205B]/10"
-            >
+            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>Today's Schedule</h2>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/schedule')} className="text-[#00205B] hover:bg-[#00205B]/10">
               View Full Schedule <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
@@ -630,7 +732,6 @@ const DashboardPage = () => {
               </div>
             ) : (
               <div className="space-y-2 max-h-[280px] overflow-y-auto">
-                {/* Current Event Highlight */}
                 {getCurrentEvent() && (
                   <div className="mb-4 p-3 bg-[#00205B]/5 border border-[#00205B]/20 rounded-sm">
                     <div className="flex items-center gap-2 mb-2">
@@ -642,28 +743,16 @@ const DashboardPage = () => {
                       <div className="flex-1">
                         <p className="font-bold text-[#00205B]">{getCurrentEvent().title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatTime(getCurrentEvent().start_time)} - {formatTime(getCurrentEvent().end_time)}
-                          </span>
-                          {getCurrentEvent().location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {getCurrentEvent().location}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatTime(getCurrentEvent().start_time)} - {formatTime(getCurrentEvent().end_time)}</span>
+                          {getCurrentEvent().location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{getCurrentEvent().location}</span>}
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
-                
-                {/* Event List */}
                 {todayEvents.map((event, idx) => (
-                  <div 
-                    key={event.id || idx}
-                    className={`flex items-start gap-3 p-2 rounded-sm hover:bg-slate-50 transition-colors border-l-4 ${eventTypeColors[event.event_type]?.border || 'border-l-slate-500'}`}
-                  >
+                  <div key={event.id || idx}
+                    className={`flex items-start gap-3 p-2 rounded-sm hover:bg-slate-50 transition-colors border-l-4 ${eventTypeColors[event.event_type]?.border || 'border-l-slate-500'}`}>
                     <div className="text-center min-w-[60px]">
                       <p className="text-sm font-bold text-[#00205B]">{formatTime(event.start_time)}</p>
                       <p className="text-xs text-slate-400">{formatTime(event.end_time)}</p>
@@ -671,17 +760,8 @@ const DashboardPage = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 text-sm truncate">{event.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {event.location && (
-                          <span className="text-xs text-slate-500 flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {event.location}
-                          </span>
-                        )}
-                        {event.uniform && event.uniform !== 'default' && (
-                          <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                            {event.uniform}
-                          </span>
-                        )}
+                        {event.location && <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>}
+                        {event.uniform && event.uniform !== 'default' && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{event.uniform}</span>}
                       </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded capitalize ${eventTypeColors[event.event_type]?.light || 'bg-slate-100'} ${eventTypeColors[event.event_type]?.text || 'text-slate-600'}`}>
@@ -691,39 +771,27 @@ const DashboardPage = () => {
                 ))}
               </div>
             )}
-            
-            {/* Quick Stats Footer */}
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-sm">
               <div className="flex items-center gap-4 text-slate-500">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  <strong className="text-[#00205B]">{todayEvents.length}</strong> events today
-                </span>
+                <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /><strong className="text-[#00205B]">{todayEvents.length}</strong> events today</span>
               </div>
-              <span className="text-xs text-slate-400">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </span>
+              <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Only show stats relevant to the role */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Total Participants */}
         <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-total-participants">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Total Participants</p>
               <p className="text-3xl font-bold text-[#00205B] font-mono">{stats?.participants?.total || 0}</p>
             </div>
-            <div className="p-2 bg-[#00205B]/10 rounded-sm">
-              <Users className="w-5 h-5 text-[#00205B]" />
-            </div>
+            <div className="p-2 bg-[#00205B]/10 rounded-sm"><Users className="w-5 h-5 text-[#00205B]" /></div>
           </div>
         </div>
-
-        {/* Paid Status */}
         <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-paid-status">
           <div className="flex items-start justify-between">
             <div>
@@ -735,181 +803,75 @@ const DashboardPage = () => {
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-1 text-xs text-emerald-600">
-                <UserCheck className="w-4 h-4" /> Paid
+              <div className="flex items-center gap-1 text-xs text-emerald-600"><UserCheck className="w-4 h-4" /> Paid</div>
+              <div className="flex items-center gap-1 text-xs text-[#BF0D3E]"><UserX className="w-4 h-4" /> Unpaid</div>
+            </div>
+          </div>
+        </div>
+        {(quickview?.budget || ['dcp','commander','executive_staff','finance'].includes(user?.role)) && (
+          <>
+            <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-budget-estimated">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Budget Estimated</p>
+                  <p className="text-3xl font-bold text-[#00205B] font-mono">{formatCurrency(stats?.budget?.total_estimated || 0)}</p>
+                </div>
+                <div className="p-2 bg-[#00205B]/10 rounded-sm"><DollarSign className="w-5 h-5 text-[#00205B]" /></div>
               </div>
-              <div className="flex items-center gap-1 text-xs text-[#BF0D3E]">
-                <UserX className="w-4 h-4" /> Unpaid
+            </div>
+            <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-budget-variance">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Budget Variance</p>
+                  <p className={`text-3xl font-bold font-mono ${(stats?.budget?.variance || 0) >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                    {formatCurrency(stats?.budget?.variance || 0)}
+                  </p>
+                </div>
+                <div className={`p-2 rounded-sm ${(stats?.budget?.variance || 0) >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                  {(stats?.budget?.variance || 0) >= 0 ? <TrendingUp className="w-5 h-5 text-emerald-600" /> : <TrendingDown className="w-5 h-5 text-[#BF0D3E]" />}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Budget Estimated */}
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-budget-estimated">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Budget Estimated</p>
-              <p className="text-3xl font-bold text-[#00205B] font-mono">{formatCurrency(stats?.budget?.total_estimated || 0)}</p>
-            </div>
-            <div className="p-2 bg-[#00205B]/10 rounded-sm">
-              <DollarSign className="w-5 h-5 text-[#00205B]" />
-            </div>
-          </div>
-        </div>
-
-        {/* Budget Variance */}
-        <div className="bg-white border border-slate-200 rounded-sm p-4" data-testid="stat-budget-variance">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Budget Variance</p>
-              <p className={`text-3xl font-bold font-mono ${(stats?.budget?.variance || 0) >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
-                {formatCurrency(stats?.budget?.variance || 0)}
-              </p>
-            </div>
-            <div className={`p-2 rounded-sm ${(stats?.budget?.variance || 0) >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>
-              {(stats?.budget?.variance || 0) >= 0 
-                ? <TrendingUp className="w-5 h-5 text-emerald-600" />
-                : <TrendingDown className="w-5 h-5 text-[#BF0D3E]" />
-              }
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
-      {/* Charts Row */}
+      {/* Bottom Row: Active Users */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Participant Types */}
-        <div className="bg-white border border-slate-200 rounded-sm">
-          <div className="border-b border-slate-100 p-4">
-            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Participants by Type
-            </h2>
-          </div>
-          <div className="p-4">
-            {participantTypeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={participantTypeData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={{ stroke: '#E2E8F0' }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={{ stroke: '#E2E8F0' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#fff', 
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '2px'
-                    }}
-                  />
-                  <Bar dataKey="value" fill="#00205B" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-slate-400">
-                No participant data available
+        <div className="lg:col-span-3">
+          <div className="bg-white border border-slate-200 rounded-sm" data-testid="active-users-widget">
+            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+              <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>Who's Online</h2>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-sm font-bold text-emerald-600">{activeUsers.count}</span>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Gender Distribution */}
-        <div className="bg-white border border-slate-200 rounded-sm">
-          <div className="border-b border-slate-100 p-4">
-            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Gender Distribution
-            </h2>
-          </div>
-          <div className="p-4">
-            {genderData.some(d => d.value > 0) ? (
-              <div className="flex items-center justify-center gap-8">
-                <ResponsiveContainer width={200} height={200}>
-                  <PieChart>
-                    <Pie
-                      data={genderData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={80}
-                      dataKey="value"
-                      paddingAngle={2}
-                    >
-                      {genderData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Legend beside the chart */}
-                <div className="space-y-3">
-                  {genderData.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-sm" 
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
+            </div>
+            <div className="p-4">
+              {activeUsers.users.length === 0 ? (
+                <div className="text-center text-slate-400 py-4">
+                  <Radio className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No other users online</p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {activeUsers.users.map((u) => (
+                    <div key={u.id} className="flex items-center gap-2 p-2 rounded-sm hover:bg-slate-50 transition-colors">
+                      <div className="relative">
+                        <div className="w-8 h-8 rounded-full bg-[#00205B] text-white flex items-center justify-center text-sm font-bold">
+                          {u.name?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
+                      </div>
                       <div>
-                        <p className="font-medium text-slate-700">{entry.name}</p>
-                        <p className="text-sm text-slate-500">
-                          {entry.value} ({((entry.value / genderData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0) || 0}%)
-                        </p>
+                        <p className="text-sm font-medium text-slate-900">{u.name}</p>
+                        <p className="text-xs text-slate-500 capitalize">{ROLE_LABELS[u.role] || u.role}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-slate-400">
-                No gender data available
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Active Users Widget */}
-        <div className="bg-white border border-slate-200 rounded-sm" data-testid="active-users-widget">
-          <div className="border-b border-slate-100 p-4 flex items-center justify-between">
-            <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Who's Online
-            </h2>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-sm font-bold text-emerald-600">{activeUsers.count}</span>
+              )}
             </div>
-          </div>
-          <div className="p-4 max-h-[280px] overflow-y-auto">
-            {activeUsers.users.length === 0 ? (
-              <div className="text-center text-slate-400 py-4">
-                <Radio className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No other users online</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {activeUsers.users.map((u) => (
-                  <div 
-                    key={u.id} 
-                    className="flex items-center gap-3 p-2 rounded-sm hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="relative">
-                      <div className="w-8 h-8 rounded-full bg-[#00205B] text-white flex items-center justify-center text-sm font-bold">
-                        {u.name?.charAt(0)?.toUpperCase() || '?'}
-                      </div>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{u.name}</p>
-                      <p className="text-xs text-slate-500 capitalize">{ROLE_LABELS[u.role] || u.role}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

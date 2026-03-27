@@ -60,6 +60,11 @@ export const getDashboardStats = async () => {
   return response.data;
 };
 
+export const getDashboardQuickview = async () => {
+  const response = await axios.get(`${API}/stats/dashboard-quickview`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Participants
 export const getParticipants = async () => {
   const response = await axios.get(`${API}/participants`, { headers: getAuthHeaders() });
