@@ -98,6 +98,14 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Consistent counts across all pages**: Total=115, Students=40, Cadre=64, Staff=11
 - **Testing**: 100% pass rate (20/20 backend + full frontend validation, iteration_35)
 
+### Mar 27, 2026 - Role-Specific Dashboard Quick-View
+- **Backend**: New `GET /api/stats/dashboard-quickview` endpoint returns role-filtered sections
+- **Frontend**: "Your Quick View" card grid on dashboard showing role-relevant items
+- **Sections**: admin (pending approvals, unlinked users), check_in (progress %), health (open incidents), budget (variance), logistics (supply/radios/lost), barracks (bunk %), training (cadre issues), dining (headcount), reports (pending/escalated), my_unit (flight info)
+- **Role filtering**: Commander sees all 9 sections; cadre only sees my_unit; budget stats hidden for non-finance roles
+- **Cards are clickable and navigate to relevant pages**
+- **Testing**: 100% pass rate (26/26 backend + full frontend, iteration_36)
+
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
 - **Sections**: Logistics, Communications, Public Affairs, Dining Services, Health Services
