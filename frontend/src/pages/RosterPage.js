@@ -39,7 +39,8 @@ import {
   Check,
   GraduationCap,
   Briefcase,
-  Star
+  Star,
+  FileText
 } from 'lucide-react';
 
 const RosterPage = () => {
@@ -73,6 +74,9 @@ const RosterPage = () => {
   // Participant detail view
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  // PDF Export
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // Removal modal
   const [isRemovalModalOpen, setIsRemovalModalOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
@@ -455,6 +459,33 @@ const RosterPage = () => {
     e.target.value = '';
   };
 
+  const handleExportPdf = async (format) => {
+    setExporting(true);
+    setExportMenuOpen(false);
+    try {
+      const API = process.env.REACT_APP_BACKEND_URL;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API}/api/participants/export-pdf?format=${format}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cap_roster_${format}_${new Date().toISOString().slice(0,10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully');
+    } catch (error) {
+      toast.error('Failed to export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const resetForm = () => {
     setEditingParticipant(null);
     setFormData({
@@ -621,6 +652,61 @@ const RosterPage = () => {
                 </span>
               </Button>
             </label>
+
+            {/* PDF Export Dropdown */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                className="rounded-sm border-slate-300 text-slate-700 hover:bg-slate-50"
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                disabled={exporting}
+                data-testid="export-pdf-btn"
+              >
+                {exporting ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4 mr-2" />
+                )}
+                {exporting ? 'Exporting...' : 'Export PDF'}
+              </Button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-sm shadow-lg w-56" data-testid="export-pdf-menu">
+                  <button
+                    onClick={() => handleExportPdf('simple')}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    data-testid="export-simple"
+                  >
+                    <FileText className="w-4 h-4 text-[#00205B]" />
+                    <div>
+                      <p className="font-medium text-slate-900">Complete Roster</p>
+                      <p className="text-xs text-slate-500">All participants in one table</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleExportPdf('by_flight')}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 border-t border-slate-100"
+                    data-testid="export-by-flight"
+                  >
+                    <Users className="w-4 h-4 text-[#00205B]" />
+                    <div>
+                      <p className="font-medium text-slate-900">By Flight</p>
+                      <p className="text-xs text-slate-500">Grouped by flight assignment</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleExportPdf('by_type')}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 border-t border-slate-100"
+                    data-testid="export-by-type"
+                  >
+                    <Shield className="w-4 h-4 text-[#00205B]" />
+                    <div>
+                      <p className="font-medium text-slate-900">By Type</p>
+                      <p className="text-xs text-slate-500">Staff, Cadre, Students sections</p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
             
             <Dialog open={isModalOpen} onOpenChange={(open) => {
               setIsModalOpen(open);

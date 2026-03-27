@@ -2305,6 +2305,206 @@ async def export_analytics_summary(
     )
 
 
+@api_router.get("/participants/export-pdf")
+async def export_roster_pdf(
+    format: str = "simple",
+    user: dict = Depends(get_current_user)
+):
+    """Export roster as PDF. format: simple, by_flight, by_type"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+    from collections import Counter
+
+    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
+    if not participants:
+        raise HTTPException(status_code=404, detail="No participants found")
+
+    output = BytesIO()
+    timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    doc = SimpleDocTemplate(output, pagesize=landscape(letter), topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleCustom', parent=styles['Title'], fontSize=18, textColor=colors.HexColor('#00205B'), spaceAfter=6)
+    subtitle_style = ParagraphStyle('SubtitleCustom', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), spaceAfter=12)
+    section_style = ParagraphStyle('SectionCustom', parent=styles['Heading2'], fontSize=13, textColor=colors.HexColor('#00205B'), spaceBefore=16, spaceAfter=6)
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=7, leading=9)
+    header_cell_style = ParagraphStyle('HeaderCell', parent=styles['Normal'], fontSize=7, leading=9, textColor=colors.white)
+
+    CAP_BLUE = colors.HexColor('#00205B')
+    CAP_RED = colors.HexColor('#BF0D3E')
+    LIGHT_GRAY = colors.HexColor('#F1F5F9')
+    BORDER_GRAY = colors.HexColor('#CBD5E1')
+
+    elements = []
+
+    # ─── Title ───
+    elements.append(Paragraph("Tennessee Wing CAP Encampment — Roster Report", title_style))
+    gen_date = datetime.now(timezone.utc).strftime('%B %d, %Y at %H:%M UTC')
+    format_labels = {"simple": "Complete Roster", "by_flight": "Roster by Flight", "by_type": "Roster by Type"}
+    elements.append(Paragraph(f"Format: {format_labels.get(format, format)} &bull; Generated: {gen_date}", subtitle_style))
+
+    # ─── Summary Stats ───
+    total = len(participants)
+    students = [p for p in participants if p.get('participant_type') in ['basic_student', 'student']]
+    cadre = [p for p in participants if p.get('participant_type') in ['cadre', 'exec_cadre']]
+    staff = [p for p in participants if p.get('participant_type') == 'staff']
+    paid = sum(1 for p in participants if p.get('paid') or p.get('paid_in_full'))
+    males = sum(1 for p in participants if (p.get('gender') or '').upper() in ['M', 'MALE'])
+    females = sum(1 for p in participants if (p.get('gender') or '').upper() in ['F', 'FEMALE'])
+
+    flights = Counter(p.get('flight', 'Unassigned') or 'Unassigned' for p in participants if p.get('participant_type') in ['basic_student', 'student', 'cadre', 'exec_cadre'])
+    wings = Counter(p.get('wing', 'Unknown') or 'Unknown' for p in participants)
+    units = Counter(p.get('unit', 'Unknown') or 'Unknown' for p in participants)
+
+    stats_data = [
+        [Paragraph('<b>Total Participants</b>', cell_style), Paragraph(str(total), cell_style),
+         Paragraph('<b>Students</b>', cell_style), Paragraph(str(len(students)), cell_style),
+         Paragraph('<b>Cadre</b>', cell_style), Paragraph(str(len(cadre)), cell_style),
+         Paragraph('<b>Staff</b>', cell_style), Paragraph(str(len(staff)), cell_style)],
+        [Paragraph('<b>Paid</b>', cell_style), Paragraph(f"{paid}/{total}", cell_style),
+         Paragraph('<b>Unpaid</b>', cell_style), Paragraph(str(total - paid), cell_style),
+         Paragraph('<b>Male</b>', cell_style), Paragraph(str(males), cell_style),
+         Paragraph('<b>Female</b>', cell_style), Paragraph(str(females), cell_style)],
+    ]
+    stats_table = Table(stats_data, colWidths=[1.1*inch, 0.6*inch]*4)
+    stats_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), LIGHT_GRAY),
+        ('BOX', (0, 0), (-1, -1), 0.5, BORDER_GRAY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, BORDER_GRAY),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(stats_table)
+    elements.append(Spacer(1, 8))
+
+    # Flight distribution row
+    flight_items = sorted(flights.items(), key=lambda x: x[0])
+    if flight_items:
+        flight_str = " &bull; ".join([f"<b>{f}</b>: {c}" for f, c in flight_items])
+        elements.append(Paragraph(f"<b>Flights:</b> {flight_str}", ParagraphStyle('FlightStats', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+        elements.append(Spacer(1, 4))
+
+    # Wing distribution row
+    wing_items = sorted(wings.items(), key=lambda x: -x[1])[:8]
+    if wing_items:
+        wing_str = " &bull; ".join([f"<b>{w}</b>: {c}" for w, c in wing_items])
+        elements.append(Paragraph(f"<b>Wings:</b> {wing_str}", ParagraphStyle('WingStats', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+        elements.append(Spacer(1, 4))
+
+    # Unit count
+    elements.append(Paragraph(f"<b>Units Represented:</b> {len(units)}", ParagraphStyle('UnitStats', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#475569'))))
+    elements.append(Spacer(1, 8))
+    elements.append(HRFlowable(width="100%", thickness=1, color=BORDER_GRAY))
+    elements.append(Spacer(1, 8))
+
+    def build_table(data_rows, title=None):
+        """Build a styled participant table"""
+        if title:
+            elements.append(Paragraph(title, section_style))
+
+        headers = ['#', 'CAPID', 'Rank', 'Last Name', 'First Name', 'Type', 'Flight', 'Unit', 'Wing', 'Gender', 'Age', 'Phone', 'Email', 'Paid']
+        header_row = [Paragraph(f'<b>{h}</b>', header_cell_style) for h in headers]
+        table_data = [header_row]
+
+        for idx, p in enumerate(data_rows, 1):
+            paid_status = 'Yes' if p.get('paid') or p.get('paid_in_full') else 'No'
+            ptype = p.get('participant_type', '')
+            if ptype in ['basic_student', 'student']:
+                ptype_label = 'Student'
+            elif ptype in ['cadre', 'exec_cadre']:
+                ptype_label = 'Cadre'
+            elif ptype == 'staff':
+                ptype_label = 'Staff'
+            else:
+                ptype_label = ptype.title()
+
+            row = [
+                Paragraph(str(idx), cell_style),
+                Paragraph(str(p.get('capid', '')), cell_style),
+                Paragraph(str(p.get('rank', '')), cell_style),
+                Paragraph(str(p.get('last_name', '')), cell_style),
+                Paragraph(str(p.get('first_name', '')), cell_style),
+                Paragraph(ptype_label, cell_style),
+                Paragraph(str(p.get('flight', '') or ''), cell_style),
+                Paragraph(str(p.get('unit', '')), cell_style),
+                Paragraph(str(p.get('wing', '')), cell_style),
+                Paragraph(str(p.get('gender', '')), cell_style),
+                Paragraph(str(p.get('age', '') or ''), cell_style),
+                Paragraph(str(p.get('cell_phone', '') or p.get('phone', '') or ''), cell_style),
+                Paragraph(str(p.get('email', '') or ''), cell_style),
+                Paragraph(paid_status, cell_style),
+            ]
+            table_data.append(row)
+
+        col_widths = [0.3*inch, 0.55*inch, 0.5*inch, 0.9*inch, 0.8*inch, 0.5*inch, 0.55*inch, 0.65*inch, 0.6*inch, 0.45*inch, 0.3*inch, 0.85*inch, 1.4*inch, 0.35*inch]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        style_cmds = [
+            ('BACKGROUND', (0, 0), (-1, 0), CAP_BLUE),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTSIZE', (0, 0), (-1, 0), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('BOX', (0, 0), (-1, -1), 0.5, BORDER_GRAY),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, CAP_BLUE),
+            ('INNERGRID', (0, 1), (-1, -1), 0.25, BORDER_GRAY),
+        ]
+        # Zebra stripe
+        for i in range(1, len(table_data)):
+            if i % 2 == 0:
+                style_cmds.append(('BACKGROUND', (0, i), (-1, i), LIGHT_GRAY))
+        # Highlight unpaid
+        for i in range(1, len(table_data)):
+            if table_data[i][-1] and hasattr(table_data[i][-1], 'text') and 'No' in str(table_data[i][-1].text if hasattr(table_data[i][-1], 'text') else ''):
+                style_cmds.append(('TEXTCOLOR', (-1, i), (-1, i), CAP_RED))
+
+        t.setStyle(TableStyle(style_cmds))
+        elements.append(t)
+        elements.append(Spacer(1, 12))
+
+    sorted_participants = sorted(participants, key=lambda p: (p.get('last_name', ''), p.get('first_name', '')))
+
+    if format == "simple":
+        build_table(sorted_participants, "Complete Roster")
+
+    elif format == "by_flight":
+        flight_groups = {}
+        for p in sorted_participants:
+            flight = p.get('flight', '') or 'Unassigned'
+            flight_groups.setdefault(flight, []).append(p)
+        for flight_name in sorted(flight_groups.keys()):
+            members = flight_groups[flight_name]
+            build_table(members, f"Flight: {flight_name} ({len(members)} members)")
+
+    elif format == "by_type":
+        for ptype, label in [('staff', 'Staff (Senior Members)'), ('cadre', 'Cadre'), ('basic_student', 'Basic Students')]:
+            if ptype == 'cadre':
+                group = [p for p in sorted_participants if p.get('participant_type') in ['cadre', 'exec_cadre']]
+            elif ptype == 'basic_student':
+                group = [p for p in sorted_participants if p.get('participant_type') in ['basic_student', 'student']]
+            else:
+                group = [p for p in sorted_participants if p.get('participant_type') == ptype]
+            if group:
+                build_table(group, f"{label} ({len(group)})")
+
+    doc.build(elements)
+    output.seek(0)
+    filename = f"cap_roster_{format}_{timestamp_str}.pdf"
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/participants/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(participant_id: str, user: dict = Depends(get_current_user)):
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
