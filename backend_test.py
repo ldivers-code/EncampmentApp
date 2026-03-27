@@ -5,7 +5,7 @@ from datetime import datetime
 
 class CAPEncampmentAPITester:
     def __init__(self):
-        self.base_url = "https://tn-wing-cadets.preview.emergentagent.com/api"
+        self.base_url = "https://wing-ops.preview.emergentagent.com/api"
         self.token = None
         self.user_id = None
         self.tests_run = 0

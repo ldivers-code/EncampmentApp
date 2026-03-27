@@ -1474,7 +1474,7 @@ async def approve_user(
     )
     
     # Send approval email in background
-    app_url = os.environ.get('APP_URL', 'https://tn-wing-cadets.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://wing-ops.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),
@@ -1649,6 +1649,111 @@ async def find_matching_participants(
                     matches.append({"match_type": "name", "participant": p, "confidence": "medium"})
     
     return {"user": target_user, "matches": matches[:10]}  # Limit to 10 matches
+
+
+
+@api_router.post("/sync/users-participants")
+async def sync_users_to_participants(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.PLANS_PROGRAMS]))
+):
+    """Auto-link users to participants by CAPID, and auto-create participant records for unmatched users"""
+    all_users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
+    all_participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
+    
+    p_by_capid = {p["capid"]: p for p in all_participants if p.get("capid")}
+    p_ids = {p["id"] for p in all_participants}
+    
+    linked = 0
+    created = 0
+    already_linked = 0
+    skipped = 0
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for u in all_users:
+        user_capid = u.get("capid", "")
+        user_id = u["id"]
+        
+        # Already linked
+        if u.get("linked_participant_id") and u["linked_participant_id"] in p_ids:
+            already_linked += 1
+            continue
+        
+        # Try to match by CAPID
+        if user_capid and user_capid in p_by_capid:
+            participant = p_by_capid[user_capid]
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {
+                    "linked_participant_id": participant["id"],
+                    "updated_at": now
+                }}
+            )
+            linked += 1
+            continue
+        
+        # No CAPID match - check if user has real data (not just test accounts)
+        if not user_capid or not u.get("name"):
+            skipped += 1
+            continue
+        
+        # Auto-create a participant record for this user
+        role = u.get("role", "cadre")
+        if role in ["dcp", "commander", "executive_staff", "staff", "finance", "plans_programs", "logistics", "training_officer", "health_services", "dining_facility"]:
+            ptype = "staff"
+        elif role in ["squadron_commander"]:
+            ptype = "cadre"
+        else:
+            ptype = "cadre"
+        
+        name_parts = (u.get("name") or "").split()
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[-1] if len(name_parts) > 1 else ""
+        
+        new_participant = {
+            "id": str(uuid.uuid4()),
+            "capid": user_capid,
+            "first_name": first_name,
+            "last_name": last_name,
+            "name": u.get("name", ""),
+            "email": u.get("email", ""),
+            "rank": u.get("rank", ""),
+            "unit": u.get("unit", ""),
+            "wing": u.get("wing", ""),
+            "gender": u.get("gender", ""),
+            "age": u.get("age"),
+            "phone": u.get("phone", ""),
+            "cell_phone": u.get("cell_phone", ""),
+            "participant_type": ptype,
+            "member_type": "SENIOR" if ptype == "staff" else "CADET",
+            "flight": u.get("flight", ""),
+            "squadron": u.get("squadron", ""),
+            "registration_status": "user_synced",
+            "created_at": now,
+            "updated_at": now,
+            "is_removed": False
+        }
+        
+        await db.participants.insert_one(new_participant)
+        
+        # Link user to new participant
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "linked_participant_id": new_participant["id"],
+                "updated_at": now
+            }}
+        )
+        created += 1
+    
+    return {
+        "message": f"Sync complete: {linked} linked, {created} created, {already_linked} already linked, {skipped} skipped",
+        "linked": linked,
+        "created": created,
+        "already_linked": already_linked,
+        "skipped": skipped,
+        "total_users": len(all_users)
+    }
+
 
 
 # ================= PARTICIPANT ROUTES =================

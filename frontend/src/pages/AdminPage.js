@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncUsersToParticipants } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -49,6 +49,9 @@ const AdminPage = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+
+  // User-Participant sync state
+  const [syncingParticipants, setSyncingParticipants] = useState(false);
 
   // Google Sheets sync state
   const [gsheetSettings, setGsheetSettings] = useState({
@@ -416,6 +419,19 @@ const AdminPage = () => {
     }
   };
 
+  const handleSyncUsersToRoster = async () => {
+    setSyncingParticipants(true);
+    try {
+      const result = await syncUsersToParticipants();
+      toast.success(result.message);
+      loadUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to sync users to roster');
+    } finally {
+      setSyncingParticipants(false);
+    }
+  };
+
   const getRoleBadgeColor = (role) => {
     return roles.find(r => r.value === role)?.color || roles[2].color;
   };
@@ -640,7 +656,20 @@ const AdminPage = () => {
           <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
             Registered Users
           </h2>
-          <span className="text-xs sm:text-sm text-slate-500">{users.length} users</span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncUsersToRoster}
+              disabled={syncingParticipants}
+              className="rounded-sm text-xs"
+              data-testid="sync-users-to-roster-btn"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${syncingParticipants ? 'animate-spin' : ''}`} />
+              {syncingParticipants ? 'Syncing...' : 'Sync Users to Roster'}
+            </Button>
+            <span className="text-xs sm:text-sm text-slate-500">{users.length} users</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full cap-table" data-testid="users-table">
@@ -671,6 +700,11 @@ const AdminPage = () => {
                       {user.name}
                       {user.id === currentUser?.id && (
                         <span className="ml-2 text-xs text-slate-400">(You)</span>
+                      )}
+                      {user.linked_participant_id ? (
+                        <span className="ml-2 text-xs text-emerald-600" title="Linked to roster participant"><Link className="w-3 h-3 inline" /></span>
+                      ) : (
+                        <span className="ml-2 text-xs text-amber-500" title="Not linked to roster"><AlertTriangle className="w-3 h-3 inline" /></span>
                       )}
                     </td>
                     <td className="text-slate-600 text-sm">{user.email}</td>

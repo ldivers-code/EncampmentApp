@@ -490,6 +490,11 @@ export const approveUser = async (userId) => {
   return response.data;
 };
 
+export const syncUsersToParticipants = async () => {
+  const response = await axios.post(`${API}/sync/users-participants`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const linkUserToParticipant = async (userId, participantId, autoPopulate = true) => {
   const response = await axios.post(
     `${API}/users/${userId}/link-participant?participant_id=${participantId}&auto_populate=${autoPopulate}`,
