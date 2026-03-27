@@ -79,8 +79,17 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Support Cadre Dual Assignment (section job + flight sub-assignment)**
 - [x] **Squadron Commander Role (with squadron/flight options)**
 - [x] **Individual Access Control (permission toggles + page visibility checkboxes)**
+- [x] **User-to-Participant Auto-Sync (link login accounts to roster by CAPID, auto-create missing participant records)**
 
 ## What's Been Implemented
+
+### Mar 27, 2026 - User-to-Participant Auto-Sync
+- **Backend**: `POST /api/sync/users-participants` endpoint auto-links users to participants by CAPID, creates missing participant records for unmatched users
+- **Frontend**: "Sync Users to Roster" button on Admin > All Users tab
+- **Link status indicators**: Green link icon for linked users, amber warning icon for unlinked users
+- **Idempotent**: Re-running sync doesn't create duplicates (tracks already_linked count)
+- **Role-restricted**: Only Commander, DCP, Executive Staff, Plans & Programs can execute
+- **Testing**: 100% pass rate (9/9 backend + full frontend validation, iteration_34)
 
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
