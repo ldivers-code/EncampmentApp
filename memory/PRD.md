@@ -82,6 +82,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **User-to-Participant Auto-Sync (link login accounts to roster by CAPID, auto-create missing participant records)**
 - [x] **Rich Text Support for Org Chart Responsibilities field (bold, italic, bullets, numbered lists)**
 - [x] **Inline Health Data Editing (add/edit/delete allergies, toggle OTC approvals from cadet detail sheet)**
+- [x] **PDF Export for Roster Reports (3 formats: complete, by flight, by type; with summary stats)**
 
 ## What's Been Implemented
 
@@ -121,6 +122,14 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Allergy form**: Name, type, anaphylaxis/EpiPen/inhaler flags, reactions, treatments, emergency contacts
 - **OTC editing**: Toggle switches for 13 OTC medications with save/cancel
 - **Testing**: 100% pass rate (15/15 backend + full frontend, iteration_37)
+
+### Mar 27, 2026 - P3: PDF Export for Roster Reports
+- **Backend**: `GET /api/participants/export-pdf?format=simple|by_flight|by_type` using reportlab
+- **3 formats**: Complete roster table, grouped by flight, grouped by type (Staff/Cadre/Students)
+- **Summary stats**: Total participants, students/cadre/staff counts, paid/unpaid, male/female, flight distribution, wing distribution, units represented
+- **Frontend**: "Export PDF" dropdown button on Roster page with 3 options
+- **Styling**: CAP blue headers, zebra striping, landscape layout, repeating headers
+- **Testing**: 100% pass rate (9/9 backend + full frontend, iteration_38)
 
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
