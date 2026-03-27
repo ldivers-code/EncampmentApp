@@ -91,6 +91,13 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Role-restricted**: Only Commander, DCP, Executive Staff, Plans & Programs can execute
 - **Testing**: 100% pass rate (9/9 backend + full frontend validation, iteration_34)
 
+### Mar 27, 2026 - Data Consistency Fix (Roster, Check-In, Org Chart, Barracks)
+- **Root cause**: Missing `is_removed` filter on 10+ participant query endpoints caused inflated/inaccurate counts
+- **Fixed endpoints**: GET /api/participants, /api/participants/stats, /api/participants/analytics/detailed, /api/check-in/roster, /api/check-in/summary, /api/barracks/unassigned-participants, /api/participants/pending-payments, /api/participants/analytics/export, /api/participants/analytics/summary-export, food expense settings
+- **Sync duplicate prevention**: Fixed auto-sync to prevent duplicate CAPID participant creation, cleaned 3 duplicate records
+- **Consistent counts across all pages**: Total=115, Students=40, Cadre=64, Staff=11
+- **Testing**: 100% pass rate (20/20 backend + full frontend validation, iteration_35)
+
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
 - **Sections**: Logistics, Communications, Public Affairs, Dining Services, Health Services
