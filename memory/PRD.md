@@ -80,6 +80,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Squadron Commander Role (with squadron/flight options)**
 - [x] **Individual Access Control (permission toggles + page visibility checkboxes)**
 - [x] **User-to-Participant Auto-Sync (link login accounts to roster by CAPID, auto-create missing participant records)**
+- [x] **Rich Text Support for Org Chart Responsibilities field (bold, italic, bullets, numbered lists)**
+- [x] **Inline Health Data Editing (add/edit/delete allergies, toggle OTC approvals from cadet detail sheet)**
 
 ## What's Been Implemented
 
@@ -105,6 +107,20 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Role filtering**: Commander sees all 9 sections; cadre only sees my_unit; budget stats hidden for non-finance roles
 - **Cards are clickable and navigate to relevant pages**
 - **Testing**: 100% pass rate (26/26 backend + full frontend, iteration_36)
+
+### Mar 27, 2026 - P1-A: Rich Text for Org Chart Responsibilities
+- **Component**: `RichTextEditor.js` using `react-quill-new` (React 19 compatible)
+- **Features**: Bold, italic, underline, bullet lists, numbered lists, clean formatting
+- **Legacy support**: `plainTextToHtml()` converts existing `- ` prefixed text to proper HTML lists
+- **Display**: `RichTextDisplay` renders HTML in read-only mode with prose styling
+- **Testing**: 100% pass rate (iteration_37)
+
+### Mar 27, 2026 - P1-B: Inline Health Data Editing
+- **New backend endpoints**: POST/PUT/DELETE for allergies, PUT for OTC approvals (all require `health_full` permission)
+- **Frontend**: Add/Edit/Delete buttons on allergy items, inline OTC toggle switches on cadet detail sheet
+- **Allergy form**: Name, type, anaphylaxis/EpiPen/inhaler flags, reactions, treatments, emergency contacts
+- **OTC editing**: Toggle switches for 13 OTC medications with save/cancel
+- **Testing**: 100% pass rate (15/15 backend + full frontend, iteration_37)
 
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
