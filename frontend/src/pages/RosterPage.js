@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import CadetHealthSection from '../components/CadetHealthSection';
+import FlightManager from '../components/FlightManager';
 import { 
   Plus, 
   Search, 
@@ -77,6 +78,8 @@ const RosterPage = () => {
   // PDF Export
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Flight Manager view
+  const [showFlightManager, setShowFlightManager] = useState(false);
   // Removal modal
   const [isRemovalModalOpen, setIsRemovalModalOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
@@ -1013,9 +1016,9 @@ const RosterPage = () => {
         <div className="ml-auto flex items-center gap-2">
           <div className="flex bg-slate-100 rounded-sm p-0.5">
             <button
-              onClick={() => { setRosterView('master'); setCurrentPage(1); }}
+              onClick={() => { setShowFlightManager(false); setRosterView('master'); setCurrentPage(1); }}
               className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                rosterView === 'master' 
+                !showFlightManager && rosterView === 'master' 
                   ? 'bg-[#00205B] text-white' 
                   : 'text-slate-600 hover:text-slate-900'
               }`}
@@ -1023,21 +1026,35 @@ const RosterPage = () => {
               Assigned
             </button>
             <button
-              onClick={() => { setRosterView('full'); setCurrentPage(1); }}
+              onClick={() => { setShowFlightManager(false); setRosterView('full'); setCurrentPage(1); }}
               className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                rosterView === 'full' 
+                !showFlightManager && rosterView === 'full' 
                   ? 'bg-[#00205B] text-white' 
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               All
             </button>
+            {canEdit() && (
+              <button
+                onClick={() => setShowFlightManager(!showFlightManager)}
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors flex items-center gap-1 ${
+                  showFlightManager 
+                    ? 'bg-[#00205B] text-white' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                data-testid="flight-manager-toggle"
+              >
+                <Users className="w-3 h-3" />
+                Flights
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Flight Distribution (Students tab only) */}
-      {categoryTab === 'students' && flightDistribution && (
+      {!showFlightManager && categoryTab === 'students' && flightDistribution && (
         <div className="bg-white border border-slate-200 rounded-sm p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold uppercase tracking-tight text-[#00205B]">Flight Distribution</h3>
@@ -1070,7 +1087,7 @@ const RosterPage = () => {
       )}
 
       {/* Stats Dashboard */}
-      {stats && (
+      {!showFlightManager && stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
           <div className="bg-white border border-slate-200 rounded-sm p-4">
             <div className="flex items-center justify-between">
@@ -1138,6 +1155,11 @@ const RosterPage = () => {
         </div>
       )}
 
+      {/* Flight Manager View */}
+      {showFlightManager ? (
+        <FlightManager participants={participants} onUpdate={loadParticipants} />
+      ) : (
+      <>
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
         {/* Main filter row */}
@@ -1625,6 +1647,9 @@ const RosterPage = () => {
           </div>
         )}
       </div>
+
+      </>
+      )}
 
       {/* Participant Detail Modal */}
       <Dialog open={isDetailOpen} onOpenChange={(open) => {

@@ -1,0 +1,135 @@
+{
+  "summary": "P4: Drag-and-Drop Flight Reassignment UI - All tests passed. Backend API (16/16 tests) and Frontend UI verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RosterPage table",
+        "issues": ["React hydration warnings in console about span elements inside table elements (th, tr, td, tbody) - cosmetic issue, does not affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_flight_reassignment.py",
+    "/app/test_reports/pytest/flight_reassignment_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_flight_reassignment.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "commander": {"email": "testadmin@cap.gov", "password": "TestPass123!", "role": "commander"}
+  },
+  "seed_data_creation": "None - used existing 115 participants (40 students, 64 cadre, 11 staff)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "P4 Flight Reassignment feature fully tested. All drag-and-drop functionality working. Flight Manager shows 7 columns (Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Unassigned). 104 manageable participants (students + cadre). Staff are correctly excluded from Flight Manager.",
+  "verified_features": [
+    {
+      "feature": "PUT /api/participants/{id}/assignment correctly updates flight and auto-maps squadron",
+      "status": "PASS",
+      "details": "All 6 flight-squadron mappings verified: alpha/bravo -> 6th_cts, charlie/delta -> 21st_cts, echo/foxtrot -> 22nd_cts"
+    },
+    {
+      "feature": "PUT /api/participants/{id}/assignment validates flight names (rejects invalid flights)",
+      "status": "PASS",
+      "details": "Invalid flight names return 400 Bad Request"
+    },
+    {
+      "feature": "PUT /api/participants/{id}/assignment requires proper role permissions",
+      "status": "PASS",
+      "details": "Unauthenticated requests return 401/403"
+    },
+    {
+      "feature": "Flight Manager toggle button (data-testid='flight-manager-toggle') visible on Roster page",
+      "status": "PASS",
+      "details": "Button labeled 'Flights' found and clickable"
+    },
+    {
+      "feature": "Clicking Flights toggle shows 7 flight columns (Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Unassigned)",
+      "status": "PASS",
+      "details": "All 7 columns with data-testid='flight-column-{name}' found"
+    },
+    {
+      "feature": "Each column shows correct student and cadre counts in header",
+      "status": "PASS",
+      "details": "Headers show format like '6 stu • 1 cadre' with total count badge"
+    },
+    {
+      "feature": "Total assigned count matches",
+      "status": "PASS",
+      "details": "Shows '44/104 assigned to flights' (104 manageable = students + cadre)"
+    },
+    {
+      "feature": "Search filter works in Flight Manager view",
+      "status": "PASS",
+      "details": "Search input (data-testid='flight-manager-search') filters cards by name/CAPID"
+    },
+    {
+      "feature": "Dragging a participant card from one flight column to another triggers the API call and updates the view",
+      "status": "PASS",
+      "details": "Successfully dragged 'Commander, Flight' from Alpha to Bravo. Toast notification shown. Counts updated correctly (Alpha: 7->6, Bravo: 9->10)"
+    },
+    {
+      "feature": "Students can be moved between flights",
+      "status": "PASS",
+      "details": "basic_student participants can be reassigned via API"
+    },
+    {
+      "feature": "Cadre can be moved between flights",
+      "status": "PASS",
+      "details": "cadre participants can be reassigned via API"
+    },
+    {
+      "feature": "Staff participants excluded from Flight Manager",
+      "status": "PASS",
+      "details": "FlightManager only shows students and cadre (104 cards), not staff (11 participants)"
+    },
+    {
+      "feature": "Empty flight (unassign) allowed",
+      "status": "PASS",
+      "details": "Setting flight to empty string moves participant to Unassigned column"
+    },
+    {
+      "feature": "Non-existent participant returns 404",
+      "status": "PASS",
+      "details": "Invalid participant ID returns 404 Not Found"
+    },
+    {
+      "feature": "Assignment changes persist in database",
+      "status": "PASS",
+      "details": "GET after PUT confirms flight and squadron changes are saved"
+    }
+  ],
+  "flight_manager_details": {
+    "component": "FlightManager.js",
+    "dnd_library": "@dnd-kit/core and @dnd-kit/sortable",
+    "flights": ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Unassigned"],
+    "squadron_mapping": {
+      "alpha": "6th_cts",
+      "bravo": "6th_cts",
+      "charlie": "21st_cts",
+      "delta": "21st_cts",
+      "echo": "22nd_cts",
+      "foxtrot": "22nd_cts"
+    },
+    "manageable_types": ["basic_student", "advanced_student", "student", "cadre", "exec_cadre"],
+    "data_testids": {
+      "toggle_button": "flight-manager-toggle",
+      "container": "flight-manager",
+      "search_input": "flight-manager-search",
+      "flight_column": "flight-column-{name}",
+      "drag_card": "drag-card-{participant_id}"
+    }
+  }
+}
