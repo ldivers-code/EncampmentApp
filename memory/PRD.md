@@ -83,6 +83,7 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Rich Text Support for Org Chart Responsibilities field (bold, italic, bullets, numbered lists)**
 - [x] **Inline Health Data Editing (add/edit/delete allergies, toggle OTC approvals from cadet detail sheet)**
 - [x] **PDF Export for Roster Reports (3 formats: complete, by flight, by type; with summary stats)**
+- [x] **Drag-and-Drop Flight Reassignment UI (Kanban-style flight columns with drag-and-drop)**
 
 ## What's Been Implemented
 
@@ -130,6 +131,14 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - **Frontend**: "Export PDF" dropdown button on Roster page with 3 options
 - **Styling**: CAP blue headers, zebra striping, landscape layout, repeating headers
 - **Testing**: 100% pass rate (9/9 backend + full frontend, iteration_38)
+
+### Mar 27, 2026 - P4: Drag-and-Drop Flight Reassignment
+- **Component**: `FlightManager.js` using `@dnd-kit/core` + `@dnd-kit/sortable`
+- **Layout**: 7 Kanban-style columns (Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Unassigned)
+- **Features**: Drag cards between columns, auto-update squadron mapping, search filter, student/cadre counts per column
+- **Scope**: Only students and cadre are draggable (staff excluded)
+- **Integration**: Toggle button in Roster page tab bar ("Flights" button), uses existing `PUT /api/participants/{id}/assignment` endpoint
+- **Testing**: 100% pass rate (16/16 backend + full frontend + actual DnD verified, iteration_39)
 
 ### Mar 26, 2026 - Support Squadron Deep Hierarchical Org Chart
 - **Backend**: Replaced 5 flat support roles with 20 hierarchical roles across 5 functional sections
