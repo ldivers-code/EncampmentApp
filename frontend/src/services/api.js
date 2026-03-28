@@ -500,6 +500,52 @@ export const syncUsersToParticipants = async () => {
   return response.data;
 };
 
+// ============ Notifications ============
+export const getNotifications = async () => {
+  const response = await axios.get(`${API}/notifications`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getUnreadCount = async () => {
+  const response = await axios.get(`${API}/notifications/unread-count`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const markNotificationRead = async (id) => {
+  const response = await axios.put(`${API}/notifications/${id}/read`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const markAllNotificationsRead = async () => {
+  const response = await axios.put(`${API}/notifications/read-all`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const sendNotification = async (data) => {
+  const response = await axios.post(`${API}/notifications/send`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getNotificationPreferences = async () => {
+  const response = await axios.get(`${API}/notifications/preferences`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateNotificationPreferences = async (prefs) => {
+  const response = await axios.put(`${API}/notifications/preferences`, prefs, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getNotificationConfig = async () => {
+  const response = await axios.get(`${API}/notifications/admin/config`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const updateNotificationConfig = async (config) => {
+  const response = await axios.put(`${API}/notifications/admin/config`, config, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const linkUserToParticipant = async (userId, participantId, autoPopulate = true) => {
   const response = await axios.post(
     `${API}/users/${userId}/link-participant?participant_id=${participantId}&auto_populate=${autoPopulate}`,

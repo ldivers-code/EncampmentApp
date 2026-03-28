@@ -27,870 +27,35 @@ from fastapi import Form, Query
 from fastapi.responses import Response
 from file_storage import init_storage, put_object, get_object
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'cap-encampment-secret-key-2026')
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
-
-# VAPID Keys for Push Notifications
-VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
-VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
-
-# SendGrid Configuration
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
-SENDGRID_SENDER_EMAIL = os.environ.get('SENDGRID_SENDER_EMAIL', 'noreply@cap-encampment.org')
-
-# Object Storage
-APP_NAME = "tnwing-cap"
-
-# Create the main app
-app = FastAPI(title="CAP Encampment Roster API")
-
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
-
-security = HTTPBearer()
-
-# ================= MODELS =================
-
-class UserRole:
-    DCP = "dcp"  # Director of Cadet Programs — advisory role above Commander, full access
-    COMMANDER = "commander"
-    EXECUTIVE_STAFF = "executive_staff"  # Commandant, Deputy Cdr for Support, DCS — same perms as Commander
-    LOGISTICS = "logistics"  # Logistics operations
-    TRAINING_OFFICER = "training_officer"  # Assigned to squadron, blister checks, counseling, cadre issues
-    FINANCE = "finance"
-    PLANS_PROGRAMS = "plans_programs"  # Schedule/Admin
-    EXEC_CADRE = "exec_cadre"  # Cadet Leadership
-    STAFF = "staff"
-    CADRE = "cadre"
-    HEALTH_SERVICES = "health_services"  # Full access to health data
-    DINING_FACILITY = "dining_facility"  # Meal plan management, view access to most pages
-    # Support Cadre Section Roles (OIC/AOIC = edit, NCOIC/Cadre = view within their section)
-    SUPPORT_LOGISTICS = "support_logistics"  # Support Sq Logistics section cadre
-    SUPPORT_COMMS = "support_comms"  # Support Sq Communications section cadre
-    SUPPORT_PA = "support_pa"  # Support Sq Public Affairs section cadre
-    SUPPORT_DINING = "support_dining"  # Support Sq Dining Services section cadre
-    SUPPORT_HEALTH = "support_health"  # Support Sq Health Services section cadre
-    SQUADRON_COMMANDER = "squadron_commander"  # Squadron Commander assigned to a specific CTS squadron
-
-class UserUnit:
-    STAFF = "staff"
-    SUPPORT_CADRE = "support_cadre"
-    EXEC_CADRE = "exec_cadre"
-    OPS_CADRE = "ops_cadre"  # Contains squadrons/flights
-
-# Granular permissions that can be assigned per user
-class AccessPermissions(BaseModel):
-    dashboard: bool = True
-    roster_view: bool = True
-    roster_edit: bool = False
-    schedule_view: bool = True
-    schedule_edit: bool = False
-    meal_plan_view: bool = True
-    meal_plan_edit: bool = False
-    budget_view: bool = False
-    budget_edit: bool = False
-    analytics: bool = False
-    org_chart: bool = True
-    handbooks: bool = True
-    documents: bool = True
-    admin_panel: bool = False
-    # Health Services permissions
-    health_view: bool = False  # View health summaries (basic info)
-    health_full: bool = False  # Full health services access (medications, incidents)
-    # Check-in permissions
-    check_in_view: bool = False  # View check-in roster
-    check_in_edit: bool = False  # Can check-in/undo participants
-    # Page visibility permissions (for individual access control)
-    page_health: bool = False  # Can see Health Services page
-    page_check_in: bool = False  # Can see Check-In page
-    page_barracks: bool = False  # Can see Barracks page
-    page_logistics: bool = False  # Can see Logistics page
-    page_meal_plan: bool = False  # Can see Meal Plan page
-    page_training: bool = False  # Can see Training Officer page
-    page_status_board: bool = False  # Can see Status Board page
-
-# Default permissions by role
-DEFAULT_PERMISSIONS = {
-    UserRole.DCP: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=True, budget_edit=True,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True,
-        health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.COMMANDER: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=True, budget_edit=True,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True,
-        health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.EXECUTIVE_STAFF: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=True, budget_edit=True,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True,
-        health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.FINANCE: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=True, budget_edit=True,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.PLANS_PROGRAMS: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=True,
-        health_view=False, health_full=False,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.EXEC_CADRE: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.STAFF: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=True, health_full=False
-    ),
-    UserRole.CADRE: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.HEALTH_SERVICES: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=True, health_full=True
-    ),
-    UserRole.TRAINING_OFFICER: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=True, health_full=False
-    ),
-    UserRole.LOGISTICS: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.DINING_FACILITY: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    # Support Cadre Section Roles - view + usage of their section pages, no admin
-    UserRole.SUPPORT_LOGISTICS: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False,
-        check_in_view=True, check_in_edit=True
-    ),
-    UserRole.SUPPORT_COMMS: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.SUPPORT_PA: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.SUPPORT_DINING: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=True,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=False, health_full=False
-    ),
-    UserRole.SUPPORT_HEALTH: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=False,
-        schedule_view=True, schedule_edit=False,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=False, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=True, health_full=False
-    ),
-    UserRole.SQUADRON_COMMANDER: AccessPermissions(
-        dashboard=True, roster_view=True, roster_edit=True,
-        schedule_view=True, schedule_edit=True,
-        meal_plan_view=True, meal_plan_edit=False,
-        budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
-        documents=True, admin_panel=False,
-        health_view=True, health_full=False,
-        check_in_view=True, check_in_edit=True
-    ),
-}
-
-class UserBase(BaseModel):
-    email: EmailStr
-    name: str
-    role: str = UserRole.STAFF  # Default to staff (can choose staff/cadre during registration)
-    capid: str  # Required - CAP ID number for security verification
-    squadron: Optional[str] = None  # staff, support_cadre, exec_cadre, ops_cadre, 6th_cts, 21st_cts, 22nd_cts
-    flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot
-
-class UserCreate(UserBase):
-    password: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserUnitAssignment(BaseModel):
-    squadron: Optional[str] = None
-    flight: Optional[str] = None
-    support_section: Optional[str] = None  # plans_programs, logistics, word, public_affairs, dfac, comms
-
-# Extended user profile model
-class UserProfile(BaseModel):
-    # Basic info
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    cell_phone: Optional[str] = None
-    # CAP info
-    capid: Optional[str] = None
-    rank: Optional[str] = None
-    unit: Optional[str] = None
-    wing: Optional[str] = None
-    region: Optional[str] = None
-    # Personal
-    gender: Optional[str] = None
-    age: Optional[int] = None
-    shirt_size: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-    # Emergency contact
-    emergency_contact: Optional[str] = None
-    emergency_phone: Optional[str] = None
-    # Parent info (for cadets)
-    cadet_parent_name: Optional[str] = None
-    cadet_parent_phone: Optional[str] = None
-    cadet_parent_email: Optional[str] = None
-    # Profile photo
-    photo_url: Optional[str] = None
-
-class UserProfileUpdate(UserProfile):
-    pass
-
-class UserResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    email: str
-    name: str
-    role: str
-    capid: Optional[str] = None
-    squadron: Optional[str] = None
-    flight: Optional[str] = None
-    created_at: str
-    # Extended profile fields
-    phone: Optional[str] = None
-    cell_phone: Optional[str] = None
-    rank: Optional[str] = None
-    unit: Optional[str] = None
-    wing: Optional[str] = None
-    region: Optional[str] = None
-    gender: Optional[str] = None
-    age: Optional[int] = None
-    shirt_size: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    emergency_phone: Optional[str] = None
-    cadet_parent_name: Optional[str] = None
-    cadet_parent_phone: Optional[str] = None
-    cadet_parent_email: Optional[str] = None
-    photo_url: Optional[str] = None
-    # Approval status
-    is_approved: Optional[bool] = None
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
-    linked_participant_id: Optional[str] = None
-    # Support cadre section assignment
-    support_section: Optional[str] = None
-    # Granular permissions
-    permissions: Optional[dict] = None
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserResponse
-
-class ParticipantBase(BaseModel):
-    capid: str
-    rank: str
-    last_name: str
-    first_name: str
-    middle_name: Optional[str] = None
-    unit: str
-    wing: Optional[str] = None
-    region: Optional[str] = None
-    gender: Optional[str] = None
-    age: Optional[int] = None
-    age_at_event: Optional[int] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    cell_phone: Optional[str] = None
-    shirt_size: Optional[str] = None
-    member_type: Optional[str] = None  # SENIOR, CADET
-    participant_type: str = "basic_student"  # basic_student, advanced_student, cadre, staff, senior_member
-    student_type: Optional[str] = None  # "First-Time Student", "Returning Student"
-    squadron: Optional[str] = None
-    flight: Optional[str] = None
-    position: Optional[str] = None
-    # Conflicts/Scheduling
-    conflicts: Optional[str] = None
-    highest_oride: Optional[str] = None
-    # Payment & Registration
-    paid: bool = False
-    paid_in_full: bool = False
-    amount_paid: Optional[float] = None
-    registration_status: Optional[str] = None
-    staff_member: bool = False
-    # Approvals
-    unit_approved: bool = False
-    unit_approval_date: Optional[str] = None
-    wing_approved: bool = False
-    wing_approval_date: Optional[str] = None
-    slotted: bool = False
-    # Address
-    address: Optional[str] = None
-    address2: Optional[str] = None  # Second address line
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-    # Emergency Contact
-    emergency_contact: Optional[str] = None
-    emergency_phone: Optional[str] = None
-    # Parent Info (for cadets)
-    cadet_parent_phone: Optional[str] = None
-    cadet_parent_email: Optional[str] = None
-    # Extended parent contact info (for students)
-    cadet_parent_phone_secondary: Optional[str] = None
-    cadet_parent_phone_emergency: Optional[str] = None
-    cadet_parent_email_secondary: Optional[str] = None
-    cadet_parent_email_emergency: Optional[str] = None
-    # Unit/Wing CC
-    unit_cc_name: Optional[str] = None
-    unit_cc_email: Optional[str] = None
-    # Training & Certifications
-    last_encampment: Optional[str] = None
-    cppt_expiration: Optional[str] = None
-    first_aid: Optional[str] = None
-    is100_date: Optional[str] = None
-    is700_date: Optional[str] = None
-    first_encampment: bool = True
-    # Other
-    religious_preference: Optional[str] = None
-    comments: Optional[str] = None
-    notes: Optional[str] = None
-    # Removal tracking
-    is_removed: Optional[bool] = False
-    removed_at: Optional[str] = None
-    removed_by: Optional[str] = None
-    removal_reason: Optional[str] = None
-
-class ParticipantCreate(ParticipantBase):
-    pass
-
-class ParticipantRemoval(BaseModel):
-    removal_reason: str
-
-class ParticipantResponse(ParticipantBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    created_at: str
-    updated_at: str
-
-class ScheduleEventBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    date: str  # ISO date string
-    start_time: str
-    end_time: str
-    location: Optional[str] = None
-    event_type: str = "general"  # general, training, ceremony, meal, recreation, pt, admin, leadership, academics
-    target_groups: List[str] = ["all"]  # all, staff, 6th_cts, 21st_cts, 22nd_cts, alpha, bravo, charlie, delta, echo, foxtrot
-    uniform: Optional[str] = None  # ABU, Blues, PT, Flight Suit, Civilian, Class A, Class B, or None for default
-
-class ScheduleEventCreate(ScheduleEventBase):
-    pass
-
-class ScheduleEventResponse(ScheduleEventBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    is_published: bool = False
-    created_at: str
-    updated_at: str
-
-# Schedule Settings for draft/publish status
-class ScheduleSettings(BaseModel):
-    is_published: bool = False
-    last_published_at: Optional[str] = None
-    last_modified_at: Optional[str] = None
-    version: int = 0  # Incremented on each change for real-time sync
-
-# Push Notification Models
-class PushSubscription(BaseModel):
-    endpoint: str
-    keys: Dict[str, str]
-
-class PushNotificationRequest(BaseModel):
-    title: str
-    body: str
-    target_groups: List[str] = ["all"]  # all, staff, 6th_cts, 21st_cts, 22nd_cts, or specific flights
-    url: Optional[str] = "/schedule"
-
-class BudgetItemBase(BaseModel):
-    category: str
-    subcategory: Optional[str] = None
-    item_name: str
-    estimated: float = 0.0
-    actual: float = 0.0
-    notes: Optional[str] = None
-    receipt_url: Optional[str] = None
-    receipt_filename: Optional[str] = None
-    payment_status: str = "pending"  # pending, paid, cancelled
-    payment_date: Optional[str] = None
-    vendor: Optional[str] = None
-    item_type: str = "expense"  # expense, income
-
-
-# Food Expense Settings Model (Default $13.15 from 2026 TNWG Encampment Budget)
-class FoodExpenseSettings(BaseModel):
-    cost_per_person_per_day: float = 13.15
-    total_participants: int = 0
-    total_days: int = 8  # July 17-24 = 8 days
-    notes: Optional[str] = None
-
-
-class FoodExpenseSettingsUpdate(BaseModel):
-    cost_per_person_per_day: Optional[float] = None
-    total_participants: Optional[int] = None
-    total_days: Optional[int] = None
-    notes: Optional[str] = None
-
-
-# ================= POINT TRACKING MODELS =================
-
-class ScoreCategoryBase(BaseModel):
-    name: str  # e.g., "Barracks Inspection", "Drill Competition"
-    category_type: str  # "flight", "squadron", "individual_cadet", "individual_cadre"
-    max_points: float = 100.0
-    description: Optional[str] = None
-    is_active: bool = True
-
-class ScoreCategoryCreate(ScoreCategoryBase):
-    pass
-
-class ScoreCategoryResponse(ScoreCategoryBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    created_at: str
-
-class ScoreEntryBase(BaseModel):
-    category_id: str
-    target_type: str  # "flight", "squadron", "individual"
-    target_id: str  # flight name, squadron name, or participant id
-    target_name: Optional[str] = None  # Display name
-    points: float
-    date: str  # YYYY-MM-DD
-    notes: Optional[str] = None
-
-class ScoreEntryCreate(ScoreEntryBase):
-    pass
-
-class ScoreEntryResponse(ScoreEntryBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    category_name: Optional[str] = None
-    entered_by: Optional[str] = None
-    created_at: str
-
-class MeritDemeritEntry(BaseModel):
-    participant_id: str
-    participant_name: Optional[str] = None
-    entry_type: str  # "merit" or "demerit"
-    points: float
-    reason: str
-    date: str  # YYYY-MM-DD
-
-class MeritDemeritResponse(MeritDemeritEntry):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    entered_by: Optional[str] = None
-    created_at: str
-
-class DailyAward(BaseModel):
-    award_type: str  # "flight_of_day", "squadron_of_day", "cadet_of_day", "cadre_of_day"
-    date: str  # YYYY-MM-DD
-    winner_id: str
-    winner_name: str
-    total_points: float
-    notes: Optional[str] = None
-
-
-# ================= FLIGHT REPORTING MODELS =================
-
-class FlightReportSection(BaseModel):
-    """Individual section of a flight report"""
-    content: str = ""
-    has_issues: bool = False
-
-class FlightReportBase(BaseModel):
-    """Daily flight report following Encampment Reporting Guide"""
-    report_date: str  # YYYY-MM-DD
-    flight: str  # alpha, bravo, charlie, delta, echo, foxtrot
-    squadron: str  # 6th_cts, 21st_cts, 22nd_cts
-    reporter_role: str  # flight_sergeant, flight_commander, squadron_commander
-    # 7 Required Sections
-    morale: FlightReportSection = FlightReportSection()
-    safety_concerns: FlightReportSection = FlightReportSection()
-    discipline_issues: FlightReportSection = FlightReportSection()
-    training_performance: FlightReportSection = FlightReportSection()
-    significant_events: FlightReportSection = FlightReportSection()
-    recommendations: FlightReportSection = FlightReportSection()
-    commander_issues: FlightReportSection = FlightReportSection()  # Items requiring escalation
-
-class FlightReportCreate(FlightReportBase):
-    pass
-
-class FlightReportResponse(FlightReportBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    submitted_by: str
-    submitted_by_name: str
-    status: str  # submitted, reviewed, escalated_squadron, escalated_exec, escalated_commander, resolved
-    escalation_level: Optional[str] = None  # squadron_commander, exec_cadre, encampment_commander
-    reviewed_by: Optional[str] = None
-    reviewed_at: Optional[str] = None
-    review_notes: Optional[str] = None
-    escalation_history: Optional[List[dict]] = []  # Track escalation chain
-    created_at: str
-    updated_at: str
-
-class EscalateReportRequest(BaseModel):
-    """Request to escalate a report up the chain
-    
-    Chain of command:
-    flight_sergeant -> flight_commander -> squadron_commander -> exec_cadre -> dcs_commandant -> encampment_commander
-    """
-    escalate_to: str  # flight_commander, squadron_commander, exec_cadre, dcs_commandant, encampment_commander
-    notes: Optional[str] = None
-
-class ReportDeadlineSettings(BaseModel):
-    """Settings for report submission deadlines"""
-    deadline_time: str = "21:00"  # 24-hour format (default 9 PM)
-    reminder_minutes_before: int = 60  # Send reminder 60 mins before deadline
-    is_enabled: bool = True
-
-
-class BudgetItemCreate(BudgetItemBase):
-    pass
-
-class BudgetItemResponse(BudgetItemBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    created_at: str
-    updated_at: str
-
-class DocumentBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    doc_type: str  # handbook, official_document, form, tlp, pocket_class, reference, checklist
-    category: Optional[str] = None  # Custom category for organization
-    content: Optional[str] = None
-    file_url: Optional[str] = None
-    # File storage fields
-    storage_path: Optional[str] = None
-    file_name: Optional[str] = None
-    file_size: Optional[int] = None
-    file_type: Optional[str] = None
-    # Flight/Squadron scope
-    flight: Optional[str] = None  # alpha, bravo, charlie, delta, echo, foxtrot, or None for all
-    squadron: Optional[str] = None  # 6th_cts, 21st_cts, 22nd_cts, or None for all
-    scope: str = "global"  # global, squadron, flight
-
-class DocumentCreate(DocumentBase):
-    pass
-
-class DocumentResponse(DocumentBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    created_at: str
-    updated_at: str
-    uploaded_by: Optional[str] = None
-    version: int = 1
-    version_history: Optional[List[Dict[str, Any]]] = None
-
-
-# ================= ORG CHART MODELS =================
-
-class OrgChartRoleBase(BaseModel):
-    role_id: str  # Unique identifier for the role position
-    title: str  # Role title (e.g., "Encampment Commander")
-    summary: Optional[str] = None  # Short description
-    responsibilities: Optional[str] = None  # Markdown/rich text for responsibilities
-    reports_to: Optional[str] = None  # role_id of supervisor
-    level: int = 0  # Hierarchy level (0 = top)
-    order: int = 0  # Display order within level
-    assigned_participant_id: Optional[str] = None  # ID of assigned participant
-
-class OrgChartRoleCreate(OrgChartRoleBase):
-    pass
-
-class OrgChartRoleUpdate(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    responsibilities: Optional[str] = None
-    reports_to: Optional[str] = None
-    level: Optional[int] = None
-    order: Optional[int] = None
-    assigned_participant_id: Optional[str] = None
-
-class OrgChartRoleResponse(OrgChartRoleBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    assigned_member_name: Optional[str] = None  # Populated from participant lookup
-    assigned_member_rank: Optional[str] = None
-    direct_subordinates: List[str] = []  # List of role_ids
-    created_at: str
-    updated_at: str
-
-
-# ================= GOOGLE SHEETS SYNC MODELS =================
-
-class GoogleSheetConfig(BaseModel):
-    sheet_type: str  # "roster" or "org_chart"
-    spreadsheet_id: str
-    gid: str  # Sheet tab ID
-    name: Optional[str] = None  # Friendly name for the sheet
-    enabled: bool = True
-
-# ================= DAILY SETTINGS MODELS =================
-
-class UniformOfTheDay(BaseModel):
-    uniform_code: str  # Senior Member uniform e.g., "ABU", "Blues", "PT Gear"
-    uniform_code_2: Optional[str] = None  # Second SM uniform option
-    cadet_uniform_code: Optional[str] = None  # Cadet uniform (if different)
-    description: Optional[str] = None
-    description_2: Optional[str] = None
-    cadet_description: Optional[str] = None
-    special_instructions: Optional[str] = None
-
-class WeatherFlagUpdate(BaseModel):
-    flag_color: str  # "green", "yellow", "red", "black"
-    heat_index: Optional[float] = None  # Current heat index
-    wbgt: Optional[float] = None  # Wet Bulb Globe Temperature if available
-    notes: Optional[str] = None  # Additional notes
-
-class DailySettingsUpdate(BaseModel):
-    uniform: Optional[UniformOfTheDay] = None
-    weather_flag: Optional[WeatherFlagUpdate] = None
-
-class GoogleSheetsSettings(BaseModel):
-    roster_sheet: Optional[GoogleSheetConfig] = None
-    org_chart_sheets: List[GoogleSheetConfig] = []
-    sync_interval_hours: int = 1
-    last_sync_at: Optional[str] = None
-    last_sync_status: Optional[str] = None  # "success", "error", "running"
-    last_sync_message: Optional[str] = None
-    auto_sync_enabled: bool = True
-
-class GoogleSheetsSyncRequest(BaseModel):
-    roster_spreadsheet_id: Optional[str] = None
-    roster_gid: Optional[str] = None
-    org_chart_spreadsheet_id: Optional[str] = None
-    org_chart_gids: Optional[List[str]] = None  # Multiple tabs for squadrons
-    sync_interval_hours: int = 1
-    auto_sync_enabled: bool = True
-
-
-# ================= AUTH HELPERS =================
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-
-def create_token(user_id: str, email: str, role: str) -> str:
-    payload = {
-        "sub": user_id,
-        "email": email,
-        "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def get_default_permissions(role: str) -> dict:
-    """Get default permissions for a given role"""
-    default = DEFAULT_PERMISSIONS.get(role, DEFAULT_PERMISSIONS[UserRole.CADRE])
-    return default.model_dump()
-
-def get_user_permissions(user: dict) -> dict:
-    """Get user's permissions - custom if set, otherwise role defaults"""
-    if user.get('permissions'):
-        return user['permissions']
-    return get_default_permissions(user.get('role', UserRole.CADRE))
-
-async def send_approval_email(to_email: str, user_name: str, app_url: str = ""):
-    """Send email notification when user account is approved"""
-    if not SENDGRID_API_KEY:
-        logging.warning("SendGrid API key not configured - skipping email notification")
-        return False
-    
-    subject = "Your CAP Encampment Account Has Been Approved"
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background-color: #00205B; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 20px; background-color: #f5f5f5; }}
-            .button {{ display: inline-block; padding: 12px 24px; background-color: #00205B; color: white; text-decoration: none; border-radius: 4px; margin-top: 15px; }}
-            .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Civil Air Patrol</h1>
-                <h2>Tennessee Wing Encampment</h2>
-            </div>
-            <div class="content">
-                <h3>Welcome, {user_name}!</h3>
-                <p>Great news! Your account for the CAP Encampment Management System has been approved.</p>
-                <p>You now have full access to the system based on your assigned role and permissions.</p>
-                <p>You can log in using your registered email address and password.</p>
-                <a href="{app_url}/login" class="button">Log In Now</a>
-            </div>
-            <div class="footer">
-                <p>Civil Air Patrol - United States Air Force Auxiliary</p>
-                <p>Volunteers Serving America</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    message = Mail(
-        from_email=SENDGRID_SENDER_EMAIL,
-        to_emails=to_email,
-        subject=subject,
-        html_content=html_content
-    )
-    
-    try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        logging.info(f"Approval email sent to {to_email}, status: {response.status_code}")
-        return response.status_code == 202
-    except Exception as e:
-        logging.error(f"Failed to send approval email to {to_email}: {str(e)}")
-        return False
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        # Add computed permissions to user object
-        user['permissions'] = get_user_permissions(user)
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-def require_role(allowed_roles: List[str]):
-    async def role_checker(user: dict = Depends(get_current_user)):
-        if user["role"] not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return user
-    return role_checker
+# Import shared modules
+from database import db, app, api_router, security, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, SENDGRID_API_KEY, SENDGRID_SENDER_EMAIL, APP_NAME, ROOT_DIR, mongo_url, client
+from models import (
+    UserRole, UserUnit, AccessPermissions, DEFAULT_PERMISSIONS,
+    UserBase, UserCreate, UserLogin, UserUnitAssignment, UserProfile, UserProfileUpdate, UserResponse, TokenResponse,
+    ParticipantBase, ParticipantCreate, ParticipantRemoval, ParticipantResponse,
+    ScheduleEventBase, ScheduleEventCreate, ScheduleEventResponse, ScheduleSettings,
+    PushSubscription, PushNotificationRequest,
+    BudgetItemBase, BudgetItemCreate, BudgetItemResponse, FoodExpenseSettings, FoodExpenseSettingsUpdate,
+    ScoreCategoryBase, ScoreCategoryCreate, ScoreCategoryResponse,
+    ScoreEntryBase, ScoreEntryCreate, ScoreEntryResponse,
+    MeritDemeritEntry, MeritDemeritResponse, DailyAward,
+    FlightReportSection, FlightReportBase, FlightReportCreate, FlightReportResponse,
+    EscalateReportRequest, ReportDeadlineSettings,
+    DocumentBase, DocumentCreate, DocumentResponse,
+    OrgChartRoleBase, OrgChartRoleCreate, OrgChartRoleUpdate, OrgChartRoleResponse,
+    GoogleSheetConfig, UniformOfTheDay, WeatherFlagUpdate, DailySettingsUpdate,
+    GoogleSheetsSettings, GoogleSheetsSyncRequest, BunkAssignRequest, NotificationPreferences
+)
+from permissions import (
+    hash_password, verify_password, create_token,
+    get_default_permissions, get_user_permissions,
+    send_approval_email, get_current_user, require_role,
+    require_health_view, require_health_full, require_check_in_access, get_event_settings
+)
+
+# Import notification routes and helper
+import routes.notifications
+from routes.notifications import create_notification
 
 # ================= AUTH ROUTES =================
 
@@ -4480,6 +3645,20 @@ async def create_schedule_event(
     doc.pop("_id", None)
     settings = await db.schedule_settings.find_one({"_id": "settings"})
     doc["is_published"] = settings.get("is_published", False) if settings else False
+
+    # Send notification for new schedule event
+    try:
+        await create_notification(
+            db, title="New Schedule Event",
+            message=f"{data.title} on {data.date} ({data.start_time}-{data.end_time})",
+            notification_type="schedule",
+            target_roles=["all"],
+            link="/schedule",
+            created_by=user.get("id")
+        )
+    except Exception as e:
+        logging.warning(f"Failed to send schedule notification: {e}")
+
     return ScheduleEventResponse(**doc)
 
 @api_router.put("/schedule/{event_id}", response_model=ScheduleEventResponse)
@@ -4501,6 +3680,20 @@ async def update_schedule_event(
     event = await db.schedule.find_one({"id": event_id}, {"_id": 0})
     settings = await db.schedule_settings.find_one({"_id": "settings"})
     event["is_published"] = settings.get("is_published", False) if settings else False
+
+    # Send notification for updated schedule event
+    try:
+        await create_notification(
+            db, title="Schedule Updated",
+            message=f"{data.title} on {data.date} has been modified",
+            notification_type="schedule",
+            target_roles=["all"],
+            link="/schedule",
+            created_by=user.get("id")
+        )
+    except Exception as e:
+        logging.warning(f"Failed to send schedule notification: {e}")
+
     return ScheduleEventResponse(**event)
 
 @api_router.delete("/schedule/{event_id}")
@@ -4514,6 +3707,19 @@ async def delete_schedule_event(
     
     # Update version for real-time sync
     await increment_schedule_version()
+
+    # Send notification for deleted schedule event
+    try:
+        await create_notification(
+            db, title="Schedule Event Cancelled",
+            message=f"A schedule event has been removed",
+            notification_type="schedule",
+            target_roles=["all"],
+            link="/schedule",
+            created_by=user.get("id")
+        )
+    except Exception as e:
+        logging.warning(f"Failed to send schedule notification: {e}")
     
     return {"message": "Event deleted successfully"}
 
