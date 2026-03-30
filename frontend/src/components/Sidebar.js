@@ -240,13 +240,16 @@ const Sidebar = ({ children }) => {
                 className={`object-contain ${collapsed ? 'w-12 h-12' : 'w-14 h-14'}`}
               />
               {!collapsed && (
-                <div>
+                <div className="flex-1">
                   <h1 className="font-black text-[#00205B] uppercase text-sm leading-tight" style={{ fontFamily: 'Chivo, sans-serif' }}>
                     Tennessee Wing
                   </h1>
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider">Civil Air Patrol</p>
                 </div>
               )}
+              <div className="hidden lg:block">
+                <NotificationBell />
+              </div>
             </div>
           </div>
 

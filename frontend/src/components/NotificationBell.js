@@ -103,7 +103,7 @@ const NotificationBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-sm shadow-xl z-50 max-h-[480px] flex flex-col" data-testid="notification-panel">
+        <div className="absolute left-0 lg:left-0 lg:right-auto right-0 top-full mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-sm shadow-xl z-[100] max-h-[480px] flex flex-col" data-testid="notification-panel">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="font-bold text-sm text-[#00205B] uppercase tracking-wide">Notifications</h3>

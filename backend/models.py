@@ -669,6 +669,12 @@ class GoogleSheetsSyncRequest(BaseModel):
 
 class BunkAssignRequest(BaseModel):
     participant_id: str
+    bunk_number: int = 0
+    position: str = "top"
+
+class CheckInStepRequest(BaseModel):
+    step: str
+    notes: str = ""
 
 class NotificationPreferences(BaseModel):
     schedule_changes: bool = True

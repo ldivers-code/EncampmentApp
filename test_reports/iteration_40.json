@@ -1,0 +1,179 @@
+{
+  "summary": "Backend route extraction and NotificationBell placement testing complete. All 26 backend API tests passed. Frontend NotificationBell and navigation working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RosterPage table",
+        "issues": ["React hydration warnings about span elements inside table elements (th, tr, td, tbody) - cosmetic issue, does not affect functionality. This is a known issue from previous iterations."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_extracted_routes.py",
+    "/app/test_reports/pytest/extracted_routes_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_extracted_routes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "commander": {"email": "commander@test.com", "password": "test123", "role": "commander"},
+    "testadmin": {"email": "testadmin@cap.gov", "password": "TestPass123!", "role": "commander"}
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend route extraction verified working. All extracted routes (notifications.py, training.py, checkin.py, barracks.py, schedule_changes.py, health_alerts.py) are properly integrated and functional. NotificationBell component is correctly placed in desktop sidebar header and dropdown opens/closes properly.",
+  "verified_features": [
+    {
+      "feature": "NotificationBell appears in desktop sidebar header",
+      "status": "PASS",
+      "details": "Bell icon visible in sidebar header next to Tennessee Wing logo. Uses data-testid='notification-bell' and 'notification-bell-btn'"
+    },
+    {
+      "feature": "Notification dropdown opens when clicked",
+      "status": "PASS",
+      "details": "Panel opens with left-0 positioning (opens to the right). Shows 'NOTIFICATIONS' header and notification items."
+    },
+    {
+      "feature": "Notification items display correctly",
+      "status": "PASS",
+      "details": "Found 2 notification items including test notification sent via pytest"
+    },
+    {
+      "feature": "GET /api/notifications - Get user notifications",
+      "status": "PASS",
+      "details": "Returns list of notifications for current user"
+    },
+    {
+      "feature": "GET /api/notifications/unread-count - Get unread count",
+      "status": "PASS",
+      "details": "Returns count object with integer count"
+    },
+    {
+      "feature": "POST /api/notifications/send - Send notification",
+      "status": "PASS",
+      "details": "Admin can send notifications to targeted roles/users"
+    },
+    {
+      "feature": "PUT /api/notifications/read-all - Mark all read",
+      "status": "PASS",
+      "details": "Marks all user notifications as read"
+    },
+    {
+      "feature": "GET /api/training/summary - Training dashboard summary",
+      "status": "PASS",
+      "details": "Returns blister_checks_today, counseling_today, cadre_issues_open counts"
+    },
+    {
+      "feature": "GET /api/training/blister-checks - Get blister checks",
+      "status": "PASS",
+      "details": "Returns list of blister check records"
+    },
+    {
+      "feature": "POST /api/training/blister-checks - Create blister check",
+      "status": "PASS",
+      "details": "Creates new blister check record with all fields"
+    },
+    {
+      "feature": "GET /api/check-in/roster - Get check-in roster",
+      "status": "PASS",
+      "details": "Returns participants with check-in status and steps"
+    },
+    {
+      "feature": "GET /api/check-in/summary - Get check-in summary",
+      "status": "PASS",
+      "details": "Returns total_participants, fully_checked_in, step_counts"
+    },
+    {
+      "feature": "POST /api/check-in/{id}/step - Check-in step",
+      "status": "PASS",
+      "details": "Marks participant as checked in for specific step"
+    },
+    {
+      "feature": "GET /api/barracks - Get all barracks",
+      "status": "PASS",
+      "details": "Returns 5 barracks with occupancy stats"
+    },
+    {
+      "feature": "GET /api/barracks/{id} - Get barracks detail",
+      "status": "PASS",
+      "details": "Returns barracks with bunks array and assignment info"
+    },
+    {
+      "feature": "GET /api/barracks/unassigned-participants",
+      "status": "PASS",
+      "details": "Returns list of participants not assigned to bunks"
+    },
+    {
+      "feature": "GET /api/facility/buildings - Get facility buildings",
+      "status": "PASS",
+      "details": "Returns list of all facility buildings"
+    },
+    {
+      "feature": "GET /api/schedule-changes - Get schedule changes",
+      "status": "PASS",
+      "details": "Returns list of schedule change requests"
+    },
+    {
+      "feature": "GET /api/schedule-changes/pending-count",
+      "status": "PASS",
+      "details": "Returns count of pending schedule changes"
+    },
+    {
+      "feature": "POST /api/schedule-changes - Submit schedule change",
+      "status": "PASS",
+      "details": "Creates new schedule change request with pending status"
+    },
+    {
+      "feature": "GET /api/health-alerts/{id} - Get health alerts",
+      "status": "PASS",
+      "details": "Returns health alerts for member with role-based filtering"
+    },
+    {
+      "feature": "PUT /api/health-alerts/{id} - Update health alerts",
+      "status": "PASS",
+      "details": "Updates health alerts for member (health services access required)"
+    },
+    {
+      "feature": "Dashboard loads correctly after login",
+      "status": "PASS",
+      "details": "Dashboard shows 'WELCOME BACK, TEST' with quick view cards"
+    },
+    {
+      "feature": "Sidebar navigation works for all pages",
+      "status": "PASS",
+      "details": "Tested: Roster, Training Officer, Check-In, Barracks, Health Services - all navigate correctly"
+    },
+    {
+      "feature": "Auth login works correctly",
+      "status": "PASS",
+      "details": "Login with commander@test.com / test123 returns access_token and user object"
+    }
+  ],
+  "mocked_apis": {
+    "SendGrid": "Email sending is mocked to console unless SENDGRID_API_KEY is present"
+  },
+  "route_extraction_details": {
+    "extracted_routes": [
+      "/app/backend/routes/notifications.py - In-app notification system",
+      "/app/backend/routes/training.py - Training officer (blister checks, counseling, cadre issues)",
+      "/app/backend/routes/checkin.py - Check-in system (multi-step in-processing)",
+      "/app/backend/routes/barracks.py - Barracks/bunk assignment",
+      "/app/backend/routes/schedule_changes.py - Schedule change requests",
+      "/app/backend/routes/health_alerts.py - Health alerts"
+    ],
+    "server_py_reduction": "server.py reduced from 9442 to 8563 lines (879 lines extracted)"
+  }
+}

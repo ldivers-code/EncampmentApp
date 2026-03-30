@@ -521,7 +521,7 @@ export const markAllNotificationsRead = async () => {
   return response.data;
 };
 
-export const sendNotification = async (data) => {
+export const sendInAppNotification = async (data) => {
   const response = await axios.post(`${API}/notifications/send`, data, { headers: getAuthHeaders() });
   return response.data;
 };
