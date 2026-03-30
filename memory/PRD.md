@@ -771,21 +771,23 @@ Staff/Cadre
 - [x] **Weather Flag System** (Heat condition flags with CAP-compliant guidelines, rest schedules, and activity restrictions)
 
 ### P1 (High Priority) - PENDING
-- [ ] Implement Handbooks page (upload/view PDF documents)
-- [ ] Implement Official Documents page (upload/view files)
-- [ ] PDF export for roster reports
+- [x] ~~Implement Handbooks page~~ (DONE - upload/view PDF documents)
+- [x] ~~Implement Official Documents page~~ (DONE - upload/view files)
+- [x] ~~PDF export for roster reports~~ (DONE - 3 formats)
 
 ### P2 (Medium Priority)
-- [ ] Add Rich Text/Markdown support for Org Chart responsibilities
-- [ ] Email notifications for schedule changes
+- [x] ~~Add Rich Text/Markdown support for Org Chart responsibilities~~ (DONE)
+- [x] ~~Email notifications for schedule changes~~ (DONE - In-app notifications + mocked SendGrid)
 - [ ] Attendance tracking per event
 - [ ] Bulk participant import validation
 - [ ] OCR integration for receipt scanning (auto-extract vendor/amount)
 
 ### P3 (Low Priority)
-- [ ] Flight/Squadron assignment interface in Roster
+- [x] ~~Flight/Squadron assignment interface in Roster~~ (DONE - Drag-and-drop Kanban)
 - [ ] Print-friendly roster and org chart views
 - [ ] Budget export to Excel
+- [ ] Senior Barracks (TR-106, TR-107, TR-105) individual room assignments
+- [ ] Bulk auto-balance button for flight distribution
 
 ## Test Credentials
 - **Commander**: commander@test.com / test123 (auto-created, full access)
@@ -954,3 +956,17 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Backend**: `MEAL_PLAN_EDITOR_ROLES`, `dining_facility` role in UserRole, `meal_plans` MongoDB collection
 - **Frontend**: `MealPlanPage.js`, `canEditMealPlan()` in AuthContext, updated Sidebar navigation
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
+
+
+### Mar 30, 2026 - NotificationBell + Server.py Refactoring
+- **NotificationBell in Desktop Sidebar**: Added notification bell with unread badge to the desktop sidebar header (was only in mobile before). Dropdown opens rightward to avoid sidebar clipping
+- **Fixed duplicate `sendNotification`** in api.js (renamed new in-app version to `sendInAppNotification`)
+- **Server.py Refactoring**: Extracted 6 route modules from `server.py`, reducing it from 9,442 → 8,563 lines (~880 lines extracted):
+  - `routes/training.py` - Training officer routes (blister checks, counseling, cadre issues)
+  - `routes/checkin.py` - Check-in system (multi-step in-processing)
+  - `routes/barracks.py` - Barracks/bunk assignment system
+  - `routes/schedule_changes.py` - Schedule change requests
+  - `routes/health_alerts.py` - Health alerts with role-based visibility
+  - `routes/notifications.py` - In-app notification system (from previous agent)
+- **New model**: `CheckInStepRequest` added to `models.py`
+- **Testing**: 26/26 backend tests passed, 100% frontend tests - iteration_40
