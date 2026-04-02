@@ -1,0 +1,243 @@
+{
+  "summary": "Backend route extraction testing complete. All 35 API tests passed after fixing missing UserRole import in badges.py. Frontend loads correctly with NotificationBell and sidebar navigation working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RosterPage table",
+        "issues": ["React hydration warnings about span elements inside table elements (th, tr, td, tbody) - cosmetic issue, does not affect functionality. This is a known issue from previous iterations."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_refactored_routes.py",
+    "/app/test_reports/pytest/refactored_routes_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/routes/badges.py",
+    "/app/backend/tests/test_refactored_routes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (35/35 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "commander": {"email": "commander@test.com", "password": "test123", "role": "commander"}
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend refactoring from 9,442 to 193 lines in server.py verified working. All 28 route modules properly integrated. Fixed missing UserRole import in badges.py that was causing 500 errors on /api/notification-badges endpoint.",
+  "verified_features": [
+    {
+      "feature": "POST /api/auth/login - Login",
+      "status": "PASS",
+      "details": "Returns access_token and user object"
+    },
+    {
+      "feature": "POST /api/auth/register - Register",
+      "status": "PASS",
+      "details": "Route exists and accessible"
+    },
+    {
+      "feature": "GET /api/auth/me - Get current user",
+      "status": "PASS",
+      "details": "Returns user profile"
+    },
+    {
+      "feature": "GET /api/users - Get all users",
+      "status": "PASS",
+      "details": "Returns list of users"
+    },
+    {
+      "feature": "GET /api/users/pending - Get pending users",
+      "status": "PASS",
+      "details": "Returns list of pending approvals"
+    },
+    {
+      "feature": "GET /api/profile - Get user profile",
+      "status": "PASS",
+      "details": "Returns user profile data"
+    },
+    {
+      "feature": "GET /api/participants - Get participants",
+      "status": "PASS",
+      "details": "Returns list of participants"
+    },
+    {
+      "feature": "GET /api/participants/export-pdf - Export PDF",
+      "status": "PASS",
+      "details": "Returns PDF file"
+    },
+    {
+      "feature": "GET /api/schedule - Get schedule",
+      "status": "PASS",
+      "details": "Returns list of schedule events"
+    },
+    {
+      "feature": "GET /api/budget - Get budget",
+      "status": "PASS",
+      "details": "Returns list of budget items"
+    },
+    {
+      "feature": "GET /api/documents - Get documents",
+      "status": "PASS",
+      "details": "Returns list of documents"
+    },
+    {
+      "feature": "GET /api/org-chart/roles - Get org chart",
+      "status": "PASS",
+      "details": "Returns list of org chart roles"
+    },
+    {
+      "feature": "GET /api/stats/dashboard - Dashboard stats",
+      "status": "PASS",
+      "details": "Returns participants, budget, schedule stats"
+    },
+    {
+      "feature": "GET /api/stats/dashboard-quickview - Quickview",
+      "status": "PASS",
+      "details": "Returns role-specific quick view data"
+    },
+    {
+      "feature": "GET /api/flights - Get flights",
+      "status": "PASS",
+      "details": "Returns 6 flights (alpha-foxtrot)"
+    },
+    {
+      "feature": "GET /api/check-in/summary - Check-in summary",
+      "status": "PASS",
+      "details": "Returns total_participants, fully_checked_in counts"
+    },
+    {
+      "feature": "GET /api/check-in/roster - Check-in roster",
+      "status": "PASS",
+      "details": "Returns participants with check-in status"
+    },
+    {
+      "feature": "GET /api/barracks - Get barracks",
+      "status": "PASS",
+      "details": "Returns 5 barracks with occupancy stats"
+    },
+    {
+      "feature": "GET /api/facility/buildings - Get buildings",
+      "status": "PASS",
+      "details": "Returns list of facility buildings"
+    },
+    {
+      "feature": "GET /api/training/summary - Training summary",
+      "status": "PASS",
+      "details": "Returns blister_checks_today, counseling_today, cadre_issues_open"
+    },
+    {
+      "feature": "GET /api/notifications - Get notifications",
+      "status": "PASS",
+      "details": "Returns list of user notifications"
+    },
+    {
+      "feature": "GET /api/notifications/unread-count - Unread count",
+      "status": "PASS",
+      "details": "Returns count object"
+    },
+    {
+      "feature": "POST /api/notifications/send - Send notification",
+      "status": "PASS",
+      "details": "Creates notification and returns notification_id"
+    },
+    {
+      "feature": "GET /api/daily-settings - Daily settings",
+      "status": "PASS",
+      "details": "Returns uniform and weather_flag settings"
+    },
+    {
+      "feature": "GET /api/meal-plans - Meal plans",
+      "status": "PASS",
+      "details": "Returns list of meal plans"
+    },
+    {
+      "feature": "GET /api/health-alerts/{id} - Health alerts",
+      "status": "PASS",
+      "details": "Returns health alerts for member"
+    },
+    {
+      "feature": "GET /api/schedule-changes - Schedule changes",
+      "status": "PASS",
+      "details": "Returns list of schedule change requests"
+    },
+    {
+      "feature": "POST /api/presence/heartbeat - Presence heartbeat",
+      "status": "PASS",
+      "details": "Returns status ok with timestamp"
+    },
+    {
+      "feature": "GET /api/notification-badges - Notification badges",
+      "status": "PASS",
+      "details": "Fixed missing UserRole import - now returns badge counts"
+    },
+    {
+      "feature": "Dashboard loads correctly",
+      "status": "PASS",
+      "details": "Shows 'WELCOME BACK, TEST' with quick view cards"
+    },
+    {
+      "feature": "NotificationBell in sidebar",
+      "status": "PASS",
+      "details": "Bell icon visible with badge count"
+    },
+    {
+      "feature": "Sidebar navigation",
+      "status": "PASS",
+      "details": "19 navigation links working correctly"
+    }
+  ],
+  "bug_fixes_applied": [
+    {
+      "file": "/app/backend/routes/badges.py",
+      "issue": "Missing UserRole import causing NameError on /api/notification-badges endpoint",
+      "fix": "Added 'from models import UserRole' import statement",
+      "status": "FIXED"
+    }
+  ],
+  "mocked_apis": {
+    "SendGrid": "Email sending is mocked to console unless SENDGRID_API_KEY is present"
+  },
+  "route_extraction_verification": {
+    "server_py_lines": "193 lines (down from 9,442)",
+    "route_modules_count": 28,
+    "all_routes_working": true,
+    "extracted_routes": [
+      "/app/backend/routes/auth.py - Auth, Password Reset, Presence, Profile",
+      "/app/backend/routes/users.py - User Management, Approval, Sync",
+      "/app/backend/routes/participants.py - Participant CRUD, Analytics, PDF Export",
+      "/app/backend/routes/schedule.py - Schedule CRUD, Import, Publish",
+      "/app/backend/routes/budget.py - Budget CRUD, Quick Update",
+      "/app/backend/routes/documents.py - Document CRUD, File Upload",
+      "/app/backend/routes/meal_plan.py - Meal Plan Schedule",
+      "/app/backend/routes/flights.py - Flight Roster, Leadership",
+      "/app/backend/routes/orgchart.py - Org Chart Roles",
+      "/app/backend/routes/stats.py - Dashboard Stats, Quickview",
+      "/app/backend/routes/daily_settings.py - Uniform, Weather Flag",
+      "/app/backend/routes/google_sheets.py - Google Sheets Sync",
+      "/app/backend/routes/badges.py - Notification Badges",
+      "/app/backend/routes/reports.py - Flight Reports",
+      "/app/backend/routes/health_services.py - Health Services, Medical Import",
+      "/app/backend/routes/medical_roster.py - Medical Roster",
+      "/app/backend/routes/notifications.py - In-app Notifications",
+      "/app/backend/routes/training.py - Training Officer (Blister, Counseling, Issues)",
+      "/app/backend/routes/checkin.py - Check-in System",
+      "/app/backend/routes/barracks.py - Barracks, Bunk Assignment",
+      "/app/backend/routes/schedule_changes.py - Schedule Change Requests",
+      "/app/backend/routes/health_alerts.py - Health Alerts",
+      "/app/backend/routes/push_notifications.py - Push Notifications",
+      "/app/backend/routes/points.py - Points, Honor Awards",
+      "/app/backend/routes/students.py - Student Upload"
+    ]
+  }
+}

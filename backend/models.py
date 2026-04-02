@@ -682,3 +682,8 @@ class NotificationPreferences(BaseModel):
     announcements: bool = True
     email_enabled: bool = True
     in_app_enabled: bool = True
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
