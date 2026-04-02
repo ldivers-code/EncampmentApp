@@ -958,15 +958,29 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
 
-### Mar 30, 2026 - NotificationBell + Server.py Refactoring
-- **NotificationBell in Desktop Sidebar**: Added notification bell with unread badge to the desktop sidebar header (was only in mobile before). Dropdown opens rightward to avoid sidebar clipping
-- **Fixed duplicate `sendNotification`** in api.js (renamed new in-app version to `sendInAppNotification`)
-- **Server.py Refactoring**: Extracted 6 route modules from `server.py`, reducing it from 9,442 → 8,563 lines (~880 lines extracted):
-  - `routes/training.py` - Training officer routes (blister checks, counseling, cadre issues)
-  - `routes/checkin.py` - Check-in system (multi-step in-processing)
-  - `routes/barracks.py` - Barracks/bunk assignment system
-  - `routes/schedule_changes.py` - Schedule change requests
-  - `routes/health_alerts.py` - Health alerts with role-based visibility
-  - `routes/notifications.py` - In-app notification system (from previous agent)
-- **New model**: `CheckInStepRequest` added to `models.py`
-- **Testing**: 26/26 backend tests passed, 100% frontend tests - iteration_40
+### Mar 30, 2026 - NotificationBell + Complete Server.py Refactoring
+- **NotificationBell in Desktop Sidebar**: Added notification bell with unread badge to the desktop sidebar header. Dropdown opens rightward to avoid sidebar clipping.
+- **Fixed duplicate `sendNotification`** in api.js (renamed to `sendInAppNotification`)
+- **COMPLETE Server.py Refactoring**: Extracted ALL routes from `server.py`, reducing it from **9,442 → 193 lines (98% reduction!)**
+  - 28 route modules created in `/app/backend/routes/`:
+  - `auth.py` - Auth, password reset, presence, profile
+  - `users.py` - User management, approval, sync
+  - `participants.py` - Participant CRUD, analytics, PDF export
+  - `students.py` - Student upload with auto-assignment
+  - `points.py` - Point tracking, honor awards
+  - `schedule.py` - Schedule CRUD, import, publish
+  - `budget.py` - Budget CRUD, quick update
+  - `documents.py` - Document/file upload
+  - `meal_plan.py` - Meal plan schedule
+  - `flights.py` - Flight roster, leadership
+  - `orgchart.py` - Org chart roles
+  - `stats.py` - Dashboard stats, quickview
+  - `daily_settings.py` - Uniform/weather settings
+  - `google_sheets.py` - Google Sheets sync
+  - `badges.py` - Notification badges
+  - `reports.py` - Flight reporting
+  - `health_services.py` - Health services + medical import
+  - `medical_roster.py` - Medical roster, cadet profiles
+  - `push_notifications.py` - Push notifications (VAPID)
+  - `training.py`, `checkin.py`, `barracks.py`, `schedule_changes.py`, `health_alerts.py`, `notifications.py`
+- **Testing**: iterations 40 + 41: 35/35 backend tests passed, 100% frontend tests
