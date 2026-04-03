@@ -87,6 +87,8 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Flight-Grouped Roster View (By Flight toggle, contact info columns, Copy Emails per flight)**
 - [x] **Flight Sergeant Restricted Visibility (cadre only see their assigned flight's participants)**
 - [x] **Parent Portal (Registration, Admin Approval, My Cadet page with Schedule/Health/Points/Meals tabs)**
+- [x] **Squadron-Level Visibility (Squadron Commander & Training Officer see both flights in their squadron)**
+- [x] **Org Chart Auto-Sync (auto-link org chart positions when role/unit assigned via Admin)**
 
 ## What's Been Implemented
 
@@ -960,6 +962,15 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Frontend**: `MealPlanPage.js`, `canEditMealPlan()` in AuthContext, updated Sidebar navigation
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
+
+### Apr 3, 2026 - Squadron-Level Visibility for Squadron Commanders & Training Officers
+- **Squadron Commander role**: Assigned to a squadron (not a flight), sees BOTH flights in their squadron on My Flight and Roster pages
+- **Training Officer role**: Assigned to a squadron, sees both flights in their squadron (e.g., 21st CTS → Charlie + Delta)
+- **Refactored visibility logic**: New `_apply_visibility_filter()` helper in `participants.py` with `SQUADRON_FLIGHTS_MAP` and `FLIGHT_TO_SQUADRON_MAP`
+- **My Flight page**: Updated header label ("Squadron Access - Alpha & Bravo"), view mode toggle visible for squadron-level roles, `canViewAllFlights` includes `squadron_commander`
+- **Org Chart auto-sync**: When role/unit is assigned via Admin, org chart positions are automatically linked (e.g., sq1-cc, to-sq2, flight_alpha_commander)
+- **Parent role assignable**: Added `parent` to valid roles in `update_user_role` endpoint
+- **Testing**: 100% pass rate (18/18 backend + full frontend validation, iteration_43)
 
 ### Apr 3, 2026 - Parent Portal & Flight-Grouped Roster View
 - **Flight-Grouped Roster View**: "By Flight" toggle on Roster page shows members grouped by flight (Alpha-Foxtrot + Unassigned), with Name/CAPID/Unit/Gender/Email/Phone/Parent Contact columns, and "Copy Emails" button per flight
