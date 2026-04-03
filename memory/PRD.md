@@ -84,6 +84,9 @@ Create an interactive roster for a Civil Air Patrol encampment using uploaded Ex
 - [x] **Inline Health Data Editing (add/edit/delete allergies, toggle OTC approvals from cadet detail sheet)**
 - [x] **PDF Export for Roster Reports (3 formats: complete, by flight, by type; with summary stats)**
 - [x] **Drag-and-Drop Flight Reassignment UI (Kanban-style flight columns with drag-and-drop)**
+- [x] **Flight-Grouped Roster View (By Flight toggle, contact info columns, Copy Emails per flight)**
+- [x] **Flight Sergeant Restricted Visibility (cadre only see their assigned flight's participants)**
+- [x] **Parent Portal (Registration, Admin Approval, My Cadet page with Schedule/Health/Points/Meals tabs)**
 
 ## What's Been Implemented
 
@@ -957,6 +960,20 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Frontend**: `MealPlanPage.js`, `canEditMealPlan()` in AuthContext, updated Sidebar navigation
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
+
+### Apr 3, 2026 - Parent Portal & Flight-Grouped Roster View
+- **Flight-Grouped Roster View**: "By Flight" toggle on Roster page shows members grouped by flight (Alpha-Foxtrot + Unassigned), with Name/CAPID/Unit/Gender/Email/Phone/Parent Contact columns, and "Copy Emails" button per flight
+- **Flight Sergeant Restriction**: Cadre users (exec_cadre, cadre, training_officer) assigned to a flight only see participants from their flight in both `/api/participants` and `/api/participants/by-flight`
+- **Parent Portal**: Full parent role implementation:
+  - Registration with CAPID linking (validates student exists)
+  - Admin approval required before access
+  - "My Cadet" page with 5 tabs: Overview, Schedule, Health, Points, Meals
+  - Sidebar restricted to only "My Cadet" for parent users
+  - Parent redirected to /my-cadet on login
+  - 5 backend endpoints: `/api/parent/my-cadet`, `/schedule`, `/health-incidents`, `/points`, `/meals`
+  - RBAC: Parents cannot access roster or other pages, non-parents cannot access parent endpoints
+- **Bug Fixes**: Fixed PublicRoute missing `user` destructure (ReferenceError crash), fixed wrong localStorage key for flight-grouped data fetch
+- **Testing**: 100% pass rate (18/18 backend + full frontend validation, iteration_42)
 
 ### Mar 30, 2026 - NotificationBell + Complete Server.py Refactoring
 - **NotificationBell in Desktop Sidebar**: Added notification bell with unread badge to the desktop sidebar header. Dropdown opens rightward to avoid sidebar clipping.

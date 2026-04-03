@@ -4,7 +4,14 @@
 - **Email**: commander@test.com
 - **Password**: test123
 - **Role**: commander
-- **Notes**: Password was reset for this fork environment
+- **Notes**: Full admin access
+
+## Parent Account
+- **Email**: jane.hundley@test.com
+- **Password**: parent123
+- **Role**: parent
+- **Linked CAPID**: 718873 (Athena Hundley, Alpha Flight)
+- **Notes**: Approved, can access My Cadet page only
 
 ## Additional Test Accounts (from previous fork data)
 - **Email**: testadmin@cap.gov
@@ -16,4 +23,4 @@
 - commander@test.cap.gov (executive_staff)
 - 662519@vawg.cap.gov (exec_cadre)
 - 658773@tncap.us (exec_cadre)
-- Total users in DB: 18+
+- Total users in DB: 20+
