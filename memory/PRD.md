@@ -963,6 +963,12 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
 
+### Apr 3, 2026 - Daily Payment Reports in Financial Tracker
+- **Payment Report Import**: Upload eCAP Event Admin Reports (.xlsx) to update payment statuses (PaidInFull, AmountPaid, RegistrationStatus, UnitApproved, WingApproved, ParentApproved) matched by CAPID — overwrites existing data
+- **Payment Reports Tab**: New tab in Financial Tracker with summary cards, By Type/By Flight breakdowns with progress bars, filterable individual table (Name, CAPID, Type, Flight, Paid, Status, Unit, Wing, Contact), and import history
+- **Endpoints**: `/api/participants/import-payments` (POST), `/api/participants/payment-summary` (GET), `/api/payment-imports` (GET)
+- **Testing**: 100% pass rate (23/23 backend + full frontend, iteration_44)
+
 ### Apr 3, 2026 - Code Quality Fixes (Code Review)
 - **XSS Fix**: Added DOMPurify sanitization to `RichTextEditor.js` `dangerouslySetInnerHTML`
 - **Undefined Variables**: Fixed all F821 errors — added missing imports in `documents.py` (logger, APP_NAME, Response), `google_sheets.py` (httpx, logger, pd, BytesIO, uuid, hashlib), `health_services.py` (get_user_permissions), `medical_roster.py` (get_event_settings), `push_notifications.py` (uuid), `participants.py` (pd, auto_assign_single_student, is_valid_flight, sync_roster_to_budget)
