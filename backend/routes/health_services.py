@@ -9,7 +9,7 @@ import pandas as pd
 
 from database import db, api_router
 from models import UserRole
-from permissions import get_current_user, require_role
+from permissions import get_current_user, require_role, get_user_permissions
 
 # ================= HEALTH SERVICES API =================
 

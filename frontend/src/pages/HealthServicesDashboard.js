@@ -792,7 +792,7 @@ const MedicalRosterTab = ({ hasFullAccess }) => {
                       {cadet.critical_flags.length > 0 ? (
                         <div className="flex flex-wrap justify-center gap-0.5">
                           {cadet.critical_flags.map((flag, i) => (
-                            <span key={i} className="text-[8px] px-1 py-0.5 bg-red-600 text-white rounded font-bold">{flag}</span>
+                            <span key={`flag-${flag}-${i}`} className="text-[8px] px-1 py-0.5 bg-red-600 text-white rounded font-bold">{flag}</span>
                           ))}
                         </div>
                       ) : (

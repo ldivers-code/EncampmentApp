@@ -490,14 +490,14 @@ const SchedulePage = () => {
     try {
       const data = await getPendingScheduleChangesCount();
       setPendingCount(data.count);
-    } catch {}
+    } catch (error) { console.error('Failed to load pending count:', error); }
   }, []);
 
   const loadChangeRequests = useCallback(async () => {
     try {
       const data = await getScheduleChangeRequests();
       setChangeRequests(data);
-    } catch {}
+    } catch (error) { console.error('Failed to load change requests:', error); }
   }, []);
 
   useEffect(() => { loadPendingCount(); }, [loadPendingCount]);

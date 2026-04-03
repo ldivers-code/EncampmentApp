@@ -976,7 +976,7 @@ const RosterPage = () => {
               <p className="text-xs uppercase tracking-wide text-emerald-700 mb-2">Budget Income Updated:</p>
               <div className="flex gap-4 text-sm">
                 {importResult.budget_sync.updates.map((u, i) => (
-                  <span key={i} className="text-emerald-600">
+                  <span key={`budget-${u.item}`} className="text-emerald-600">
                     {u.item}: {formatCurrency(u.actual)} ({u.count} participants)
                   </span>
                 ))}

@@ -1,6 +1,7 @@
 """Push Notification routes (VAPID/Web Push)"""
 from fastapi import Depends, HTTPException
 from datetime import datetime, timezone
+import uuid
 
 from database import db, api_router, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
 from models import UserRole, PushSubscription, PushNotificationRequest

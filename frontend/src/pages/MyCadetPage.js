@@ -232,7 +232,7 @@ export default function MyCadetPage() {
               <CardContent>
                 <div className="space-y-3">
                   {health.incidents.map((inc, i) => (
-                    <div key={i} className="p-3 bg-red-50 rounded-sm border border-red-100">
+                    <div key={inc.id || `incident-${i}`} className="p-3 bg-red-50 rounded-sm border border-red-100">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm">{inc.incident_type || inc.type || 'Incident'}</span>
                         <Badge variant={inc.severity === 'critical' ? 'destructive' : 'outline'} className="text-xs">
@@ -255,7 +255,7 @@ export default function MyCadetPage() {
               {!health?.allergies?.length ? <p className="text-sm text-slate-500">No allergies on record.</p> : (
                 <div className="flex flex-wrap gap-2">
                   {health.allergies.map((a, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{a.allergen || a.allergy_name} ({a.allergy_type || 'general'})</Badge>
+                    <Badge key={`allergy-${a.allergen || a.allergy_name}-${i}`} variant="outline" className="text-xs">{a.allergen || a.allergy_name} ({a.allergy_type || 'general'})</Badge>
                   ))}
                 </div>
               )}
@@ -268,7 +268,7 @@ export default function MyCadetPage() {
               {!health?.prescriptions?.length ? <p className="text-sm text-slate-500">No prescriptions on record.</p> : (
                 <div className="space-y-2">
                   {health.prescriptions.map((p, i) => (
-                    <div key={i} className="p-2 bg-slate-50 rounded-sm text-sm">
+                    <div key={`rx-${p.medication_name || p.name}-${i}`} className="p-2 bg-slate-50 rounded-sm text-sm">
                       <span className="font-medium">{p.medication_name || p.name}</span>
                       {p.dosage && <span className="text-slate-500 ml-2">{p.dosage}</span>}
                       {p.frequency && <span className="text-slate-400 ml-2">({p.frequency})</span>}
@@ -309,7 +309,7 @@ export default function MyCadetPage() {
               <CardContent>
                 <div className="space-y-2">
                   {points.awards.map((a, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2 bg-amber-50 rounded-sm border border-amber-100">
+                    <div key={a.id || `award-${a.award_name || a.name}-${i}`} className="flex items-center gap-2 p-2 bg-amber-50 rounded-sm border border-amber-100">
                       <Award className="w-4 h-4 text-amber-600" />
                       <span className="text-sm font-medium">{a.award_name || a.name}</span>
                     </div>
@@ -325,7 +325,7 @@ export default function MyCadetPage() {
               <CardContent>
                 <div className="space-y-1">
                   {points.entries.map((e, i) => (
-                    <div key={i} className="flex justify-between items-center p-2 text-sm border-b border-slate-100 last:border-0">
+                    <div key={e.id || `entry-${e.reason || e.category}-${i}`} className="flex justify-between items-center p-2 text-sm border-b border-slate-100 last:border-0">
                       <span className="text-slate-700">{e.reason || e.category || 'Points'}</span>
                       <span className={`font-mono font-bold ${e.points >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {e.points >= 0 ? '+' : ''}{e.points}
@@ -348,7 +348,7 @@ export default function MyCadetPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {meals.dietary_restrictions.map((d, i) => (
-                    <Badge key={i} className="bg-amber-100 text-amber-800 text-xs">{d}</Badge>
+                    <Badge key={`diet-${d}`} className="bg-amber-100 text-amber-800 text-xs">{d}</Badge>
                   ))}
                 </div>
               </CardContent>
@@ -361,7 +361,7 @@ export default function MyCadetPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {meals.all_allergies.map((a, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{a}</Badge>
+                    <Badge key={`meal-allergy-${a}`} variant="outline" className="text-xs">{a}</Badge>
                   ))}
                 </div>
               </CardContent>
@@ -374,7 +374,7 @@ export default function MyCadetPage() {
               {!meals?.meal_plans?.length ? <p className="text-sm text-slate-500">No meal plans posted yet.</p> : (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto">
                   {meals.meal_plans.map((mp, i) => (
-                    <div key={i} className="p-3 bg-slate-50 rounded-sm border border-slate-100">
+                    <div key={mp.id || `meal-${mp.date || mp.day_number || i}`} className="p-3 bg-slate-50 rounded-sm border border-slate-100">
                       <div className="font-medium text-sm mb-2">{mp.date || `Day ${mp.day_number || i + 1}`}</div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                         {mp.breakfast && <div><span className="text-slate-400 uppercase">Breakfast:</span> <span className="text-slate-700">{mp.breakfast}</span></div>}

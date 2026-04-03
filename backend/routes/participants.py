@@ -7,12 +7,19 @@ from datetime import datetime, timezone
 from io import BytesIO
 import uuid
 import logging
+import hashlib
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 from database import db, api_router
 from models import (
     UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
 from permissions import get_current_user, require_role
+from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget
 
 # ================= PARTICIPANT ROUTES =================
 
@@ -942,7 +949,7 @@ async def update_participant(
             update_data["flight"] = merged_doc.get("flight")
             update_data["squadron"] = merged_doc.get("squadron")
     
-    result = await db.participants.update_one(
+    await db.participants.update_one(
         {"id": participant_id},
         {"$set": update_data}
     )
@@ -1232,7 +1239,7 @@ async def import_participants(
                         # Generate a pseudo-CAPID from hash of name + unit
                         import hashlib
                         composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
-                        hash_digest = hashlib.md5(composite.encode()).hexdigest()[:6]
+                        hash_digest = hashlib.sha256(composite.encode()).hexdigest()[:6]
                         capid = f"GEN{hash_digest.upper()}"
                     else:
                         # Skip rows without enough identifying info

@@ -2,14 +2,21 @@
 from fastapi import Depends, HTTPException, BackgroundTasks
 from typing import Optional
 from datetime import datetime, timezone
+from io import BytesIO
 import logging
 import os
+import uuid
+import hashlib
 
+import httpx
+import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database import db, api_router
 from models import UserRole, GoogleSheetsSyncRequest, GoogleSheetsSettings
 from permissions import get_current_user, require_role
+
+logger = logging.getLogger(__name__)
 
 # ================= GOOGLE SHEETS SYNC ENDPOINTS =================
 
@@ -250,7 +257,7 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                     if last_name and first_name:
                         import hashlib
                         composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
-                        hash_digest = hashlib.md5(composite.encode()).hexdigest()[:6]
+                        hash_digest = hashlib.sha256(composite.encode()).hexdigest()[:6]
                         capid = f"GEN{hash_digest.upper()}"
                     else:
                         continue

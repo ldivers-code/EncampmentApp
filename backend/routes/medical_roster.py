@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from database import db, api_router
 from models import UserRole
 from permissions import get_current_user, require_role, get_user_permissions, require_health_view
+from health_services import get_event_settings
 
 # ================= MEDICAL ROSTER & CADET FULL PROFILE =================
 

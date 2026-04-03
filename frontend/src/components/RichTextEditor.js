@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactQuill from 'react-quill-new';
+import DOMPurify from 'dompurify';
 import 'react-quill-new/dist/quill.snow.css';
 
 const modules = {
@@ -40,7 +41,7 @@ export const RichTextDisplay = ({ html, className }) => {
   return (
     <div
       className={`rich-text-display prose prose-sm prose-slate max-w-none ${className || ''}`}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
       data-testid="rich-text-display"
     />
   );

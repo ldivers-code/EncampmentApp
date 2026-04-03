@@ -23,7 +23,7 @@ const StatusBoardDisplay = () => {
     try {
       const d = await getSBDisplay();
       setData(d);
-    } catch {}
+    } catch (error) { console.error('Failed to load status board data:', error); }
   }, []);
 
   // Data refresh every 15s

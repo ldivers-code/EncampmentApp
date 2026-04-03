@@ -121,7 +121,7 @@ const LogisticsPage = () => {
       else if (t === 'vehicle-log') setVehicleLog(await getVehicleLog());
       else if (t === 'facilities') setFacilities(await getFacilities());
       else if (t === 'supply') setSupplyReqs(await getSupplyRequests());
-    } catch { /* silent */ }
+    } catch (error) { console.error(`Failed to load ${t}:`, error); }
   }, [searchQ]);
 
   useEffect(() => { if (tab !== 'dashboard') loadTab(tab); }, [tab, loadTab]);

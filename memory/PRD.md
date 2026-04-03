@@ -963,6 +963,14 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
 
+### Apr 3, 2026 - Code Quality Fixes (Code Review)
+- **XSS Fix**: Added DOMPurify sanitization to `RichTextEditor.js` `dangerouslySetInnerHTML`
+- **Undefined Variables**: Fixed all F821 errors — added missing imports in `documents.py` (logger, APP_NAME, Response), `google_sheets.py` (httpx, logger, pd, BytesIO, uuid, hashlib), `health_services.py` (get_user_permissions), `medical_roster.py` (get_event_settings), `push_notifications.py` (uuid), `participants.py` (pd, auto_assign_single_student, is_valid_flight, sync_roster_to_budget)
+- **MD5 → SHA-256**: Replaced insecure `hashlib.md5` with `hashlib.sha256` in `participants.py` and `google_sheets.py`
+- **Array Index Keys**: Fixed 11 instances across `MyCadetPage.js`, `HealthServicesDashboard.js`, `RosterPage.js` — now use stable unique identifiers
+- **Empty Catch Blocks**: Added error logging to silent catches in `StatusBoardDisplay.js`, `StatusBoardControl.js`, `SchedulePage.js`, `LogisticsPage.js`
+- **Backend Lint**: Reduced from 36 errors to 11 (only unused variables and bare excepts remain, no runtime crashes)
+
 ### Apr 3, 2026 - Squadron-Level Visibility for Squadron Commanders & Training Officers
 - **Squadron Commander role**: Assigned to a squadron (not a flight), sees BOTH flights in their squadron on My Flight and Roster pages
 - **Training Officer role**: Assigned to a squadron, sees both flights in their squadron (e.g., 21st CTS → Charlie + Delta)

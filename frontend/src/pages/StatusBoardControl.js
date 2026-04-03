@@ -70,7 +70,7 @@ const StatusBoardControl = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const loadAudit = async () => { try { setAudit(await getSBAudit()); } catch {} };
+  const loadAudit = async () => { try { setAudit(await getSBAudit()); } catch (error) { console.error('Failed to load audit:', error); } };
 
   const openModal = (type, data = null) => {
     setModal(type);

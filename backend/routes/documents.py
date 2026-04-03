@@ -1,14 +1,18 @@
 """Document and File Upload/Download routes"""
-from fastapi import Depends, HTTPException, UploadFile, File, Form
+from fastapi import Depends, HTTPException, UploadFile, File, Form, Response
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
 import logging
+import os
 
 from database import db, api_router
 from models import UserRole, DocumentCreate, DocumentResponse
 from permissions import get_current_user, require_role
 from file_storage import put_object, get_object
+
+logger = logging.getLogger(__name__)
+APP_NAME = os.environ.get("APP_NAME", "cadre-hub")
 
 # ================= DOCUMENT ROUTES =================
 
