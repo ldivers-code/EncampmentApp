@@ -1,0 +1,126 @@
+{
+  "summary": "Squadron-level visibility testing complete. All 18 backend tests passed. Frontend UI verified working for Squadron Commander and Training Officer roles with correct 'Squadron Access' labels, flight selectors showing only their squadron's flights, and proper participant filtering on both My Flight and Roster pages.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RosterPage table",
+        "issues": ["React hydration warnings about span elements inside table elements - cosmetic issue from previous iterations, does not affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_squadron_visibility.py",
+    "/app/test_reports/pytest/squadron_visibility_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_squadron_visibility.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "commander": {"email": "commander@test.com", "password": "test123", "role": "commander"},
+    "squadron_commander": {"email": "sqcc@test.com", "password": "test123", "role": "squadron_commander", "squadron": "6th_cts"},
+    "training_officer": {"email": "to@test.com", "password": "test123", "role": "training_officer", "squadron": "21st_cts"},
+    "parent": {"email": "jane.hundley@test.com", "password": "parent123", "role": "parent", "linked_capid": "718873"},
+    "exec_cadre_alpha": {"email": "commander@cap.us", "password": "test123", "role": "exec_cadre", "flight": "alpha"}
+  },
+  "seed_data_creation": "Test users sqcc@test.com (Squadron Commander, 6th_cts) and to@test.com (Training Officer, 21st_cts) were created and approved by main agent",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Squadron-level visibility features fully tested and working. Squadron Commander (6th_cts) sees Alpha+Bravo flights only. Training Officer (21st_cts) sees Charlie+Delta flights only. Flight-level cadre still sees only their assigned flight. Commander sees all flights. Parent role is assignable and redirects to /my-cadet. Org chart auto-sync logs show successful linking for squadron_commander role.",
+  "verified_features": [
+    {
+      "feature": "Squadron Commander accessible_flights",
+      "status": "PASS",
+      "details": "GET /api/my-flight returns accessible_flights=['alpha','bravo'] for squadron_commander with squadron=6th_cts"
+    },
+    {
+      "feature": "Squadron Commander participants filter",
+      "status": "PASS",
+      "details": "GET /api/participants returns only Alpha and Bravo flight participants"
+    },
+    {
+      "feature": "Squadron Commander by-flight filter",
+      "status": "PASS",
+      "details": "GET /api/participants/by-flight returns only Alpha and Bravo flight groups"
+    },
+    {
+      "feature": "Squadron Commander My Flight UI label",
+      "status": "PASS",
+      "details": "My Flight page shows 'Squadron Access - Alpha & Bravo' (not 'Full Access')"
+    },
+    {
+      "feature": "Squadron Commander view toggle",
+      "status": "PASS",
+      "details": "Flight/Squadron toggle visible on My Flight page for squadron-level roles"
+    },
+    {
+      "feature": "Training Officer accessible_flights",
+      "status": "PASS",
+      "details": "GET /api/my-flight returns accessible_flights=['charlie','delta'] for training_officer with squadron=21st_cts"
+    },
+    {
+      "feature": "Training Officer participants filter",
+      "status": "PASS",
+      "details": "GET /api/participants returns only Charlie and Delta flight participants"
+    },
+    {
+      "feature": "Training Officer by-flight filter",
+      "status": "PASS",
+      "details": "GET /api/participants/by-flight returns only Charlie and Delta flight groups"
+    },
+    {
+      "feature": "Training Officer My Flight UI label",
+      "status": "PASS",
+      "details": "My Flight page shows 'Squadron Access - Charlie & Delta'"
+    },
+    {
+      "feature": "Training Officer Roster page filter",
+      "status": "PASS",
+      "details": "Roster page shows only Charlie and Delta flight participants with 21ST CTS squadron badges"
+    },
+    {
+      "feature": "Exec Cadre Alpha flight restriction",
+      "status": "PASS",
+      "details": "exec_cadre with flight=alpha only sees Alpha flight participants (unchanged behavior)"
+    },
+    {
+      "feature": "Commander full access",
+      "status": "PASS",
+      "details": "Commander sees all 6 flights and has has_full_access=True"
+    },
+    {
+      "feature": "Parent login redirect",
+      "status": "PASS",
+      "details": "Parent user redirected to /my-cadet after login"
+    },
+    {
+      "feature": "Parent roster access denied",
+      "status": "PASS",
+      "details": "Parent gets 403 'Parents do not have roster access' on /api/participants"
+    },
+    {
+      "feature": "Parent role assignable",
+      "status": "PASS",
+      "details": "Parent role is in valid_roles list and can be assigned via Admin"
+    },
+    {
+      "feature": "Org chart auto-sync",
+      "status": "PASS",
+      "details": "Backend logs show 'Auto-synced org chart: sq1-cc -> participant' when squadron_commander assigned to 6th_cts"
+    }
+  ],
+  "mocked_apis": {
+    "SendGrid": "Email sending returns 401 Unauthorized (API key issue) but approval workflow still works"
+  }
+}

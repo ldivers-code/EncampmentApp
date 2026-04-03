@@ -16,21 +16,50 @@ from permissions import get_current_user, require_role
 
 # ================= PARTICIPANT ROUTES =================
 
+SQUADRON_FLIGHTS_MAP = {
+    "6th_cts": ["alpha", "bravo"],
+    "21st_cts": ["charlie", "delta"],
+    "22nd_cts": ["echo", "foxtrot"]
+}
+FLIGHT_TO_SQUADRON_MAP = {
+    "alpha": "6th_cts", "bravo": "6th_cts",
+    "charlie": "21st_cts", "delta": "21st_cts",
+    "echo": "22nd_cts", "foxtrot": "22nd_cts"
+}
+
+def _apply_visibility_filter(query: dict, user: dict):
+    """Apply role-based visibility filter to participant queries.
+    Squadron-level roles (Squadron Commander, Training Officer) see both flights in their squadron.
+    Flight-level roles (Cadre, Exec Cadre) see only their assigned flight.
+    """
+    user_role = user.get('role')
+    user_flight = (user.get('flight') or '').lower()
+    user_squadron = (user.get('squadron') or '').lower()
+
+    if user_role == UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+
+    # Squadron-level roles: see both flights in their squadron
+    squadron_level_roles = [UserRole.SQUADRON_COMMANDER, UserRole.TRAINING_OFFICER]
+    if user_role in squadron_level_roles:
+        sq = user_squadron or FLIGHT_TO_SQUADRON_MAP.get(user_flight, '')
+        if sq and sq in SQUADRON_FLIGHTS_MAP:
+            query["flight"] = {"$in": SQUADRON_FLIGHTS_MAP[sq]}
+        return
+
+    # Flight-level cadre: see only their assigned flight
+    flight_level_roles = [UserRole.CADRE, UserRole.EXEC_CADRE]
+    if user_role in flight_level_roles and user_flight:
+        query["flight"] = user_flight
+
+
 @api_router.get("/participants", response_model=List[ParticipantResponse])
 async def get_participants(user: dict = Depends(get_current_user)):
     query = {"is_removed": {"$ne": True}}
     
     user_role = user.get('role')
-    user_flight = (user.get('flight') or '').lower()
     
-    # Flight Sergeants (cadre assigned to a flight) only see their flight's students
-    cadre_flight_roles = [UserRole.CADRE, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER]
-    if user_role in cadre_flight_roles and user_flight:
-        query["flight"] = user_flight
-    
-    # Parents cannot view roster
-    if user_role == UserRole.PARENT:
-        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+    _apply_visibility_filter(query, user)
     
     participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
     
@@ -68,15 +97,7 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
     """Get participants grouped by flight for easy identification"""
     query = {"is_removed": {"$ne": True}}
     
-    user_role = user.get('role')
-    user_flight = (user.get('flight') or '').lower()
-    
-    cadre_flight_roles = [UserRole.CADRE, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER]
-    if user_role in cadre_flight_roles and user_flight:
-        query["flight"] = user_flight
-    
-    if user_role == UserRole.PARENT:
-        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+    _apply_visibility_filter(query, user)
     
     participants = await db.participants.find(
         query,

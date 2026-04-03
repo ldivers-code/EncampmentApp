@@ -193,7 +193,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
     """Get current user's flight information and accessible flights"""
     user_flight = (user.get("flight") or "").lower()
     user_role = user.get("role")
-    user_squadron = user.get("squadron")
+    user_squadron = (user.get("squadron") or "").lower()
     
     flight_to_squadron = {
         "alpha": "6th_cts", "bravo": "6th_cts",
@@ -201,21 +201,31 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
         "echo": "22nd_cts", "foxtrot": "22nd_cts"
     }
     
+    squadron_flights = {
+        "6th_cts": ["alpha", "bravo"],
+        "21st_cts": ["charlie", "delta"],
+        "22nd_cts": ["echo", "foxtrot"]
+    }
+    
     all_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
     all_squadrons = ["6th_cts", "21st_cts", "22nd_cts"]
     
-    # Determine accessible flights
-    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]:
+    # Full access roles
+    if user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.DCP]:
         accessible_flights = all_flights
         accessible_squadrons = all_squadrons
-    elif user_squadron:
-        # Squadron-level staff
-        squadron_flights = {
-            "6th_cts": ["alpha", "bravo"],
-            "21st_cts": ["charlie", "delta"],
-            "22nd_cts": ["echo", "foxtrot"]
-        }
-        accessible_flights = squadron_flights.get(user_squadron, [])
+    # Squadron-level roles: see both flights in their squadron
+    elif user_role in [UserRole.SQUADRON_COMMANDER, UserRole.TRAINING_OFFICER]:
+        sq = user_squadron if user_squadron in squadron_flights else flight_to_squadron.get(user_flight, "")
+        if sq and sq in squadron_flights:
+            accessible_flights = squadron_flights[sq]
+            accessible_squadrons = [sq]
+        else:
+            accessible_flights = all_flights
+            accessible_squadrons = all_squadrons
+    elif user_squadron and user_squadron in squadron_flights:
+        # Other squadron-assigned staff
+        accessible_flights = squadron_flights[user_squadron]
         accessible_squadrons = [user_squadron]
     elif user_flight:
         accessible_flights = [user_flight]
@@ -230,7 +240,7 @@ async def get_my_flight_info(user: dict = Depends(get_current_user)):
         "user_role": user_role,
         "accessible_flights": accessible_flights,
         "accessible_squadrons": accessible_squadrons,
-        "has_full_access": user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]
+        "has_full_access": user_role in [UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE, UserRole.DCP]
     }
 
 

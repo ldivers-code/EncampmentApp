@@ -4,6 +4,7 @@ from typing import List
 from datetime import datetime, timezone
 import uuid
 import os
+import logging
 
 from database import db, api_router
 from models import (
@@ -12,6 +13,73 @@ from models import (
 from permissions import (
     get_default_permissions, get_current_user, require_role, send_approval_email
 )
+
+logger = logging.getLogger(__name__)
+
+# Org chart role_id mappings
+SQUADRON_ORG_CHART_MAP = {
+    "6th_cts": {"cc": "sq1-cc", "to": "to-sq1", "ato": "ato-sq1"},
+    "21st_cts": {"cc": "sq2-cc", "to": "to-sq2", "ato": "ato-sq2"},
+    "22nd_cts": {"cc": "sq3-cc", "to": "to-sq3", "ato": "ato-sq3"},
+}
+
+async def auto_sync_org_chart(user_data: dict):
+    """Auto-update org chart positions based on user role and unit assignment"""
+    role = user_data.get("role", "")
+    flight = (user_data.get("flight") or "").lower()
+    squadron = (user_data.get("squadron") or "").lower()
+    participant_id = user_data.get("linked_participant_id")
+    
+    # Find participant by CAPID if no linked_participant_id
+    if not participant_id:
+        capid = user_data.get("capid", "")
+        if capid:
+            p = await db.participants.find_one({"capid": capid, "is_removed": {"$ne": True}}, {"_id": 0, "id": 1})
+            if p:
+                participant_id = p["id"]
+    
+    org_role_id = None
+    
+    flight_to_sq = {
+        "alpha": "6th_cts", "bravo": "6th_cts",
+        "charlie": "21st_cts", "delta": "21st_cts",
+        "echo": "22nd_cts", "foxtrot": "22nd_cts"
+    }
+    
+    if role == UserRole.SQUADRON_COMMANDER:
+        sq = squadron if squadron in SQUADRON_ORG_CHART_MAP else flight_to_sq.get(flight, "")
+        if sq and sq in SQUADRON_ORG_CHART_MAP:
+            org_role_id = SQUADRON_ORG_CHART_MAP[sq]["cc"]
+    elif role == UserRole.TRAINING_OFFICER:
+        sq = squadron if squadron in SQUADRON_ORG_CHART_MAP else flight_to_sq.get(flight, "")
+        if sq and sq in SQUADRON_ORG_CHART_MAP:
+            org_role_id = SQUADRON_ORG_CHART_MAP[sq]["to"]
+    elif flight:
+        # Detect position from user's position field or role context
+        position = (user_data.get("position") or "").lower()
+        name = user_data.get("name", "")
+        
+        # Check if user name contains hints
+        name_lower = name.lower()
+        
+        if "flight commander" in position or "flt cc" in position or "flight commander" in name_lower:
+            org_role_id = f"flight_{flight}_commander"
+        elif "flight sergeant" in position or "flt sgt" in position or "flight sergeant" in name_lower:
+            org_role_id = f"flight_{flight}_sergeant"
+    
+    if org_role_id and participant_id:
+        existing = await db.org_chart_roles.find_one({"role_id": org_role_id}, {"_id": 0})
+        if existing:
+            await db.org_chart_roles.update_one(
+                {"role_id": org_role_id},
+                {"$set": {
+                    "assigned_participant_id": participant_id,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            logger.info(f"Auto-synced org chart: {org_role_id} -> participant {participant_id}")
+    elif org_role_id:
+        logger.info(f"Org chart role {org_role_id} identified but no participant_id to link")
 
 
 # ================= USER MANAGEMENT =================
@@ -29,7 +97,7 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
         UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES,
         UserRole.DINING_FACILITY, UserRole.SUPPORT_LOGISTICS, UserRole.SUPPORT_COMMS,
         UserRole.SUPPORT_PA, UserRole.SUPPORT_DINING, UserRole.SUPPORT_HEALTH,
-        UserRole.SQUADRON_COMMANDER
+        UserRole.SQUADRON_COMMANDER, UserRole.PARENT
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -40,6 +108,15 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Auto-sync org chart after role change
+    try:
+        updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        if updated_user:
+            await auto_sync_org_chart(updated_user)
+    except Exception as e:
+        logger.error(f"Org chart auto-sync on role change failed: {e}")
+    
     return {"message": "Role updated successfully"}
 
 @api_router.put("/users/{user_id}/unit")
@@ -95,6 +172,13 @@ async def assign_user_unit(
         raise HTTPException(status_code=404, detail="User not found")
     
     updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    
+    # Auto-sync org chart position
+    try:
+        await auto_sync_org_chart(updated_user)
+    except Exception as e:
+        logger.error(f"Org chart auto-sync failed: {e}")
+    
     return UserResponse(**updated_user)
 
 @api_router.delete("/users/{user_id}")

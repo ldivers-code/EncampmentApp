@@ -413,7 +413,7 @@ const MyFlightPage = () => {
 
   // Check if user can view all flights (Exec Cadre, Commander, Staff, Plans & Programs)
   const canViewAllFlights = () => {
-    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs', 'squadron_commander'].includes(user?.role);
   };
 
   // Check if user can only submit reports for their assigned flight
@@ -423,7 +423,7 @@ const MyFlightPage = () => {
 
   // Check if user can escalate reports
   const canEscalateReports = () => {
-    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs'].includes(user?.role);
+    return ['dcp', 'commander', 'executive_staff', 'training_officer', 'exec_cadre', 'staff', 'plans_programs', 'squadron_commander'].includes(user?.role);
   };
 
   // Check if user can resolve escalated reports
@@ -778,7 +778,11 @@ const MyFlightPage = () => {
               My Flight
             </h1>
             <p className="text-slate-500 text-sm">
-              {flightInfo.has_full_access ? 'Full Access - All Flights' : `Assigned to ${getFlightLabel(flightInfo.user_flight)}`}
+              {flightInfo.has_full_access 
+                ? 'Full Access - All Flights' 
+                : ['squadron_commander', 'training_officer'].includes(user?.role)
+                  ? `Squadron Access - ${flightInfo.accessible_flights?.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(' & ') || 'All'}`
+                  : `Assigned to ${getFlightLabel(flightInfo.user_flight)}`}
             </p>
           </div>
         </div>
@@ -799,7 +803,7 @@ const MyFlightPage = () => {
           )}
           
           {/* View Mode Toggle */}
-          {flightInfo.has_full_access && (
+          {(flightInfo.has_full_access || flightInfo.accessible_flights?.length > 1) && (
             <div className="flex rounded-sm border border-slate-200 overflow-hidden">
               <button
                 onClick={() => setViewMode('flight')}
