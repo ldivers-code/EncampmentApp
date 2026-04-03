@@ -478,9 +478,10 @@ async def import_payment_report(
     file: UploadFile = File(...),
     user: dict = Depends(require_finance_access())
 ):
-    """Import daily eCAP payment report - ONLY updates payment fields, overwrites existing data.
-    Matches by CAPID and updates: paid_in_full, amount_paid, registration_status, unit_approved, wing_approved.
-    Does NOT touch flight, squadron, or other assignment data.
+    """Import payment reports - auto-detects format:
+    1) Daily Payments report (CAPID, FullName, Amount, PaymentDate, PaymentType) - each row = a payment
+    2) eCAP EventAdmin report (RegistrantsCAPID, PaidInFull, AmountPaid, etc.) - status-based
+    Matches by CAPID, overwrites existing payment data.
     """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
@@ -489,129 +490,43 @@ async def import_payment_report(
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         df.columns = df.columns.str.strip()
-        
-        column_map = {
-            'RegistrantsCAPID': 'capid', 'CAPID': 'capid',
-            'PaidInFull': 'paid_in_full', 'AmountPaid': 'amount_paid',
-            'RegistrationStatus': 'registration_status',
-            'InvoiceStatus': 'invoice_status', 'InvoiceID': 'invoice_id',
-            'UnitApproved': 'unit_approved', 'WingApproved': 'wing_approved',
-            'ParentApproved': 'parent_approved',
-            'NameLast': 'last_name', 'NameFirst': 'first_name',
-            'Rank': 'rank', 'MbrType': 'member_type', 'StaffMember': 'staff_member',
-        }
-        df = df.rename(columns=column_map)
+        cols = set(df.columns)
         
         now = datetime.now(timezone.utc).isoformat()
         matched = 0
         updated = 0
         not_found = []
+        report_format = "unknown"
         
-        for _, row in df.iterrows():
-            row_dict = row.to_dict()
-            
-            capid = str(row_dict.get('capid', '')).strip()
-            if not capid or capid == 'nan':
-                continue
-            
-            existing = await db.participants.find_one({"capid": capid}, {"_id": 0, "id": 1, "last_name": 1, "first_name": 1})
-            if not existing:
-                last = str(row_dict.get('last_name', '')).strip()
-                first = str(row_dict.get('first_name', '')).strip()
-                if last != 'nan' and first != 'nan':
-                    not_found.append({"capid": capid, "name": f"{last}, {first}"})
-                continue
-            
-            matched += 1
-            
-            def get_bool(key):
-                val = row_dict.get(key)
-                if val is None or (isinstance(val, float) and pd.isna(val)):
-                    return None
-                if isinstance(val, bool):
-                    return val
-                return str(val).lower() in ['yes', 'true', '1']
-            
-            def get_float(key):
-                val = row_dict.get(key)
-                if val is None or (isinstance(val, float) and pd.isna(val)):
-                    return None
-                try:
-                    return float(val)
-                except (ValueError, TypeError):
-                    return None
-            
-            def get_str(key):
-                val = row_dict.get(key)
-                if val is None or (isinstance(val, float) and pd.isna(val)):
-                    return None
-                s = str(val).strip()
-                return s if s and s != 'nan' else None
-            
-            paid_in_full = get_bool('paid_in_full')
-            amount_paid = get_float('amount_paid')
-            
-            payment_update = {
-                "updated_at": now,
-                "payment_last_synced": now,
-            }
-            
-            if paid_in_full is not None:
-                payment_update["paid_in_full"] = paid_in_full
-                payment_update["paid"] = paid_in_full
-            if amount_paid is not None:
-                payment_update["amount_paid"] = amount_paid
-                if amount_paid > 0 and paid_in_full is None:
-                    payment_update["paid"] = True
-                    payment_update["paid_in_full"] = True
-            
-            reg_status = get_str('registration_status')
-            if reg_status:
-                payment_update["registration_status"] = reg_status
-            
-            inv_status = get_str('invoice_status')
-            if inv_status:
-                payment_update["invoice_status"] = inv_status
-            
-            inv_id = get_str('invoice_id')
-            if inv_id:
-                payment_update["invoice_id"] = inv_id
-            
-            unit_approved = get_bool('unit_approved')
-            if unit_approved is not None:
-                payment_update["unit_approved"] = unit_approved
-            
-            wing_approved = get_bool('wing_approved')
-            if wing_approved is not None:
-                payment_update["wing_approved"] = wing_approved
-            
-            parent_approved = get_bool('parent_approved')
-            if parent_approved is not None:
-                payment_update["parent_approved"] = parent_approved
-            
-            result = await db.participants.update_one(
-                {"capid": capid},
-                {"$set": payment_update}
-            )
-            if result.modified_count > 0:
-                updated += 1
+        # Auto-detect format
+        is_daily_payments = 'FullName' in cols and 'Amount' in cols and 'PaymentDate' in cols
+        is_ecap_admin = 'PaidInFull' in cols or 'RegistrationStatus' in cols or 'AmountPaid' in cols
         
-        # Log the import
+        if is_daily_payments:
+            report_format = "daily_payments"
+            matched, updated, not_found = await _import_daily_payments(df, now)
+        elif is_ecap_admin:
+            report_format = "ecap_admin"
+            matched, updated, not_found = await _import_ecap_admin(df, now)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unrecognized report format. Expected columns like 'FullName'+'Amount'+'PaymentDate' (Daily Payments) or 'PaidInFull'/'RegistrationStatus' (eCAP Admin). Found: {', '.join(sorted(cols)[:15])}")
+        
         import_log = {
             "id": str(uuid.uuid4()),
             "type": "payment_report",
+            "format": report_format,
             "filename": file.filename,
             "imported_by": user.get("name", user.get("email")),
             "imported_at": now,
+            "total_rows": len(df),
             "matched": matched,
             "updated": updated,
             "not_found_count": len(not_found),
-            "not_found_sample": not_found[:10],
+            "not_found_sample": not_found[:20],
         }
         await db.payment_imports.insert_one(import_log)
         import_log.pop("_id", None)
         
-        # Sync budget income
         try:
             from routes.students import sync_roster_to_budget
             budget_sync = await sync_roster_to_budget()
@@ -619,15 +534,241 @@ async def import_payment_report(
             budget_sync = None
         
         return {
-            "message": f"Payment report imported: {matched} matched, {updated} updated, {len(not_found)} not on roster",
+            "message": f"Payment report imported ({report_format}): {matched} matched, {updated} updated, {len(not_found)} not on roster",
+            "format": report_format,
             "matched": matched,
             "updated": updated,
             "not_found": not_found[:20],
             "budget_sync": budget_sync,
             "import_id": import_log["id"]
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing payment report: {str(e)}")
+
+
+async def _resolve_capid(raw_capid, full_name=None):
+    """Resolve a CAPID to a participant, handling corrupted Excel serial numbers.
+    Falls back to name matching if CAPID doesn't match."""
+    capid = str(raw_capid).strip()
+    if not capid or capid == 'nan':
+        return None, capid
+    
+    # Handle Excel date serial number corruption (e.g. 46069.7049375347)
+    if '.' in capid:
+        try:
+            capid = str(int(float(capid)))
+        except (ValueError, TypeError):
+            pass
+    
+    # Remove leading zeros but keep at least 1 digit
+    capid = capid.lstrip('0') or '0'
+    
+    existing = await db.participants.find_one(
+        {"capid": capid, "is_removed": {"$ne": True}},
+        {"_id": 0, "id": 1, "last_name": 1, "first_name": 1, "capid": 1}
+    )
+    if existing:
+        return existing, capid
+    
+    # Fallback: try name matching if we have a full name
+    if full_name and full_name != 'nan':
+        name_clean = full_name.strip()
+        if ',' in name_clean:
+            parts = name_clean.split(',', 1)
+            last = parts[0].strip()
+            first = parts[1].strip().split()[0] if parts[1].strip() else ""
+        else:
+            parts = name_clean.split()
+            last = parts[-1] if parts else ""
+            first = parts[0] if len(parts) > 1 else ""
+        
+        if last:
+            import re
+            existing = await db.participants.find_one(
+                {
+                    "last_name": {"$regex": f"^{re.escape(last)}$", "$options": "i"},
+                    "first_name": {"$regex": f"^{re.escape(first)}", "$options": "i"},
+                    "is_removed": {"$ne": True}
+                },
+                {"_id": 0, "id": 1, "last_name": 1, "first_name": 1, "capid": 1}
+            )
+            if existing:
+                return existing, existing.get("capid", capid)
+    
+    return None, capid
+
+
+async def _import_daily_payments(df, now):
+    """Import Daily Payments report: each row = a payment transaction.
+    Presence in report means person has paid."""
+    matched = 0
+    updated = 0
+    not_found = []
+    
+    # Aggregate payments per person (they might have multiple rows)
+    payments_by_person = {}
+    for _, row in df.iterrows():
+        row_dict = row.to_dict()
+        raw_capid = row_dict.get('CAPID', '')
+        full_name = str(row_dict.get('FullName', '')).strip()
+        amount = 0
+        try:
+            amount = float(row_dict.get('Amount', 0))
+        except (ValueError, TypeError):
+            pass
+        
+        payment_date_raw = row_dict.get('PaymentDate')
+        payment_type = str(row_dict.get('PaymentType', '')).strip()
+        if payment_type == 'nan':
+            payment_type = ''
+        
+        # Parse payment date
+        payment_date = None
+        if payment_date_raw and str(payment_date_raw) != 'nan':
+            if isinstance(payment_date_raw, datetime):
+                payment_date = payment_date_raw.isoformat()
+            else:
+                try:
+                    from dateutil import parser as dateparser
+                    payment_date = dateparser.parse(str(payment_date_raw)).isoformat()
+                except Exception:
+                    payment_date = str(payment_date_raw)
+        
+        key = f"{raw_capid}|{full_name}"
+        if key not in payments_by_person:
+            payments_by_person[key] = {
+                "raw_capid": raw_capid,
+                "full_name": full_name,
+                "total_amount": 0,
+                "payments": [],
+            }
+        payments_by_person[key]["total_amount"] += amount
+        payments_by_person[key]["payments"].append({
+            "amount": amount,
+            "date": payment_date,
+            "type": payment_type,
+        })
+    
+    for key, person in payments_by_person.items():
+        existing, capid = await _resolve_capid(person["raw_capid"], person["full_name"])
+        
+        if not existing:
+            not_found.append({"capid": capid, "name": person["full_name"]})
+            continue
+        
+        matched += 1
+        
+        payment_update = {
+            "paid": True,
+            "paid_in_full": True,
+            "amount_paid": person["total_amount"],
+            "updated_at": now,
+            "payment_last_synced": now,
+            "payment_history": person["payments"],
+        }
+        
+        if person["payments"]:
+            last_payment = person["payments"][-1]
+            if last_payment.get("date"):
+                payment_update["last_payment_date"] = last_payment["date"]
+            if last_payment.get("type"):
+                payment_update["payment_type"] = last_payment["type"]
+        
+        result = await db.participants.update_one(
+            {"id": existing["id"]},
+            {"$set": payment_update}
+        )
+        if result.modified_count > 0:
+            updated += 1
+    
+    return matched, updated, not_found
+
+
+async def _import_ecap_admin(df, now):
+    """Import eCAP EventAdmin report: status-based with PaidInFull, RegistrationStatus, etc."""
+    column_map = {
+        'RegistrantsCAPID': 'capid', 'CAPID': 'capid',
+        'PaidInFull': 'paid_in_full', 'AmountPaid': 'amount_paid',
+        'RegistrationStatus': 'registration_status',
+        'InvoiceStatus': 'invoice_status', 'InvoiceID': 'invoice_id',
+        'UnitApproved': 'unit_approved', 'WingApproved': 'wing_approved',
+        'ParentApproved': 'parent_approved',
+        'NameLast': 'last_name', 'NameFirst': 'first_name',
+    }
+    df = df.rename(columns=column_map)
+    
+    matched = 0
+    updated = 0
+    not_found = []
+    
+    for _, row in df.iterrows():
+        row_dict = row.to_dict()
+        capid = str(row_dict.get('capid', '')).strip()
+        if not capid or capid == 'nan':
+            continue
+        if '.' in capid:
+            try:
+                capid = str(int(float(capid)))
+            except (ValueError, TypeError):
+                pass
+        
+        existing = await db.participants.find_one({"capid": capid, "is_removed": {"$ne": True}}, {"_id": 0, "id": 1})
+        if not existing:
+            last = str(row_dict.get('last_name', '')).strip()
+            first = str(row_dict.get('first_name', '')).strip()
+            if last != 'nan' and first != 'nan':
+                not_found.append({"capid": capid, "name": f"{last}, {first}"})
+            continue
+        
+        matched += 1
+        
+        def get_val(key, vtype='str'):
+            val = row_dict.get(key)
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return None
+            if vtype == 'bool':
+                if isinstance(val, bool):
+                    return val
+                return str(val).lower() in ['yes', 'true', '1']
+            if vtype == 'float':
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+            s = str(val).strip()
+            return s if s and s != 'nan' else None
+        
+        paid_in_full = get_val('paid_in_full', 'bool')
+        amount_paid = get_val('amount_paid', 'float')
+        
+        payment_update = {"updated_at": now, "payment_last_synced": now}
+        
+        if paid_in_full is not None:
+            payment_update["paid_in_full"] = paid_in_full
+            payment_update["paid"] = paid_in_full
+        if amount_paid is not None:
+            payment_update["amount_paid"] = amount_paid
+            if amount_paid > 0 and paid_in_full is None:
+                payment_update["paid"] = True
+                payment_update["paid_in_full"] = True
+        
+        for field, key in [("registration_status", "registration_status"), ("invoice_status", "invoice_status"), ("invoice_id", "invoice_id")]:
+            v = get_val(key)
+            if v:
+                payment_update[field] = v
+        
+        for field, key in [("unit_approved", "unit_approved"), ("wing_approved", "wing_approved"), ("parent_approved", "parent_approved")]:
+            v = get_val(key, 'bool')
+            if v is not None:
+                payment_update[field] = v
+        
+        result = await db.participants.update_one({"id": existing["id"]}, {"$set": payment_update})
+        if result.modified_count > 0:
+            updated += 1
+    
+    return matched, updated, not_found
 
 
 @api_router.get("/participants/payment-summary")
