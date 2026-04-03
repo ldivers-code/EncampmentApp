@@ -1,0 +1,144 @@
+{
+  "summary": "Parent Portal and Flight-Grouped Roster testing complete. All 18 backend tests passed. Frontend UI verified working for flight-grouped roster view, parent login redirect, My Cadet page with all 5 tabs, and parent sidebar restriction.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "RosterPage table",
+        "issues": ["React hydration warnings about span elements inside table elements - cosmetic issue from previous iterations, does not affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_parent_portal.py",
+    "/app/test_reports/pytest/parent_portal_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_parent_portal.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "commander": {"email": "commander@test.com", "password": "test123", "role": "commander"},
+    "parent": {"email": "jane.hundley@test.com", "password": "parent123", "role": "parent", "linked_capid": "718873"},
+    "exec_cadre_alpha": {"email": "commander@cap.us", "password": "test123", "role": "exec_cadre", "flight": "alpha"}
+  },
+  "seed_data_creation": "Parent user jane.hundley@test.com was created and approved by main agent, linked to CAPID 718873 (Athena Hundley, Alpha Flight)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Parent Portal and Flight-Grouped Roster features fully tested and working. Parent user jane.hundley@test.com is approved and linked to cadet Athena Hundley (CAPID 718873, Alpha Flight). Flight sergeant restriction verified working for exec_cadre users with flight assignments.",
+  "verified_features": [
+    {
+      "feature": "Flight-grouped roster view toggle",
+      "status": "PASS",
+      "details": "By Flight toggle button on /roster page switches to flight-grouped view showing Alpha, Bravo, Charlie, Delta, Echo, Foxtrot flights"
+    },
+    {
+      "feature": "Flight-grouped view columns",
+      "status": "PASS",
+      "details": "Shows Name, CAPID, Unit, Gender, Email, Phone, Parent Contact columns per flight group"
+    },
+    {
+      "feature": "Copy Emails button per flight",
+      "status": "PASS",
+      "details": "Each flight group has a 'Copy Emails' button that copies member emails to clipboard"
+    },
+    {
+      "feature": "Flight Sergeant restriction - /api/participants",
+      "status": "PASS",
+      "details": "exec_cadre user with flight=alpha only sees 6 participants from alpha flight"
+    },
+    {
+      "feature": "Flight Sergeant restriction - /api/participants/by-flight",
+      "status": "PASS",
+      "details": "exec_cadre user with flight=alpha only sees Alpha flight group (1 group, 6 members)"
+    },
+    {
+      "feature": "Parent registration requires valid CAPID",
+      "status": "PASS",
+      "details": "POST /api/auth/register with role=parent and invalid CAPID returns 400 'No student found'"
+    },
+    {
+      "feature": "Parent login success",
+      "status": "PASS",
+      "details": "jane.hundley@test.com can login and receives role=parent in response"
+    },
+    {
+      "feature": "Parent login redirects to /my-cadet",
+      "status": "PASS",
+      "details": "After login, parent is redirected to /my-cadet instead of /dashboard"
+    },
+    {
+      "feature": "Parent sidebar shows only 'My Cadet'",
+      "status": "PASS",
+      "details": "Parent user sees only 'My Cadet' navigation item in sidebar"
+    },
+    {
+      "feature": "GET /api/parent/my-cadet",
+      "status": "PASS",
+      "details": "Returns linked cadet info: C/MSgt Athena Hundley, CAPID 718873, Alpha Flight, 6TH CTS"
+    },
+    {
+      "feature": "GET /api/parent/my-cadet/schedule",
+      "status": "PASS",
+      "details": "Returns events filtered by cadet's flight"
+    },
+    {
+      "feature": "GET /api/parent/my-cadet/health-incidents",
+      "status": "PASS",
+      "details": "Returns incidents, allergies, prescriptions, otc_approvals"
+    },
+    {
+      "feature": "GET /api/parent/my-cadet/points",
+      "status": "PASS",
+      "details": "Returns total_points, total_merits, total_demerits, awards"
+    },
+    {
+      "feature": "GET /api/parent/my-cadet/meals",
+      "status": "PASS",
+      "details": "Returns meal_plans, dietary_restrictions, all_allergies, cadet_name"
+    },
+    {
+      "feature": "My Cadet page tabs",
+      "status": "PASS",
+      "details": "All 5 tabs work: Overview, Schedule, Health, Points, Meals"
+    },
+    {
+      "feature": "My Cadet page displays cadet info",
+      "status": "PASS",
+      "details": "Shows cadet name, CAPID, flight badge, squadron, check-in progress, quick status cards"
+    },
+    {
+      "feature": "Parent cannot access /api/participants",
+      "status": "PASS",
+      "details": "Returns 403 'Parents do not have roster access'"
+    },
+    {
+      "feature": "Parent cannot access /api/participants/by-flight",
+      "status": "PASS",
+      "details": "Returns 403 'Parents do not have roster access'"
+    },
+    {
+      "feature": "Non-parent cannot access /api/parent/* endpoints",
+      "status": "PASS",
+      "details": "Commander user gets 403 'Parent access only' on all parent endpoints"
+    },
+    {
+      "feature": "POST /api/users/{id}/approve",
+      "status": "PASS",
+      "details": "Admin can approve pending users"
+    }
+  ],
+  "mocked_apis": {
+    "SendGrid": "Email sending returns 401 Unauthorized (API key issue) but approval workflow still works"
+  }
+}

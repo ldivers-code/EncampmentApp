@@ -167,7 +167,7 @@ const RosterPage = () => {
 
   const loadFlightGrouped = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('cap_token');
       const res = await axios.get(`${API}/api/participants/by-flight`, {
         headers: { Authorization: `Bearer ${token}` }
       });
