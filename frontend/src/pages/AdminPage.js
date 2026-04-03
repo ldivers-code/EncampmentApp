@@ -84,7 +84,8 @@ const AdminPage = () => {
     { value: 'support_pa', label: 'Support - Public Affairs', color: 'bg-slate-200 text-slate-800 border-slate-300' },
     { value: 'support_dining', label: 'Support - Dining', color: 'bg-slate-200 text-slate-800 border-slate-300' },
     { value: 'support_health', label: 'Support - Health Svc', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'squadron_commander', label: 'Squadron Commander', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
+    { value: 'squadron_commander', label: 'Squadron Commander', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+    { value: 'parent', label: 'Parent / Guardian', color: 'bg-sky-100 text-sky-800 border-sky-200' }
   ];
 
   const supportSections = [
