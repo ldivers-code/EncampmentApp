@@ -351,6 +351,27 @@ export const seedTNWGBudgetTemplate = async () => {
   return response.data;
 };
 
+// Payment Reports
+export const importPaymentReport = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/participants/import-payments`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const getPaymentSummary = async () => {
+  const response = await axios.get(`${API}/participants/payment-summary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getPaymentImportHistory = async () => {
+  const response = await axios.get(`${API}/payment-imports`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+
 // Documents
 export const getDocuments = async () => {
   const response = await axios.get(`${API}/documents`, { headers: getAuthHeaders() });

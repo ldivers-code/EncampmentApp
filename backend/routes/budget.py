@@ -471,3 +471,272 @@ async def delete_budget_item(
 
 
 
+# ================= PAYMENT REPORT ENDPOINTS =================
+
+@api_router.post("/participants/import-payments")
+async def import_payment_report(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_finance_access())
+):
+    """Import daily eCAP payment report - ONLY updates payment fields, overwrites existing data.
+    Matches by CAPID and updates: paid_in_full, amount_paid, registration_status, unit_approved, wing_approved.
+    Does NOT touch flight, squadron, or other assignment data.
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = df.columns.str.strip()
+        
+        column_map = {
+            'RegistrantsCAPID': 'capid', 'CAPID': 'capid',
+            'PaidInFull': 'paid_in_full', 'AmountPaid': 'amount_paid',
+            'RegistrationStatus': 'registration_status',
+            'InvoiceStatus': 'invoice_status', 'InvoiceID': 'invoice_id',
+            'UnitApproved': 'unit_approved', 'WingApproved': 'wing_approved',
+            'ParentApproved': 'parent_approved',
+            'NameLast': 'last_name', 'NameFirst': 'first_name',
+            'Rank': 'rank', 'MbrType': 'member_type', 'StaffMember': 'staff_member',
+        }
+        df = df.rename(columns=column_map)
+        
+        now = datetime.now(timezone.utc).isoformat()
+        matched = 0
+        updated = 0
+        not_found = []
+        
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            
+            capid = str(row_dict.get('capid', '')).strip()
+            if not capid or capid == 'nan':
+                continue
+            
+            existing = await db.participants.find_one({"capid": capid}, {"_id": 0, "id": 1, "last_name": 1, "first_name": 1})
+            if not existing:
+                last = str(row_dict.get('last_name', '')).strip()
+                first = str(row_dict.get('first_name', '')).strip()
+                if last != 'nan' and first != 'nan':
+                    not_found.append({"capid": capid, "name": f"{last}, {first}"})
+                continue
+            
+            matched += 1
+            
+            def get_bool(key):
+                val = row_dict.get(key)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return None
+                if isinstance(val, bool):
+                    return val
+                return str(val).lower() in ['yes', 'true', '1']
+            
+            def get_float(key):
+                val = row_dict.get(key)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return None
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+            
+            def get_str(key):
+                val = row_dict.get(key)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return None
+                s = str(val).strip()
+                return s if s and s != 'nan' else None
+            
+            paid_in_full = get_bool('paid_in_full')
+            amount_paid = get_float('amount_paid')
+            
+            payment_update = {
+                "updated_at": now,
+                "payment_last_synced": now,
+            }
+            
+            if paid_in_full is not None:
+                payment_update["paid_in_full"] = paid_in_full
+                payment_update["paid"] = paid_in_full
+            if amount_paid is not None:
+                payment_update["amount_paid"] = amount_paid
+                if amount_paid > 0 and paid_in_full is None:
+                    payment_update["paid"] = True
+                    payment_update["paid_in_full"] = True
+            
+            reg_status = get_str('registration_status')
+            if reg_status:
+                payment_update["registration_status"] = reg_status
+            
+            inv_status = get_str('invoice_status')
+            if inv_status:
+                payment_update["invoice_status"] = inv_status
+            
+            inv_id = get_str('invoice_id')
+            if inv_id:
+                payment_update["invoice_id"] = inv_id
+            
+            unit_approved = get_bool('unit_approved')
+            if unit_approved is not None:
+                payment_update["unit_approved"] = unit_approved
+            
+            wing_approved = get_bool('wing_approved')
+            if wing_approved is not None:
+                payment_update["wing_approved"] = wing_approved
+            
+            parent_approved = get_bool('parent_approved')
+            if parent_approved is not None:
+                payment_update["parent_approved"] = parent_approved
+            
+            result = await db.participants.update_one(
+                {"capid": capid},
+                {"$set": payment_update}
+            )
+            if result.modified_count > 0:
+                updated += 1
+        
+        # Log the import
+        import_log = {
+            "id": str(uuid.uuid4()),
+            "type": "payment_report",
+            "filename": file.filename,
+            "imported_by": user.get("name", user.get("email")),
+            "imported_at": now,
+            "matched": matched,
+            "updated": updated,
+            "not_found_count": len(not_found),
+            "not_found_sample": not_found[:10],
+        }
+        await db.payment_imports.insert_one(import_log)
+        import_log.pop("_id", None)
+        
+        # Sync budget income
+        try:
+            from routes.students import sync_roster_to_budget
+            budget_sync = await sync_roster_to_budget()
+        except Exception:
+            budget_sync = None
+        
+        return {
+            "message": f"Payment report imported: {matched} matched, {updated} updated, {len(not_found)} not on roster",
+            "matched": matched,
+            "updated": updated,
+            "not_found": not_found[:20],
+            "budget_sync": budget_sync,
+            "import_id": import_log["id"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing payment report: {str(e)}")
+
+
+@api_router.get("/participants/payment-summary")
+async def get_payment_summary(user: dict = Depends(require_finance_access())):
+    """Get detailed payment collection summary broken down by participant type"""
+    participants = await db.participants.find(
+        {"is_removed": {"$ne": True}},
+        {"_id": 0, "capid": 1, "rank": 1, "last_name": 1, "first_name": 1,
+         "participant_type": 1, "member_type": 1, "flight": 1, "squadron": 1,
+         "paid": 1, "paid_in_full": 1, "amount_paid": 1, "registration_status": 1,
+         "invoice_status": 1, "unit_approved": 1, "wing_approved": 1, "parent_approved": 1,
+         "email": 1, "cadet_parent_email": 1, "unit_cc_email": 1, "wing": 1, "unit": 1,
+         "payment_last_synced": 1}
+    ).to_list(2000)
+    
+    summary = {
+        "total": len(participants),
+        "paid": 0,
+        "unpaid": 0,
+        "total_collected": 0.0,
+        "by_type": {},
+        "by_flight": {},
+        "by_status": {"approved": 0, "pending": 0, "other": 0},
+        "unit_approved": 0,
+        "wing_approved": 0,
+        "participants": [],
+        "last_import": None,
+    }
+    
+    for p in participants:
+        is_paid = p.get('paid') or p.get('paid_in_full')
+        ptype = p.get('participant_type', 'unknown')
+        flight = (p.get('flight') or 'unassigned').lower()
+        
+        if is_paid:
+            summary["paid"] += 1
+        else:
+            summary["unpaid"] += 1
+        
+        amt = float(p.get('amount_paid') or 0)
+        summary["total_collected"] += amt
+        
+        if ptype not in summary["by_type"]:
+            summary["by_type"][ptype] = {"total": 0, "paid": 0, "unpaid": 0, "collected": 0.0}
+        summary["by_type"][ptype]["total"] += 1
+        if is_paid:
+            summary["by_type"][ptype]["paid"] += 1
+        else:
+            summary["by_type"][ptype]["unpaid"] += 1
+        summary["by_type"][ptype]["collected"] += amt
+        
+        if flight not in summary["by_flight"]:
+            summary["by_flight"][flight] = {"total": 0, "paid": 0, "unpaid": 0}
+        summary["by_flight"][flight]["total"] += 1
+        if is_paid:
+            summary["by_flight"][flight]["paid"] += 1
+        else:
+            summary["by_flight"][flight]["unpaid"] += 1
+        
+        reg = (p.get('registration_status') or '').lower()
+        if 'approved' in reg:
+            summary["by_status"]["approved"] += 1
+        elif 'pending' in reg or not reg:
+            summary["by_status"]["pending"] += 1
+        else:
+            summary["by_status"]["other"] += 1
+        
+        if p.get('unit_approved'):
+            summary["unit_approved"] += 1
+        if p.get('wing_approved'):
+            summary["wing_approved"] += 1
+        
+        summary["participants"].append({
+            "capid": p.get("capid"),
+            "name": f"{p.get('rank', '')} {p.get('last_name', '')}, {p.get('first_name', '')}".strip(),
+            "participant_type": ptype,
+            "flight": flight,
+            "paid": bool(is_paid),
+            "amount_paid": amt,
+            "registration_status": p.get("registration_status"),
+            "unit_approved": bool(p.get("unit_approved")),
+            "wing_approved": bool(p.get("wing_approved")),
+            "parent_approved": bool(p.get("parent_approved")),
+            "email": p.get("email"),
+            "parent_email": p.get("cadet_parent_email"),
+            "unit_cc_email": p.get("unit_cc_email"),
+            "wing": p.get("wing"),
+            "unit": p.get("unit"),
+            "last_synced": p.get("payment_last_synced"),
+        })
+    
+    last_import = await db.payment_imports.find_one(
+        {"type": "payment_report"},
+        {"_id": 0},
+        sort=[("imported_at", -1)]
+    )
+    summary["last_import"] = last_import
+    
+    return summary
+
+
+@api_router.get("/payment-imports")
+async def get_payment_import_history(user: dict = Depends(require_finance_access())):
+    """Get history of payment report imports"""
+    imports = await db.payment_imports.find(
+        {"type": "payment_report"},
+        {"_id": 0}
+    ).sort("imported_at", -1).to_list(50)
+    return imports
+
+
+
