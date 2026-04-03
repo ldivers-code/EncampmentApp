@@ -963,6 +963,14 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
 
+### Apr 3, 2026 - Parent OTC Medication Permission Form
+- **Parent OTC Form**: New "OTC Meds" tab in My Cadet page — auto-fills cadet info, collects parent/guardian info, 13 OTC medication Yes/No checklist, 4 required acknowledgments, optional HSO notes, typed signature with timestamp
+- **Staff Dashboard**: New "OTC Permissions" tab in Health Services — summary cards (Total/Submitted/Reviewed/Missing), filterable table with medication grid (Y/N per med), search, status/type filters, Review button
+- **Workflow**: Not Started → Submitted → Reviewed. Missing forms flagged as red "Missing" status
+- **Backend**: `/app/backend/routes/otc_permissions.py` — 6 endpoints (parent GET/POST, staff dashboard/detail/review)
+- **Validation**: All 13 meds must be answered, all 4 acks must be checked, signature required. 403 for wrong role
+- **Testing**: 100% pass rate (14/14 backend + full frontend, iteration_46)
+
 ### Apr 3, 2026 - Financial Tracker Charts Fix + Smart Receipt Upload
 - **Income vs Expenses Overview**: New card showing Net Position, Income/Expenses progress bars with %, variances, paid items count
 - **Chart Fixes**: Bar chart labels readable at -35° angle (no truncation), Pie chart uses legend grid below donut (no overlapping text)
