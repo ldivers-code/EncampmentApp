@@ -963,6 +963,13 @@ Comprehensive health tracking system for managing cadet medications, incidents, 
 - **Testing**: 15/15 backend tests passed, 100% frontend tests passed
 
 
+### Apr 3, 2026 - Financial Tracker Charts Fix + Smart Receipt Upload
+- **Income vs Expenses Overview**: New card showing Net Position, Income/Expenses progress bars with %, variances, paid items count
+- **Chart Fixes**: Bar chart labels readable at -35° angle (no truncation), Pie chart uses legend grid below donut (no overlapping text)
+- **Smart Receipt Upload**: Upload receipt images → GPT-4o OCR extracts line items → auto-categorized to budget categories with confidence scores → user can change categories → "Add to Budget" creates real budget entries
+- **Endpoints**: `/api/budget/receipt-upload` (POST), `/api/budget/receipt-confirm` (POST), `/api/budget/receipt-uploads` (GET)
+- **Testing**: 100% pass rate (13/13 backend + full frontend, iteration_45)
+
 ### Apr 3, 2026 - Daily Payment Reports in Financial Tracker
 - **Payment Report Import**: Upload eCAP Event Admin Reports (.xlsx) to update payment statuses (PaidInFull, AmountPaid, RegistrationStatus, UnitApproved, WingApproved, ParentApproved) matched by CAPID — overwrites existing data
 - **Payment Reports Tab**: New tab in Financial Tracker with summary cards, By Type/By Flight breakdowns with progress bars, filterable individual table (Name, CAPID, Type, Flight, Paid, Status, Unit, Wing, Contact), and import history
