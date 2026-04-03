@@ -84,6 +84,7 @@ import routes.participants
 import routes.students
 import routes.points
 import routes.parent
+import routes.otc_permissions
 
 # Auth routes extracted to routes/auth.py
 # User management routes extracted to routes/users.py

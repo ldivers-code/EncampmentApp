@@ -830,6 +830,7 @@ const MedicalRosterTab = ({ hasFullAccess }) => {
 // ==================== MAIN DASHBOARD ====================
 const HealthServicesDashboard = () => {
   const { user } = useAuth();
+  const token = localStorage.getItem('cap_token');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
@@ -869,6 +870,12 @@ const HealthServicesDashboard = () => {
   const [importResult, setImportResult] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  // OTC Dashboard state
+  const [otcDashboard, setOtcDashboard] = useState(null);
+  const [otcLoading, setOtcLoading] = useState(false);
+  const [otcSearch, setOtcSearch] = useState('');
+  const [otcFilter, setOtcFilter] = useState('all');
+  const [otcTypeFilter, setOtcTypeFilter] = useState('all');
 
   // Check if user has full health access
   const hasFullAccess = () => {
@@ -899,6 +906,29 @@ const HealthServicesDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadOtcDashboard = async () => {
+    setOtcLoading(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/otc-permissions/dashboard`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) setOtcDashboard(await res.json());
+    } catch (e) { console.error('Failed to load OTC dashboard:', e); }
+    finally { setOtcLoading(false); }
+  };
+
+  const reviewOtcForm = async (capid) => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/otc-permissions/${capid}/review`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Form marked as reviewed');
+        loadOtcDashboard();
+      }
+    } catch (e) { toast.error('Failed to review form'); }
   };
 
   useEffect(() => {
@@ -1105,7 +1135,162 @@ const HealthServicesDashboard = () => {
           <ClipboardList className="w-4 h-4 inline mr-1.5 -mt-0.5" />
           Medical Roster
         </button>
+        <button
+          onClick={() => setActiveTab('otc-permissions')}
+          className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors border-b-2 -mb-px ${
+            activeTab === 'otc-permissions'
+              ? 'text-[#00205B] border-[#00205B]'
+              : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+          }`}
+          data-testid="tab-otc-permissions"
+        >
+          <Pill className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+          OTC Permissions
+        </button>
       </div>
+
+      {/* OTC Permissions Tab */}
+      {activeTab === 'otc-permissions' && (
+        <div className="space-y-6">
+          {otcLoading || !otcDashboard ? (
+            <div className="text-center py-8">
+              {!otcDashboard && !otcLoading && (
+                <Button onClick={loadOtcDashboard} className="bg-[#00205B]" data-testid="load-otc-dashboard">Load OTC Dashboard</Button>
+              )}
+              {otcLoading && <span className="text-slate-400">Loading OTC dashboard...</span>}
+            </div>
+          ) : (<>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white border border-slate-200 rounded-sm p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Total Cadets</p>
+                <p className="text-2xl font-bold text-[#00205B]">{otcDashboard.total}</p>
+              </div>
+              <div className="bg-white border border-emerald-200 rounded-sm p-4">
+                <p className="text-xs uppercase tracking-wide text-emerald-600">Submitted</p>
+                <p className="text-2xl font-bold text-emerald-600">{otcDashboard.submitted}</p>
+              </div>
+              <div className="bg-white border border-blue-200 rounded-sm p-4">
+                <p className="text-xs uppercase tracking-wide text-blue-600">Reviewed</p>
+                <p className="text-2xl font-bold text-blue-600">{otcDashboard.reviewed}</p>
+              </div>
+              <div className="bg-white border border-red-200 rounded-sm p-4">
+                <p className="text-xs uppercase tracking-wide text-red-600">Missing</p>
+                <p className="text-2xl font-bold text-red-600">{otcDashboard.missing}</p>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Input placeholder="Search by name or CAPID..." value={otcSearch} onChange={e => setOtcSearch(e.target.value)}
+                className="w-64 rounded-sm" data-testid="otc-dashboard-search" />
+              <Select value={otcFilter} onValueChange={setOtcFilter}>
+                <SelectTrigger className="w-36 rounded-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="submitted">Submitted</SelectItem>
+                  <SelectItem value="reviewed">Reviewed</SelectItem>
+                  <SelectItem value="not_started">Missing</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={otcTypeFilter} onValueChange={setOtcTypeFilter}>
+                <SelectTrigger className="w-32 rounded-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="Student">Students</SelectItem>
+                  <SelectItem value="Cadre">Cadre</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={loadOtcDashboard} className="rounded-sm">
+                <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+              </Button>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+              <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
+                <table className="w-full text-sm" data-testid="otc-dashboard-table">
+                  <thead className="bg-slate-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase">Name</th>
+                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase">Type</th>
+                      <th className="text-center p-3 text-xs font-semibold text-slate-600 uppercase">Status</th>
+                      {Object.entries(otcDashboard.medication_labels || {}).map(([key, label]) => (
+                        <th key={key} className="text-center p-2 text-[10px] font-semibold text-slate-500 uppercase w-12" title={label}>
+                          {label.substring(0, 4)}
+                        </th>
+                      ))}
+                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase">Parent</th>
+                      <th className="text-center p-3 text-xs font-semibold text-slate-600 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {otcDashboard.items
+                      .filter(i => {
+                        const search = otcSearch.toLowerCase();
+                        const matchSearch = !search || i.name?.toLowerCase().includes(search) || i.capid?.includes(search);
+                        const matchStatus = otcFilter === 'all' || i.status === otcFilter;
+                        const matchType = otcTypeFilter === 'all' || i.participant_type === otcTypeFilter;
+                        return matchSearch && matchStatus && matchType;
+                      })
+                      .sort((a, b) => {
+                        const order = { not_started: 0, submitted: 1, reviewed: 2 };
+                        return (order[a.status] || 0) - (order[b.status] || 0);
+                      })
+                      .map(item => (
+                        <tr key={item.capid} className={`border-t border-slate-100 ${item.status === 'not_started' ? 'bg-red-50/30' : ''}`}>
+                          <td className="p-3">
+                            <div className="font-medium text-sm">{item.name}</div>
+                            <div className="text-xs text-slate-400">{item.capid} {item.flight && `- ${item.flight}`}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${item.participant_type === 'Student' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {item.participant_type}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              item.status === 'reviewed' ? 'bg-blue-100 text-blue-700' :
+                              item.status === 'submitted' ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {item.status === 'not_started' ? 'Missing' : item.status}
+                            </span>
+                          </td>
+                          {Object.keys(otcDashboard.medication_labels || {}).map(med => (
+                            <td key={med} className="p-1 text-center">
+                              {item.medications ? (
+                                item.medications[med] ? (
+                                  <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-red-400 mx-auto" />
+                                )
+                              ) : (
+                                <span className="text-slate-200">-</span>
+                              )}
+                            </td>
+                          ))}
+                          <td className="p-3 text-xs text-slate-500">{item.parent_name || '-'}</td>
+                          <td className="p-3 text-center">
+                            {item.status === 'submitted' && (
+                              <Button size="sm" variant="outline" className="text-xs h-7 rounded-sm"
+                                onClick={() => reviewOtcForm(item.capid)} data-testid={`review-otc-${item.capid}`}>
+                                Review
+                              </Button>
+                            )}
+                            {item.status === 'reviewed' && (
+                              <span className="text-xs text-blue-600">Reviewed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>)}
+        </div>
+      )}
 
       {/* Medical Roster Tab */}
       {activeTab === 'medical-roster' && (
