@@ -27,6 +27,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import PaymentReportsTab from './budget/PaymentReportsTab';
+import SmartReceiptTab from './budget/SmartReceiptTab';
+import ReceiptRepositoryTab from './budget/ReceiptRepositoryTab';
 import { 
   Plus, 
   Upload, 
@@ -253,6 +256,11 @@ const BudgetPage = () => {
     } catch (error) {
       console.error('Failed to load receipt history:', error);
     }
+  };
+
+  const handleDiscardReceipt = () => {
+    setParsedReceipt(null);
+    setReceiptItems([]);
   };
 
   // Calculate totals with detailed variance tracking
@@ -1292,597 +1300,53 @@ const BudgetPage = () => {
 
       {/* Receipt Repository Tab */}
       {activeTab === 'receipts' && (
-        <div className="space-y-6">
-          {/* Receipt Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white border border-slate-200 rounded-sm p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#00205B]/10 rounded-sm">
-                  <Receipt className="w-5 h-5 text-[#00205B]" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#00205B]">{itemsWithReceipts.length}</p>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Total Receipts</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-sm p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-sm">
-                  <DollarSign className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-emerald-600">
-                    {formatCurrency(itemsWithReceipts.reduce((sum, item) => sum + (item.actual || 0), 0))}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Documented Expenses</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-sm p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-sm">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-amber-600">
-                    {items.filter(i => i.item_type === 'expense' && i.actual > 0 && !i.receipt_url).length}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Missing Receipts</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                type="text"
-                placeholder="Search receipts by item, category, or vendor..."
-                value={receiptSearch}
-                onChange={(e) => setReceiptSearch(e.target.value)}
-                className="pl-10 rounded-sm"
-                data-testid="receipt-search"
-              />
-            </div>
-          </div>
-
-          {/* Receipt Gallery */}
-          {filteredReceipts.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-sm p-12 text-center">
-              <Receipt className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-              <p className="text-lg text-slate-500">No receipts uploaded yet</p>
-              <p className="text-sm text-slate-400 mt-2">
-                Upload receipts to budget items in the Budget Items tab
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredReceipts.map((item) => (
-                <div 
-                  key={item.id}
-                  className="bg-white border border-slate-200 rounded-sm overflow-hidden hover:shadow-md transition-shadow group"
-                >
-                  {/* Receipt Preview */}
-                  <div 
-                    className="h-48 bg-slate-100 relative cursor-pointer"
-                    onClick={() => setSelectedReceipt(item)}
-                  >
-                    {item.receipt_url?.startsWith('data:application/pdf') ? (
-                      <div className="h-full flex flex-col items-center justify-center">
-                        <FileImage className="w-16 h-16 text-slate-400" />
-                        <p className="text-sm text-slate-500 mt-2">PDF Document</p>
-                      </div>
-                    ) : (
-                      <img 
-                        src={item.receipt_url} 
-                        alt={`Receipt for ${item.item_name}`}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                      <Eye className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                  
-                  {/* Receipt Info */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-slate-900 truncate">{item.item_name}</h3>
-                        <p className="text-sm text-slate-500">{item.category}</p>
-                      </div>
-                      <p className="text-lg font-bold text-[#00205B] whitespace-nowrap">
-                        {formatCurrency(item.actual || 0)}
-                      </p>
-                    </div>
-                    
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        {item.vendor && (
-                          <span className="truncate max-w-[120px]">{item.vendor}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedReceipt(item)}
-                          className="h-8 w-8 p-0"
-                          title="View"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <a 
-                          href={item.receipt_url}
-                          download={item.receipt_filename || 'receipt'}
-                          className="h-8 w-8 p-0 inline-flex items-center justify-center hover:bg-slate-100 rounded"
-                          title="Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReceiptDelete(item.id)}
-                          className="h-8 w-8 p-0 text-red-500 hover:bg-red-50"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Items Missing Receipts */}
-          {items.filter(i => i.item_type === 'expense' && i.actual > 0 && !i.receipt_url).length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-sm p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-bold text-amber-800 mb-2">Items Missing Receipts</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {items
-                      .filter(i => i.item_type === 'expense' && i.actual > 0 && !i.receipt_url)
-                      .slice(0, 6)
-                      .map(item => (
-                        <div key={item.id} className="flex items-center justify-between bg-white rounded px-3 py-2">
-                          <span className="text-sm text-slate-700 truncate">{item.item_name}</span>
-                          <span className="text-sm font-mono text-amber-700">{formatCurrency(item.actual)}</span>
-                        </div>
-                      ))
-                    }
-                  </div>
-                  {items.filter(i => i.item_type === 'expense' && i.actual > 0 && !i.receipt_url).length > 6 && (
-                    <p className="text-xs text-amber-600 mt-2">
-                      +{items.filter(i => i.item_type === 'expense' && i.actual > 0 && !i.receipt_url).length - 6} more items
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <ReceiptRepositoryTab
+          items={items}
+          filteredReceipts={filteredReceipts}
+          itemsWithReceipts={itemsWithReceipts}
+          receiptSearch={receiptSearch}
+          setReceiptSearch={setReceiptSearch}
+          setSelectedReceipt={setSelectedReceipt}
+          handleReceiptDelete={handleReceiptDelete}
+          formatCurrency={formatCurrency}
+        />
       )}
 
       {/* Receipt Preview Modal */}
       {/* Payment Reports Tab */}
       {activeTab === 'payments' && (
-        <div className="space-y-6">
-          {/* Upload Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-[#00205B]">Daily Payment Reports</h2>
-              <p className="text-sm text-slate-500">
-                Upload eCAP Event Admin Reports to update payment statuses for all roster members
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="cursor-pointer" data-testid="upload-payment-report">
-                <input type="file" accept=".xlsx,.xls" onChange={handlePaymentUpload} className="hidden" />
-                <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm transition-colors ${
-                  paymentUploading ? 'bg-slate-200 text-slate-500' : 'bg-[#00205B] text-white hover:bg-[#001845]'
-                }`}>
-                  <Upload className="w-4 h-4" />
-                  {paymentUploading ? 'Importing...' : 'Upload eCAP Report'}
-                </span>
-              </label>
-              <Button variant="outline" size="sm" onClick={loadPaymentData} className="rounded-sm" data-testid="refresh-payments">
-                <Search className="w-4 h-4 mr-1" />
-                Refresh
-              </Button>
-            </div>
-          </div>
-
-          {paymentLoading ? (
-            <div className="text-center py-12 text-slate-400">Loading payment data...</div>
-          ) : !paymentSummary ? (
-            <div className="text-center py-12 text-slate-400">
-              <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="text-lg">No payment data loaded</p>
-              <p className="text-sm mt-1">Click Refresh to load or upload an eCAP report</p>
-            </div>
-          ) : (
-            <>
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-white border border-slate-200 rounded-sm p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-                  <p className="text-2xl font-bold text-[#00205B]">{paymentSummary.total}</p>
-                </div>
-                <div className="bg-white border border-emerald-200 rounded-sm p-4">
-                  <p className="text-xs uppercase tracking-wide text-emerald-600">Paid</p>
-                  <p className="text-2xl font-bold text-emerald-600">{paymentSummary.paid}</p>
-                  <p className="text-xs text-slate-400">{paymentSummary.total > 0 ? Math.round(paymentSummary.paid / paymentSummary.total * 100) : 0}%</p>
-                </div>
-                <div className="bg-white border border-red-200 rounded-sm p-4">
-                  <p className="text-xs uppercase tracking-wide text-red-600">Unpaid</p>
-                  <p className="text-2xl font-bold text-red-600">{paymentSummary.unpaid}</p>
-                </div>
-                <div className="bg-white border border-blue-200 rounded-sm p-4">
-                  <p className="text-xs uppercase tracking-wide text-blue-600">Unit Approved</p>
-                  <p className="text-2xl font-bold text-blue-600">{paymentSummary.unit_approved}</p>
-                </div>
-                <div className="bg-white border border-indigo-200 rounded-sm p-4">
-                  <p className="text-xs uppercase tracking-wide text-indigo-600">Wing Approved</p>
-                  <p className="text-2xl font-bold text-indigo-600">{paymentSummary.wing_approved}</p>
-                </div>
-              </div>
-
-              {/* By Type Breakdown */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white border border-slate-200 rounded-sm p-4">
-                  <h3 className="font-semibold text-sm text-slate-700 mb-3 uppercase tracking-wide">By Participant Type</h3>
-                  <div className="space-y-2">
-                    {Object.entries(paymentSummary.by_type).map(([type, data]) => (
-                      <div key={type} className="flex items-center justify-between p-2 bg-slate-50 rounded-sm">
-                        <span className="text-sm font-medium capitalize">{type.replace(/_/g, ' ')}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-emerald-600 font-mono">{data.paid} paid</span>
-                          <span className="text-xs text-red-500 font-mono">{data.unpaid} unpaid</span>
-                          <span className="text-xs text-slate-400">/ {data.total}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-sm p-4">
-                  <h3 className="font-semibold text-sm text-slate-700 mb-3 uppercase tracking-wide">By Flight</h3>
-                  <div className="space-y-2">
-                    {Object.entries(paymentSummary.by_flight).map(([flight, data]) => (
-                      <div key={flight} className="flex items-center justify-between p-2 bg-slate-50 rounded-sm">
-                        <span className="text-sm font-medium capitalize">{flight}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden">
-                            <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${data.total > 0 ? (data.paid / data.total * 100) : 0}%` }} />
-                          </div>
-                          <span className="text-xs font-mono text-slate-600">{data.paid}/{data.total}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Last Import Info */}
-              {paymentSummary.last_import && (
-                <div className="bg-blue-50 border border-blue-200 rounded-sm p-3 text-sm text-blue-800">
-                  <span className="font-medium">Last Import:</span> {paymentSummary.last_import.filename} — {paymentSummary.last_import.matched} matched, {paymentSummary.last_import.updated} updated — by {paymentSummary.last_import.imported_by} on {new Date(paymentSummary.last_import.imported_at).toLocaleString()}
-                </div>
-              )}
-
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-3 py-2 border-y border-slate-200">
-                <Input
-                  placeholder="Search by name, CAPID, or email..."
-                  value={paymentSearch}
-                  onChange={(e) => setPaymentSearch(e.target.value)}
-                  className="w-64 rounded-sm"
-                  data-testid="payment-search"
-                />
-                <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
-                  <SelectTrigger className="w-40 rounded-sm" data-testid="payment-type-filter">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="basic_student">Students</SelectItem>
-                    <SelectItem value="advanced_student">Advanced Students</SelectItem>
-                    <SelectItem value="cadre">Cadre</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="senior_member">Senior Members</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
-                  <SelectTrigger className="w-32 rounded-sm" data-testid="payment-status-filter">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="unpaid">Unpaid</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={paymentFlightFilter} onValueChange={setPaymentFlightFilter}>
-                  <SelectTrigger className="w-36 rounded-sm" data-testid="payment-flight-filter">
-                    <SelectValue placeholder="Flight" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Flights</SelectItem>
-                    <SelectItem value="alpha">Alpha</SelectItem>
-                    <SelectItem value="bravo">Bravo</SelectItem>
-                    <SelectItem value="charlie">Charlie</SelectItem>
-                    <SelectItem value="delta">Delta</SelectItem>
-                    <SelectItem value="echo">Echo</SelectItem>
-                    <SelectItem value="foxtrot">Foxtrot</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Individual Payment Table */}
-              <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
-                <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
-                  <table className="w-full text-sm" data-testid="payment-report-table">
-                    <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="text-left p-3 font-semibold text-slate-600 text-xs uppercase">Name</th>
-                        <th className="text-left p-3 font-semibold text-slate-600 text-xs uppercase">CAPID</th>
-                        <th className="text-left p-3 font-semibold text-slate-600 text-xs uppercase">Type</th>
-                        <th className="text-left p-3 font-semibold text-slate-600 text-xs uppercase">Flight</th>
-                        <th className="text-center p-3 font-semibold text-slate-600 text-xs uppercase">Paid</th>
-                        <th className="text-center p-3 font-semibold text-slate-600 text-xs uppercase">Status</th>
-                        <th className="text-center p-3 font-semibold text-slate-600 text-xs uppercase">Unit</th>
-                        <th className="text-center p-3 font-semibold text-slate-600 text-xs uppercase">Wing</th>
-                        <th className="text-left p-3 font-semibold text-slate-600 text-xs uppercase">Contact</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentSummary.participants
-                        .filter(p => {
-                          const search = paymentSearch.toLowerCase();
-                          const matchesSearch = !search || p.name?.toLowerCase().includes(search) || p.capid?.includes(search) || p.email?.toLowerCase().includes(search);
-                          const matchesType = paymentTypeFilter === 'all' || p.participant_type === paymentTypeFilter;
-                          const matchesStatus = paymentStatusFilter === 'all' || (paymentStatusFilter === 'paid' && p.paid) || (paymentStatusFilter === 'unpaid' && !p.paid);
-                          const matchesFlight = paymentFlightFilter === 'all' || p.flight === paymentFlightFilter;
-                          return matchesSearch && matchesType && matchesStatus && matchesFlight;
-                        })
-                        .map((p) => (
-                          <tr key={p.capid} className="border-t border-slate-100 hover:bg-slate-50">
-                            <td className="p-3 font-medium">{p.name}</td>
-                            <td className="p-3 font-mono text-xs text-slate-500">{p.capid}</td>
-                            <td className="p-3">
-                              <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 capitalize">
-                                {p.participant_type?.replace(/_/g, ' ')}
-                              </span>
-                            </td>
-                            <td className="p-3 capitalize text-xs">{p.flight}</td>
-                            <td className="p-3 text-center">
-                              {p.paid ? (
-                                <CheckCircle className="w-4 h-4 text-emerald-500 mx-auto" />
-                              ) : (
-                                <AlertCircle className="w-4 h-4 text-red-500 mx-auto" />
-                              )}
-                            </td>
-                            <td className="p-3 text-center text-xs">{p.registration_status || '-'}</td>
-                            <td className="p-3 text-center">
-                              {p.unit_approved ? <span className="text-[10px] px-1 bg-blue-100 text-blue-700 rounded">Yes</span> : <span className="text-slate-300">-</span>}
-                            </td>
-                            <td className="p-3 text-center">
-                              {p.wing_approved ? <span className="text-[10px] px-1 bg-emerald-100 text-emerald-700 rounded">Yes</span> : <span className="text-slate-300">-</span>}
-                            </td>
-                            <td className="p-3 text-xs text-slate-500 max-w-[200px] truncate">{p.email || p.parent_email || '-'}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Import History */}
-              {paymentHistory.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-sm p-4">
-                  <h3 className="font-semibold text-sm text-slate-700 mb-3 uppercase tracking-wide">Import History</h3>
-                  <div className="space-y-2">
-                    {paymentHistory.map((imp) => (
-                      <div key={imp.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-sm text-sm">
-                        <div>
-                          <span className="font-medium">{imp.filename}</span>
-                          <span className="text-slate-400 ml-2">by {imp.imported_by}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs">
-                          <span className="text-emerald-600">{imp.matched} matched</span>
-                          <span className="text-blue-600">{imp.updated} updated</span>
-                          {imp.not_found_count > 0 && <span className="text-amber-600">{imp.not_found_count} not found</span>}
-                          <span className="text-slate-400">{new Date(imp.imported_at).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        <PaymentReportsTab
+          paymentSummary={paymentSummary}
+          paymentHistory={paymentHistory}
+          paymentLoading={paymentLoading}
+          paymentUploading={paymentUploading}
+          paymentSearch={paymentSearch}
+          setPaymentSearch={setPaymentSearch}
+          paymentTypeFilter={paymentTypeFilter}
+          setPaymentTypeFilter={setPaymentTypeFilter}
+          paymentStatusFilter={paymentStatusFilter}
+          setPaymentStatusFilter={setPaymentStatusFilter}
+          paymentFlightFilter={paymentFlightFilter}
+          setPaymentFlightFilter={setPaymentFlightFilter}
+          handlePaymentUpload={handlePaymentUpload}
+          loadPaymentData={loadPaymentData}
+        />
       )}
 
       {/* Smart Receipts Tab */}
       {activeTab === 'smart-receipts' && (
-        <div className="space-y-6">
-          {/* Upload Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-[#00205B]">Smart Receipt Upload</h2>
-              <p className="text-sm text-slate-500">
-                Upload receipt images — items are auto-extracted and categorized to your budget
-              </p>
-            </div>
-            <label className="cursor-pointer" data-testid="upload-smart-receipt">
-              <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.heic" onChange={handleSmartReceiptUpload} className="hidden" />
-              <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm transition-colors ${
-                receiptUploading ? 'bg-slate-200 text-slate-500' : 'bg-[#00205B] text-white hover:bg-[#001845]'
-              }`}>
-                <Upload className="w-4 h-4" />
-                {receiptUploading ? 'Processing...' : 'Upload Receipt'}
-              </span>
-            </label>
-          </div>
-
-          {/* Parsed Receipt Review */}
-          {parsedReceipt && (
-            <div className="bg-white border-2 border-[#00205B]/20 rounded-sm p-5 space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-bold text-[#00205B]">
-                    {parsedReceipt.vendor || 'Receipt'}
-                  </h3>
-                  <div className="flex gap-4 text-sm text-slate-500 mt-1">
-                    {parsedReceipt.date && <span>Date: {parsedReceipt.date}</span>}
-                    {parsedReceipt.total && <span>Total: <strong className="text-slate-700">${parsedReceipt.total.toFixed(2)}</strong></span>}
-                  </div>
-                </div>
-                {parsedReceipt.receipt_url && !parsedReceipt.receipt_url.startsWith('data:') && (
-                  <a href={parsedReceipt.receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">
-                    View Image
-                  </a>
-                )}
-              </div>
-
-              {/* Line Items with Category Selection */}
-              <div className="border border-slate-200 rounded-sm overflow-hidden">
-                <table className="w-full text-sm" data-testid="receipt-items-table">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="w-8 p-3"><input type="checkbox" checked={receiptItems.every(i => i.include)} onChange={(e) => setReceiptItems(receiptItems.map(i => ({ ...i, include: e.target.checked })))} /></th>
-                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase">Item</th>
-                      <th className="text-right p-3 text-xs font-semibold text-slate-600 uppercase w-28">Amount</th>
-                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase w-52">Category</th>
-                      <th className="text-center p-3 text-xs font-semibold text-slate-600 uppercase w-20">Match</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {receiptItems.map((item, idx) => (
-                      <tr key={item.key} className={`border-t border-slate-100 ${!item.include ? 'opacity-40' : ''}`}>
-                        <td className="p-3">
-                          <input type="checkbox" checked={item.include} onChange={(e) => {
-                            const updated = [...receiptItems];
-                            updated[idx] = { ...updated[idx], include: e.target.checked };
-                            setReceiptItems(updated);
-                          }} />
-                        </td>
-                        <td className="p-3">{item.description}</td>
-                        <td className="p-3 text-right font-mono">${item.amount.toFixed(2)}</td>
-                        <td className="p-3">
-                          <Select value={item.category} onValueChange={(val) => {
-                            const updated = [...receiptItems];
-                            updated[idx] = { ...updated[idx], category: val };
-                            setReceiptItems(updated);
-                          }}>
-                            <SelectTrigger className="w-full rounded-sm text-xs h-8" data-testid={`receipt-category-${idx}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(parsedReceipt.available_categories || budgetCategories).map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${
-                            item.confidence >= 0.5 ? 'bg-emerald-100 text-emerald-700' :
-                            item.confidence >= 0.2 ? 'bg-amber-100 text-amber-700' :
-                            'bg-slate-100 text-slate-500'
-                          }`}>
-                            {Math.round(item.confidence * 100)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50">
-                    <tr>
-                      <td className="p-3" />
-                      <td className="p-3 font-semibold">
-                        Selected: {receiptItems.filter(i => i.include).length} items
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold">
-                        ${receiptItems.filter(i => i.include).reduce((s, i) => s + i.amount, 0).toFixed(2)}
-                      </td>
-                      <td className="p-3" colSpan={2}>
-                        <Button
-                          onClick={handleConfirmReceipt}
-                          disabled={confirming || receiptItems.filter(i => i.include).length === 0}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm"
-                          data-testid="confirm-receipt-btn"
-                        >
-                          {confirming ? 'Adding...' : 'Add to Budget'}
-                        </Button>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              
-              <Button variant="outline" size="sm" onClick={() => { setParsedReceipt(null); setReceiptItems([]); }} className="rounded-sm">
-                Discard
-              </Button>
-            </div>
-          )}
-
-          {/* No receipt uploaded yet */}
-          {!parsedReceipt && !receiptUploading && (
-            <div className="bg-white border border-dashed border-slate-300 rounded-sm p-12 text-center">
-              <Receipt className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-              <p className="text-slate-500">Upload a receipt photo to auto-extract line items</p>
-              <p className="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP, PDF</p>
-            </div>
-          )}
-
-          {receiptUploading && (
-            <div className="bg-white border border-slate-200 rounded-sm p-12 text-center">
-              <div className="animate-pulse">
-                <Receipt className="w-12 h-12 mx-auto mb-3 text-[#00205B]/40" />
-                <p className="text-[#00205B] font-medium">Analyzing receipt...</p>
-                <p className="text-xs text-slate-400 mt-1">Extracting items and matching categories</p>
-              </div>
-            </div>
-          )}
-
-          {/* Receipt History */}
-          {receiptHistory.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-sm p-4">
-              <h3 className="font-semibold text-sm text-slate-700 mb-3 uppercase tracking-wide">Previous Uploads</h3>
-              <div className="space-y-2">
-                {receiptHistory.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-sm text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                        r.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {r.status === 'confirmed' ? 'Added' : 'Pending'}
-                      </span>
-                      <span className="font-medium">{r.vendor || r.filename}</span>
-                      {r.total && <span className="text-xs font-mono text-slate-500">${r.total.toFixed(2)}</span>}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
-                      <span>{r.line_items?.length || 0} items</span>
-                      <span>{new Date(r.uploaded_at).toLocaleDateString()}</span>
-                      <span>by {r.uploaded_by}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <SmartReceiptTab
+          receiptUploading={receiptUploading}
+          parsedReceipt={parsedReceipt}
+          receiptItems={receiptItems}
+          setReceiptItems={setReceiptItems}
+          receiptHistory={receiptHistory}
+          confirming={confirming}
+          handleSmartReceiptUpload={handleSmartReceiptUpload}
+          handleConfirmReceipt={handleConfirmReceipt}
+          handleDiscardReceipt={handleDiscardReceipt}
+          budgetCategories={budgetCategories}
+        />
       )}
 
       {(receiptPreview || selectedReceipt) && (

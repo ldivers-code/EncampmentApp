@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -106,11 +106,14 @@ const TrainingOfficerPage = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [flightFilter, setFlightFilter] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const buildFilterParams = () => {
+    const params = {};
+    if (dateFilter) params.date = dateFilter;
+    if (flightFilter) params.flight = flightFilter;
+    return params;
+  };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [sumData, bData, cData, iData] = await Promise.all([
@@ -129,14 +132,12 @@ const TrainingOfficerPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const buildFilterParams = () => {
-    const params = {};
-    if (dateFilter) params.date = dateFilter;
-    if (flightFilter) params.flight = flightFilter;
-    return params;
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const applyFilters = async () => {
     const params = buildFilterParams();

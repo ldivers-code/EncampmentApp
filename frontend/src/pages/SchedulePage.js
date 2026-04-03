@@ -211,14 +211,7 @@ const SchedulePage = () => {
   useEffect(() => {
     loadEvents();
     loadSettings();
-  }, []);
-
-  // Reload when filter changes
-  useEffect(() => {
-    if (!loading) {
-      // No need to reload - filtering is done client-side
-    }
-  }, [scheduleFilter]);
+  }, [loadEvents, loadSettings]);
 
   useEffect(() => {
     refreshIntervalRef.current = setInterval(() => {
@@ -658,9 +651,9 @@ const SchedulePage = () => {
           {/* Mobile Date Picker Dropdown */}
           {showMobileDatePicker && (
             <div className="mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-2 grid grid-cols-4 gap-1">
-              {encampmentDates.map((date, idx) => (
+              {encampmentDates.map((date) => (
                 <button
-                  key={idx}
+                  key={format(date, 'yyyy-MM-dd')}
                   onClick={() => {
                     setSelectedDate(date);
                     setShowMobileDatePicker(false);
@@ -1262,9 +1255,9 @@ const SchedulePage = () => {
       {!isMobile && (
         <div className="bg-white border border-slate-200 rounded-sm mb-4 overflow-x-auto">
           <div className="flex min-w-max">
-            {encampmentDates.map((date, idx) => (
+            {encampmentDates.map((date) => (
               <button
-                key={idx}
+                key={format(date, 'yyyy-MM-dd')}
                 onClick={() => setSelectedDate(date)}
                 className={`flex-1 min-w-[100px] px-4 py-3 text-center border-r border-slate-200 last:border-r-0 transition-colors ${
                   isSameDay(date, selectedDate)

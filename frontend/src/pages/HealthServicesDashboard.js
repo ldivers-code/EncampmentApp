@@ -242,7 +242,7 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
                     <p className="text-sm text-slate-500 italic p-3">No allergies on file</p>
                   ) : (
                     profile.allergies?.map((a, idx) => (
-                      <div key={idx} className={`p-3 border rounded-sm ${a.is_anaphylaxis ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`} data-testid={`allergy-item-${idx}`}>
+                      <div key={a.id || `allergy-${a.allergy_name}-${idx}`} className={`p-3 border rounded-sm ${a.is_anaphylaxis ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`} data-testid={`allergy-item-${idx}`}>
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="font-bold text-sm">{a.allergy_name}</p>
@@ -379,7 +379,7 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
                       <p className="text-sm text-slate-500 italic p-3">No prescription medications on file</p>
                     ) : (
                       profile.medications?.map((m, idx) => (
-                        <div key={idx} className={`p-3 border rounded-sm bg-white ${m.rescue_med_flag ? 'border-orange-300 bg-orange-50' : 'border-slate-200'}`} data-testid={`medication-item-${idx}`}>
+                        <div key={m.id || `med-${m.medication_name}-${idx}`} className={`p-3 border rounded-sm bg-white ${m.rescue_med_flag ? 'border-orange-300 bg-orange-50' : 'border-slate-200'}`} data-testid={`medication-item-${idx}`}>
                           <div className="flex items-start justify-between">
                             <div>
                               <p className="font-bold text-sm">{m.medication_name}</p>
@@ -415,7 +415,7 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
                     <p className="text-sm text-slate-500 italic p-3">No incidents on file</p>
                   ) : (
                     profile.incidents?.map((inc, idx) => (
-                      <div key={idx} className={`p-3 border rounded-sm bg-white ${
+                      <div key={inc.id || `inc-${inc.incident_date}-${inc.incident_time}-${idx}`} className={`p-3 border rounded-sm bg-white ${
                         inc.resolution_status === 'open' ? 'border-red-300' :
                         inc.resolution_status === 'monitoring' ? 'border-amber-300' :
                         'border-slate-200'
@@ -469,7 +469,7 @@ const CadetHealthDetail = ({ cadetId, isOpen, onClose, hasFullAccess }) => {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {profile.medication_log.map((log, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
+                          <tr key={log.id || `log-${log.date}-${log.medication_name}-${idx}`} className="hover:bg-slate-50">
                             <td className="p-2">{log.date}</td>
                             <td className="p-2 font-medium">{log.medication_name}</td>
                             <td className="p-2">{log.time_due}</td>
@@ -1468,7 +1468,7 @@ const HealthServicesDashboard = () => {
                 <div className="divide-y divide-slate-100">
                   {medsDue.map((med, idx) => (
                     <div 
-                      key={idx} 
+                      key={`due-${med.cadet_id_internal}-${med.medication_name}-${idx}`} 
                       className={`p-3 hover:bg-slate-50 cursor-pointer ${med.status === 'overdue' ? 'bg-red-50' : ''}`}
                       onClick={() => navigate(`/roster?cadet=${med.cadet_id_internal}`)}
                     >
@@ -1512,7 +1512,7 @@ const HealthServicesDashboard = () => {
               <div className="divide-y divide-red-100">
                 {overdueMeds.map((med, idx) => (
                   <div 
-                    key={idx} 
+                    key={`overdue-${med.cadet_id_internal}-${med.medication_name}-${idx}`} 
                     className="p-3 hover:bg-red-50 cursor-pointer bg-red-50/50"
                     onClick={() => navigate(`/roster?cadet=${med.cadet_id_internal}`)}
                   >
@@ -1556,7 +1556,7 @@ const HealthServicesDashboard = () => {
               <div className="divide-y divide-slate-100">
                 {openIncidents.map((inc, idx) => (
                   <div 
-                    key={idx} 
+                    key={`oinc-${inc.cadet_id_internal}-${inc.incident_date}-${idx}`} 
                     className="p-3 hover:bg-slate-50 cursor-pointer"
                     onClick={() => navigate(`/roster?cadet=${inc.cadet_id_internal}`)}
                   >
@@ -1719,7 +1719,7 @@ const HealthServicesDashboard = () => {
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {auditLog.map((log, idx) => (
-                  <div key={idx} className="p-3 border border-slate-200 rounded-sm text-sm">
+                  <div key={log.id || `audit-${log.changed_at}-${idx}`} className="p-3 border border-slate-200 rounded-sm text-sm">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className={`text-xs px-2 py-0.5 rounded mr-2 ${

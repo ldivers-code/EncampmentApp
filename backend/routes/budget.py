@@ -634,7 +634,7 @@ async def smart_receipt_upload(
             messages = [
                 ChatMessage(
                     role="user",
-                    content=f"Extract ALL items and their prices from this receipt. Format each line as: ITEM_DESCRIPTION | $AMOUNT\nAlso include the store/vendor name on the first line as: VENDOR: name\nAnd the date as: DATE: date\nAnd the total as: TOTAL: $amount",
+                    content="Extract ALL items and their prices from this receipt. Format each line as: ITEM_DESCRIPTION | $AMOUNT\nAlso include the store/vendor name on the first line as: VENDOR: name\nAnd the date as: DATE: date\nAnd the total as: TOTAL: $amount",
                     images=[data_url]
                 )
             ]

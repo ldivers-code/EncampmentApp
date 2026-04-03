@@ -1866,7 +1866,7 @@ const MyFlightPage = () => {
                   </div>
                   <div className="space-y-2">
                     {selectedReport.escalation_history.map((entry, idx) => (
-                      <div key={idx} className="flex items-start gap-2 text-sm">
+                      <div key={entry.escalated_at || entry.resolved_at || `esc-${idx}`} className="flex items-start gap-2 text-sm">
                         <div className="w-2 h-2 bg-amber-500 rounded-full mt-1.5" />
                         <div>
                           {entry.action === 'resolved' ? (

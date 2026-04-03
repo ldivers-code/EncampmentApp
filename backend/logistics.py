@@ -58,8 +58,10 @@ def create_logistics_router(db, get_current_user):
     @router.get("/inventory")
     async def list_inventory(category: str = None, issued: str = None, search: str = None, user=Depends(get_current_user)):
         query = {}
-        if category: query["category"] = category
-        if issued == "true": query["quantity_issued"] = {"$gt": 0}
+        if category:
+            query["category"] = category
+        if issued == "true":
+            query["quantity_issued"] = {"$gt": 0}
         if search:
             query["$or"] = [{"item_name": {"$regex": search, "$options": "i"}}, {"item_id": {"$regex": search, "$options": "i"}}, {"assigned_to": {"$regex": search, "$options": "i"}}]
         return await db.log_inventory.find(query, {"_id": 0}).sort("item_name", 1).to_list(500)
@@ -80,15 +82,18 @@ def create_logistics_router(db, get_current_user):
     async def update_inventory_item(item_id: str, update: dict = Body(...), user=Depends(require_admin)):
         allowed = {"item_name","category","item_id","quantity_available","quantity_issued","storage_location","condition","assigned_to","reorder_threshold","last_inventory_check","notes"}
         fields = {k: v for k, v in update.items() if k in allowed}
-        fields["updated_by"] = user["id"]; fields["updated_at"] = now_iso()
+        fields["updated_by"] = user["id"]
+        fields["updated_at"] = now_iso()
         r = await db.log_inventory.update_one({"id": item_id}, {"$set": fields})
-        if r.modified_count == 0: raise HTTPException(status_code=404, detail="Not found")
+        if r.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Not found")
         return {"message": "Updated"}
 
     @router.delete("/inventory/{item_id}")
     async def delete_inventory_item(item_id: str, user=Depends(require_admin)):
         r = await db.log_inventory.delete_one({"id": item_id})
-        if r.deleted_count == 0: raise HTTPException(status_code=404, detail="Not found")
+        if r.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Not found")
         return {"message": "Deleted"}
 
     # ====================== LOST AND FOUND ======================
@@ -96,8 +101,10 @@ def create_logistics_router(db, get_current_user):
     @router.get("/lost-found")
     async def list_lost_found(status: str = None, search: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
-        if search: query["$or"] = [{"item_description": {"$regex": search, "$options": "i"}}, {"found_by": {"$regex": search, "$options": "i"}}]
+        if status:
+            query["status"] = status
+        if search:
+            query["$or"] = [{"item_description": {"$regex": search, "$options": "i"}}, {"found_by": {"$regex": search, "$options": "i"}}]
         return await db.log_lost_found.find(query, {"_id": 0}).sort("date_found", -1).to_list(500)
 
     @router.post("/lost-found")
@@ -124,7 +131,8 @@ def create_logistics_router(db, get_current_user):
     @router.get("/radios")
     async def list_radios(status: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
+        if status:
+            query["status"] = status
         radios = await db.log_radios.find(query, {"_id": 0}).sort([("status", 1), ("radio_number", 1)]).to_list(500)
         now = datetime.now(timezone.utc)
         for r in radios:
@@ -135,7 +143,8 @@ def create_logistics_router(db, get_current_user):
                         r["status"] = "overdue"
                         r["overdue_minutes"] = int((now - exp).total_seconds() / 60)
                         await db.log_radios.update_one({"id": r["id"]}, {"$set": {"status": "overdue"}})
-                except: pass
+                except Exception:
+                    pass
         radios.sort(key=lambda x: (0 if x.get("status") == "overdue" else 1, x.get("radio_number","")))
         return radios
 
@@ -181,8 +190,10 @@ def create_logistics_router(db, get_current_user):
     @router.get("/comms-log")
     async def list_comms_log(call_sign: str = None, priority: str = None, user=Depends(get_current_user)):
         query = {}
-        if call_sign: query["call_sign"] = {"$regex": call_sign, "$options": "i"}
-        if priority: query["priority"] = priority
+        if call_sign:
+            query["call_sign"] = {"$regex": call_sign, "$options": "i"}
+        if priority:
+            query["priority"] = priority
         return await db.log_comms.find(query, {"_id": 0}).sort("time", -1).to_list(500)
 
     @router.post("/comms-log")
@@ -200,8 +211,10 @@ def create_logistics_router(db, get_current_user):
     @router.get("/callsigns")
     async def list_callsigns(status: str = None, category: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
-        if category: query["staff_category"] = category
+        if status:
+            query["status"] = status
+        if category:
+            query["staff_category"] = category
         return await db.log_callsigns.find(query, {"_id": 0}).sort("call_sign", 1).to_list(500)
 
     @router.post("/callsigns")
@@ -234,7 +247,8 @@ def create_logistics_router(db, get_current_user):
     @router.get("/vehicles")
     async def list_vehicles(status: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
+        if status:
+            query["status"] = status
         vehicles = await db.log_vehicles.find(query, {"_id": 0}).sort("vehicle_name", 1).to_list(500)
         now = datetime.now(timezone.utc)
         for v in vehicles:
@@ -245,7 +259,8 @@ def create_logistics_router(db, get_current_user):
                         v["status"] = "overdue"
                         v["overdue_minutes"] = int((now - exp).total_seconds() / 60)
                         await db.log_vehicles.update_one({"id": v["id"]}, {"$set": {"status": "overdue"}})
-                except: pass
+                except Exception:
+                    pass
         vehicles.sort(key=lambda x: (0 if x.get("status") == "overdue" else 1, x.get("vehicle_name","")))
         return vehicles
 
@@ -281,16 +296,22 @@ def create_logistics_router(db, get_current_user):
     @router.get("/vehicle-log")
     async def list_vehicle_log(vehicle: str = None, driver: str = None, date: str = None, user=Depends(get_current_user)):
         query = {}
-        if vehicle: query["vehicle_name"] = {"$regex": vehicle, "$options": "i"}
-        if driver: query["driver"] = {"$regex": driver, "$options": "i"}
-        if date: query["date"] = date
+        if vehicle:
+            query["vehicle_name"] = {"$regex": vehicle, "$options": "i"}
+        if driver:
+            query["driver"] = {"$regex": driver, "$options": "i"}
+        if date:
+            query["date"] = date
         return await db.log_vehicle_log.find(query, {"_id": 0}).sort("date", -1).to_list(500)
 
     @router.post("/vehicle-log")
     async def create_vehicle_log(data: dict = Body(...), user=Depends(require_admin)):
-        start = data.get("start_mileage", 0); end = data.get("end_mileage", 0)
-        try: total = float(end) - float(start) if end and start else 0
-        except: total = 0
+        start = data.get("start_mileage", 0)
+        end = data.get("end_mileage", 0)
+        try:
+            total = float(end) - float(start) if end and start else 0
+        except (ValueError, TypeError):
+            total = 0
         doc = {"id": new_id(), "vehicle_name": data.get("vehicle_name",""), "driver": data.get("driver",""),
                "date": data.get("date", today_str()), "start_mileage": start, "end_mileage": end,
                "total_miles": round(total, 1), "purpose": data.get("purpose",""),
@@ -305,7 +326,8 @@ def create_logistics_router(db, get_current_user):
     @router.get("/facilities")
     async def list_facilities(status: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
+        if status:
+            query["status"] = status
         return await db.log_facilities.find(query, {"_id": 0}).sort("item_name", 1).to_list(500)
 
     @router.post("/facilities")
@@ -330,7 +352,8 @@ def create_logistics_router(db, get_current_user):
     @router.get("/supply-requests")
     async def list_supply_requests(status: str = None, user=Depends(get_current_user)):
         query = {}
-        if status: query["status"] = status
+        if status:
+            query["status"] = status
         return await db.log_supply_requests.find(query, {"_id": 0}).sort([("status", 1), ("date_requested", -1)]).to_list(500)
 
     @router.post("/supply-requests")
@@ -350,7 +373,8 @@ def create_logistics_router(db, get_current_user):
     async def approve_supply_request(req_id: str, data: dict = Body(...), user=Depends(require_admin)):
         s = data.get("status","approved")
         fields = {"status": s, "approved_by": user["name"], "approved_at": now_iso()}
-        if data.get("notes"): fields["notes"] = data["notes"]
+        if data.get("notes"):
+            fields["notes"] = data["notes"]
         await db.log_supply_requests.update_one({"id": req_id}, {"$set": fields})
         return {"message": f"Request {s}"}
 
