@@ -35,7 +35,7 @@ async def register(user_data: UserCreate):
     is_first_user = user_count == 0
     assigned_role = UserRole.COMMANDER if is_first_user else user_data.role
     
-    valid_registration_roles = [UserRole.STAFF, UserRole.CADRE]
+    valid_registration_roles = [UserRole.STAFF, UserRole.CADRE, UserRole.PARENT]
     if not is_first_user and assigned_role not in valid_registration_roles:
         assigned_role = UserRole.STAFF
     
@@ -43,6 +43,17 @@ async def register(user_data: UserCreate):
     now = datetime.now(timezone.utc).isoformat()
     
     default_permissions = get_default_permissions(assigned_role)
+    
+    # For parent registration, verify the CAPID belongs to a student participant
+    linked_participant_id = None
+    if assigned_role == UserRole.PARENT:
+        student = await db.participants.find_one(
+            {"capid": user_data.capid, "is_removed": {"$ne": True}},
+            {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "flight": 1}
+        )
+        if not student:
+            raise HTTPException(status_code=400, detail="No student found with this CAPID. Please verify your cadet's CAPID.")
+        linked_participant_id = student["id"]
     
     user_doc = {
         "id": user_id,
@@ -57,7 +68,8 @@ async def register(user_data: UserCreate):
         "is_approved": is_first_user,
         "approved_by": user_id if is_first_user else None,
         "approved_at": now if is_first_user else None,
-        "permissions": default_permissions
+        "permissions": default_permissions,
+        "linked_participant_id": linked_participant_id
     }
     await db.users.insert_one(user_doc)
     

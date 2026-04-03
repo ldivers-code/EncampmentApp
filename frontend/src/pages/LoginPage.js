@@ -118,7 +118,9 @@ const LoginPage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="capid" className="text-xs uppercase tracking-wide text-slate-600">CAP ID *</Label>
+                    <Label htmlFor="capid" className="text-xs uppercase tracking-wide text-slate-600">
+                      {formData.role === 'parent' ? "Your Cadet's CAPID *" : "CAP ID *"}
+                    </Label>
                     <Input
                       id="capid"
                       name="capid"
@@ -143,9 +145,14 @@ const LoginPage = () => {
                       <SelectContent>
                         <SelectItem value="staff">Staff / Senior Member</SelectItem>
                         <SelectItem value="cadre">Cadre</SelectItem>
+                        <SelectItem value="parent">Parent / Guardian</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-slate-400 mt-1">Your role can be adjusted by encampment admin after approval</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {formData.role === 'parent' 
+                        ? "Enter your cadet's CAPID above. Your account requires admin approval."
+                        : "Your role can be adjusted by encampment admin after approval"}
+                    </p>
                   </div>
                 </>
               )}

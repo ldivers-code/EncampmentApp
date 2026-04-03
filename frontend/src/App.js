@@ -26,6 +26,7 @@ import StatusBoardControl from "./pages/StatusBoardControl";
 import StatusBoardDisplay from "./pages/StatusBoardDisplay";
 import CheckInPage from "./pages/CheckInPage";
 import BarracksPage from "./pages/BarracksPage";
+import MyCadetPage from "./pages/MyCadetPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -40,6 +41,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Parents can only access /my-cadet
+  if (user?.role === 'parent' && allowedRoles && !allowedRoles.includes('parent')) {
+    return <Navigate to="/my-cadet" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
@@ -61,7 +67,8 @@ const PublicRoute = ({ children }) => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    // Parents always go to My Cadet page
+    return <Navigate to={user?.role === 'parent' ? "/my-cadet" : "/dashboard"} replace />;
   }
 
   return children;
@@ -107,6 +114,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <MyFlightPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-cadet"
+        element={
+          <ProtectedRoute allowedRoles={['parent']}>
+            <MyCadetPage />
           </ProtectedRoute>
         }
       />

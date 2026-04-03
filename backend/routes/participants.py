@@ -18,49 +18,140 @@ from permissions import get_current_user, require_role
 
 @api_router.get("/participants", response_model=List[ParticipantResponse])
 async def get_participants(user: dict = Depends(get_current_user)):
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
-    
-    # Define roles that can see all data
-    privileged_roles = [
-        UserRole.COMMANDER,
-        UserRole.EXECUTIVE_STAFF,
-        UserRole.EXEC_CADRE,
-        UserRole.PLANS_PROGRAMS,
-        UserRole.FINANCE,
-        UserRole.STAFF  # Health Services falls under staff
-    ]
+    query = {"is_removed": {"$ne": True}}
     
     user_role = user.get('role')
+    user_flight = (user.get('flight') or '').lower()
     
-    # If user doesn't have a privileged role, filter sensitive fields
+    # Flight Sergeants (cadre assigned to a flight) only see their flight's students
+    cadre_flight_roles = [UserRole.CADRE, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER]
+    if user_role in cadre_flight_roles and user_flight:
+        query["flight"] = user_flight
+    
+    # Parents cannot view roster
+    if user_role == UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+    
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
+    
+    privileged_roles = [
+        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.DCP,
+        UserRole.EXEC_CADRE, UserRole.PLANS_PROGRAMS,
+        UserRole.FINANCE, UserRole.STAFF, UserRole.HEALTH_SERVICES
+    ]
+    
     if user_role not in privileged_roles:
-        # Sensitive fields to hide (set to empty/default values)
         sensitive_fields = [
-            'email', 'phone', 'cell_phone', 'address', 'city', 'state', 'zip_code',
-            'emergency_contact', 'emergency_phone', 'cadet_parent_name', 
-            'cadet_parent_phone', 'cadet_parent_email', 'amount_paid',
-            'registration_status', 'notes', 'comments', 'religious_preference',
-            'shirt_size', 'unit_cc_name', 'unit_cc_email'
+            'address', 'city', 'state', 'zip_code',
+            'amount_paid', 'registration_status', 'notes', 'comments', 
+            'religious_preference', 'shirt_size', 'unit_cc_name', 'unit_cc_email'
         ]
         filtered_participants = []
         for p in participants:
-            # Create a copy of the participant
             filtered_p = dict(p)
-            # Hide sensitive string/numeric fields
             for field in sensitive_fields:
                 if field in filtered_p:
                     filtered_p[field] = None
-            # Hide payment info but keep as boolean False
             filtered_p['paid'] = False
             filtered_p['paid_in_full'] = False
             filtered_p['amount_paid'] = None
-            # Hide approval info
             filtered_p['unit_approved'] = False
             filtered_p['wing_approved'] = False
             filtered_participants.append(filtered_p)
         return [ParticipantResponse(**p) for p in filtered_participants]
     
     return [ParticipantResponse(**p) for p in participants]
+
+
+@api_router.get("/participants/by-flight")
+async def get_participants_by_flight(user: dict = Depends(get_current_user)):
+    """Get participants grouped by flight for easy identification"""
+    query = {"is_removed": {"$ne": True}}
+    
+    user_role = user.get('role')
+    user_flight = (user.get('flight') or '').lower()
+    
+    cadre_flight_roles = [UserRole.CADRE, UserRole.EXEC_CADRE, UserRole.TRAINING_OFFICER]
+    if user_role in cadre_flight_roles and user_flight:
+        query["flight"] = user_flight
+    
+    if user_role == UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+    
+    participants = await db.participants.find(
+        query,
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "rank": 1,
+         "capid": 1, "flight": 1, "squadron": 1, "participant_type": 1,
+         "gender": 1, "age": 1, "wing": 1, "unit": 1,
+         "email": 1, "phone": 1, "cell_phone": 1,
+         "cadet_parent_email": 1, "cadet_parent_phone": 1, "cadet_parent_name": 1,
+         "member_type": 1}
+    ).to_list(1000)
+    
+    flights_map = {}
+    unassigned = []
+    
+    for p in participants:
+        flight = (p.get("flight") or "").lower()
+        entry = {
+            "id": p.get("id"),
+            "name": f"{p.get('rank', '')} {p.get('last_name', '')}, {p.get('first_name', '')}".strip(", "),
+            "first_name": p.get("first_name", ""),
+            "last_name": p.get("last_name", ""),
+            "rank": p.get("rank", ""),
+            "capid": p.get("capid", ""),
+            "flight": flight,
+            "squadron": p.get("squadron", ""),
+            "participant_type": p.get("participant_type", ""),
+            "gender": p.get("gender", ""),
+            "age": p.get("age"),
+            "wing": p.get("wing", ""),
+            "unit": p.get("unit", ""),
+            "email": p.get("email", ""),
+            "phone": p.get("phone", "") or p.get("cell_phone", ""),
+            "parent_email": p.get("cadet_parent_email", ""),
+            "parent_phone": p.get("cadet_parent_phone", ""),
+            "parent_name": p.get("cadet_parent_name", ""),
+        }
+        
+        if not flight:
+            unassigned.append(entry)
+        else:
+            if flight not in flights_map:
+                flights_map[flight] = []
+            flights_map[flight].append(entry)
+    
+    flight_order = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    result = []
+    for f in flight_order:
+        if f in flights_map:
+            members = sorted(flights_map[f], key=lambda x: x["last_name"])
+            result.append({
+                "flight": f,
+                "flight_label": f.capitalize(),
+                "count": len(members),
+                "members": members
+            })
+    
+    for f in sorted(flights_map.keys()):
+        if f not in flight_order:
+            members = sorted(flights_map[f], key=lambda x: x["last_name"])
+            result.append({
+                "flight": f,
+                "flight_label": f.capitalize() if f else "Unknown",
+                "count": len(members),
+                "members": members
+            })
+    
+    if unassigned:
+        result.append({
+            "flight": "unassigned",
+            "flight_label": "Unassigned",
+            "count": len(unassigned),
+            "members": sorted(unassigned, key=lambda x: x["last_name"])
+        })
+    
+    return result
 
 
 @api_router.get("/participants/stats")

@@ -6,6 +6,7 @@ import NotificationBell from './NotificationBell';
 import { 
   LayoutDashboard, 
   Users, 
+  User,
   Calendar, 
   BookOpen, 
   FileText, 
@@ -78,8 +79,19 @@ const Sidebar = ({ children }) => {
     { path: '/points', icon: Trophy, label: 'Point Tracking' },
   ];
 
-  // Meal Plan Schedule visible to all roles
-  navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
+  // Parent role only sees "My Cadet" tab
+  if (user?.role === 'parent') {
+    const parentNavItems = [
+      { path: '/my-cadet', icon: User, label: 'My Cadet' },
+    ];
+
+    // Skip the rest of the nav building for parents
+    // We'll use parentNavItems below
+    navItems.length = 0;
+    navItems.push(...parentNavItems);
+  } else {
+    // Meal Plan Schedule visible to all non-parent roles
+    navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
 
   // Financial Tracker visible to commander, executive_staff, finance
   if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
@@ -137,6 +149,8 @@ const Sidebar = ({ children }) => {
   if (['dcp', 'commander', 'executive_staff'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }
+
+  } // end of non-parent nav items else block
 
   const NavItem = ({ item }) => {
     const isActive = location.pathname === item.path;

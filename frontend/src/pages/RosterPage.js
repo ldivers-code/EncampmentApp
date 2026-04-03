@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
+
+const API = process.env.REACT_APP_BACKEND_URL;
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -85,6 +88,9 @@ const RosterPage = () => {
   const [removalReason, setRemovalReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  // Flight-grouped view
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'flight'
+  const [flightGroupedData, setFlightGroupedData] = useState([]);
 
   // Check if user can see full roster details (sensitive info)
   const canViewSensitiveData = () => {
@@ -158,6 +164,22 @@ const RosterPage = () => {
       console.error('Failed to load flight distribution');
     }
   };
+
+  const loadFlightGrouped = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/api/participants/by-flight`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFlightGroupedData(res.data);
+    } catch (error) {
+      console.error('Failed to load flight-grouped data');
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'flight') loadFlightGrouped();
+  }, [viewMode]);
 
   // Handle student roster upload
   const handleStudentUpload = async (e) => {
@@ -1049,6 +1071,17 @@ const RosterPage = () => {
                 Flights
               </button>
             )}
+            <button
+              onClick={() => { setShowFlightManager(false); setViewMode(viewMode === 'flight' ? 'table' : 'flight'); }}
+              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors flex items-center gap-1 ${
+                viewMode === 'flight' 
+                  ? 'bg-[#00205B] text-white' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              data-testid="by-flight-toggle"
+            >
+              By Flight
+            </button>
           </div>
         </div>
       </div>
@@ -1158,6 +1191,76 @@ const RosterPage = () => {
       {/* Flight Manager View */}
       {showFlightManager ? (
         <FlightManager participants={participants} onUpdate={loadParticipants} />
+      ) : viewMode === 'flight' ? (
+        /* Flight-Grouped View */
+        <div className="space-y-6" data-testid="flight-grouped-view">
+          {flightGroupedData.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">Loading flight data...</div>
+          ) : (
+            flightGroupedData.map((group) => {
+              const fColors = {
+                alpha: 'border-l-red-500 bg-red-50/30', bravo: 'border-l-blue-500 bg-blue-50/30',
+                charlie: 'border-l-green-500 bg-green-50/30', delta: 'border-l-yellow-500 bg-yellow-50/30',
+                echo: 'border-l-purple-500 bg-purple-50/30', foxtrot: 'border-l-orange-500 bg-orange-50/30',
+                unassigned: 'border-l-slate-400 bg-slate-50/30',
+              };
+              return (
+                <div key={group.flight} className={`border border-slate-200 rounded-sm border-l-4 ${fColors[group.flight] || 'border-l-slate-400'}`}>
+                  <div className="p-4 flex items-center justify-between bg-white/80">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-base font-bold text-[#00205B]">{group.flight_label} Flight</h3>
+                      <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full font-medium">{group.count} members</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const emails = group.members.filter(m => m.email).map(m => m.email).join(', ');
+                        if (emails) { navigator.clipboard.writeText(emails); }
+                      }}
+                      className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-sm font-medium transition-colors"
+                      data-testid={`copy-emails-${group.flight}`}
+                    >
+                      Copy Emails
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                          <th className="px-4 py-2">Name</th>
+                          <th className="px-4 py-2">CAPID</th>
+                          <th className="px-4 py-2">Unit</th>
+                          <th className="px-4 py-2">Gender</th>
+                          <th className="px-4 py-2">Email</th>
+                          <th className="px-4 py-2">Phone</th>
+                          <th className="px-4 py-2">Parent Contact</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {group.members.map((m) => (
+                          <tr key={m.id} className="hover:bg-white/60 transition-colors">
+                            <td className="px-4 py-2.5 font-medium">{m.rank} {m.last_name}, {m.first_name}</td>
+                            <td className="px-4 py-2.5 font-mono text-xs">{m.capid}</td>
+                            <td className="px-4 py-2.5 text-xs">{m.unit}</td>
+                            <td className="px-4 py-2.5 text-xs">{m.gender}</td>
+                            <td className="px-4 py-2.5">
+                              {m.email && <a href={`mailto:${m.email}`} className="text-blue-600 hover:underline text-xs">{m.email}</a>}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs">{m.phone}</td>
+                            <td className="px-4 py-2.5 text-xs">
+                              {m.parent_name && <div className="font-medium">{m.parent_name}</div>}
+                              {m.parent_email && <a href={`mailto:${m.parent_email}`} className="text-blue-600 hover:underline">{m.parent_email}</a>}
+                              {m.parent_phone && <div className="text-slate-500">{m.parent_phone}</div>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       ) : (
       <>
       {/* Filters */}

@@ -247,6 +247,20 @@ async def log_cadet_incident(
     entry["cadet_id_internal"] = cadet_id
     result = await log_incident(db, entry, user["id"])
     result.pop("_id", None)
+    
+    # Notify parent(s) for critical incidents
+    severity = entry.get("severity", "").lower()
+    incident_type = entry.get("incident_type", entry.get("type", "")).lower()
+    critical_types = ["allergic_reaction", "allergic reaction", "critical", "severe", "injury", "seizure", "emergency"]
+    
+    if severity in ["critical", "severe", "high"] or any(ct in incident_type for ct in critical_types):
+        from routes.parent import notify_parent_health_incident
+        cadet = await db.participants.find_one({"id": cadet_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+        cadet_name = f"{cadet.get('first_name', '')} {cadet.get('last_name', '')}" if cadet else "Your cadet"
+        title = f"Health Alert: {cadet_name}"
+        message = f"{incident_type.replace('_', ' ').title()} reported for {cadet_name}. Severity: {severity}. Please contact Health Services for details."
+        await notify_parent_health_incident(cadet_id, incident_type, title, message)
+    
     return result
 
 @api_router.put("/health/incidents/{incident_id}/status")

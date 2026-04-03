@@ -138,7 +138,7 @@ async def approve_user(
         }}
     )
     
-    app_url = os.environ.get('APP_URL', 'https://tn-wing-roster.preview.emergentagent.com')
+    app_url = os.environ.get('APP_URL', 'https://cadre-hub.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
         target_user.get('email'),

@@ -22,6 +22,7 @@ class UserRole:
     SUPPORT_DINING = "support_dining"
     SUPPORT_HEALTH = "support_health"
     SQUADRON_COMMANDER = "squadron_commander"
+    PARENT = "parent"
 
 
 class UserUnit:
@@ -228,6 +229,15 @@ DEFAULT_PERMISSIONS = {
         documents=True, admin_panel=False,
         health_view=True, health_full=False,
         check_in_view=True, check_in_edit=True
+    ),
+    UserRole.PARENT: AccessPermissions(
+        dashboard=False, roster_view=False, roster_edit=False,
+        schedule_view=False, schedule_edit=False,
+        meal_plan_view=False, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=False, handbooks=False,
+        documents=False, admin_panel=False,
+        health_view=False, health_full=False
     ),
 }
 
