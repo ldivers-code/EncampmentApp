@@ -13,7 +13,10 @@ import {
   markBudgetItemPaid,
   importPaymentReport,
   getPaymentSummary,
-  getPaymentImportHistory
+  getPaymentImportHistory,
+  smartReceiptUpload,
+  confirmReceiptItems,
+  getReceiptUploads
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -84,6 +87,12 @@ const BudgetPage = () => {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [paymentFlightFilter, setPaymentFlightFilter] = useState('all');
+  // Smart receipt upload state
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const [parsedReceipt, setParsedReceipt] = useState(null);
+  const [receiptItems, setReceiptItems] = useState([]);
+  const [receiptHistory, setReceiptHistory] = useState([]);
+  const [confirming, setConfirming] = useState(false);
 
   const [formData, setFormData] = useState({
     category: '',
@@ -177,6 +186,72 @@ const BudgetPage = () => {
     } finally {
       setPaymentUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleSmartReceiptUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setReceiptUploading(true);
+    setParsedReceipt(null);
+    setReceiptItems([]);
+    try {
+      const result = await smartReceiptUpload(file);
+      setParsedReceipt(result);
+      setReceiptItems(
+        (result.line_items || []).map((item, i) => ({
+          ...item,
+          category: item.suggested_category,
+          include: true,
+          key: i,
+        }))
+      );
+      toast.success(`Receipt parsed: ${result.line_items?.length || 0} items found`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to process receipt');
+    } finally {
+      setReceiptUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleConfirmReceipt = async () => {
+    if (!parsedReceipt) return;
+    const itemsToConfirm = receiptItems
+      .filter(item => item.include)
+      .map(item => ({
+        description: item.description,
+        amount: item.amount,
+        category: item.category,
+        vendor: parsedReceipt.vendor,
+      }));
+    
+    if (itemsToConfirm.length === 0) {
+      toast.error('Select at least one item to add');
+      return;
+    }
+    
+    setConfirming(true);
+    try {
+      const result = await confirmReceiptItems(parsedReceipt.receipt_id, itemsToConfirm);
+      toast.success(result.message);
+      setParsedReceipt(null);
+      setReceiptItems([]);
+      loadData();
+      loadReceiptHistory();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to confirm receipt items');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const loadReceiptHistory = async () => {
+    try {
+      const data = await getReceiptUploads();
+      setReceiptHistory(data);
+    } catch (error) {
+      console.error('Failed to load receipt history:', error);
     }
   };
 
@@ -700,6 +775,18 @@ const BudgetPage = () => {
           <Users className="w-4 h-4" />
           Payment Reports
         </button>
+        <button
+          onClick={() => { setActiveTab('smart-receipts'); if (receiptHistory.length === 0) loadReceiptHistory(); }}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === 'smart-receipts'
+              ? 'border-[#00205B] text-[#00205B]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="tab-smart-receipts"
+        >
+          <Receipt className="w-4 h-4" />
+          Smart Receipts
+        </button>
       </div>
 
       {/* Budget Tab Content */}
@@ -803,8 +890,80 @@ const BudgetPage = () => {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      {/* Income vs Expenses Overview + Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Income vs Expenses Card */}
+        <div className="bg-white border border-slate-200 rounded-sm">
+          <div className="border-b border-slate-100 p-4">
+            <h2 className="font-bold uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              Income vs Expenses
+            </h2>
+          </div>
+          <div className="p-5 space-y-5">
+            {/* Net Position */}
+            <div className="text-center py-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Net Position</p>
+              <p className={`text-3xl font-bold font-mono ${totals.currentBalance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                {formatCurrency(totals.currentBalance)}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">Projected: {formatCurrency(totals.projectedBalance)}</p>
+            </div>
+
+            {/* Income Bar */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Income</span>
+                <span className="text-sm font-mono font-bold text-emerald-600">{formatCurrency(totals.actualIncome)}</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
+                <div className="bg-emerald-500 h-4 rounded-full transition-all relative" style={{ width: `${Math.min(100, (totals.actualIncome / Math.max(totals.estimatedIncome, 1)) * 100)}%` }}>
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                    {Math.round((totals.actualIncome / Math.max(totals.estimatedIncome, 1)) * 100)}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">of {formatCurrency(totals.estimatedIncome)} estimated</p>
+            </div>
+
+            {/* Expenses Bar */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-[#BF0D3E] uppercase tracking-wide">Expenses</span>
+                <span className="text-sm font-mono font-bold text-[#BF0D3E]">{formatCurrency(totals.actualExpenses)}</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
+                <div className="bg-[#BF0D3E] h-4 rounded-full transition-all relative" style={{ width: `${Math.min(100, (totals.actualExpenses / Math.max(totals.estimatedExpenses, 1)) * 100)}%` }}>
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                    {Math.round((totals.actualExpenses / Math.max(totals.estimatedExpenses, 1)) * 100)}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">of {formatCurrency(totals.estimatedExpenses)} estimated</p>
+            </div>
+
+            {/* Breakdown */}
+            <div className="border-t border-slate-100 pt-3 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Paid Items</span>
+                <span className="font-mono font-semibold text-[#00205B]">{totals.paidCount} / {totals.totalItems}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Income Variance</span>
+                <span className={`font-mono font-semibold ${totals.incomeVariance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                  {totals.incomeVariance >= 0 ? '+' : ''}{formatCurrency(totals.incomeVariance)}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Expense Variance</span>
+                <span className={`font-mono font-semibold ${totals.expenseVariance >= 0 ? 'text-emerald-600' : 'text-[#BF0D3E]'}`}>
+                  {totals.expenseVariance >= 0 ? '' : '+'}{formatCurrency(Math.abs(totals.expenseVariance))} {totals.expenseVariance >= 0 ? 'under' : 'over'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Budget by Category - Fixed labels */}
         {chartData.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-sm">
             <div className="border-b border-slate-100 p-4">
@@ -814,30 +973,35 @@ const BudgetPage = () => {
             </div>
             <div className="p-4">
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData}>
+                <BarChart data={chartData} margin={{ bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 10, fill: '#64748B' }}
+                    tick={{ fontSize: 9, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
-                    angle={-45}
+                    angle={-35}
                     textAnchor="end"
-                    height={70}
+                    height={80}
+                    interval={0}
+                    tickFormatter={(value) => value.length > 14 ? value.substring(0, 14) + '...' : value}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: '#64748B' }}
                     axisLine={{ stroke: '#E2E8F0' }}
                     tickFormatter={(value) => `$${value.toLocaleString()}`}
+                    width={65}
                   />
                   <Tooltip
-                    formatter={(value) => formatCurrency(value)}
+                    formatter={(value, name) => [formatCurrency(value), name]}
+                    labelFormatter={(label) => label}
                     contentStyle={{
                       backgroundColor: '#fff',
                       border: '1px solid #E2E8F0',
-                      borderRadius: '2px'
+                      borderRadius: '2px',
+                      fontSize: '12px'
                     }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Bar dataKey="Estimated" fill="#00205B" radius={[2, 2, 0, 0]} />
                   <Bar dataKey="Actual" fill="#BF0D3E" radius={[2, 2, 0, 0]} />
                 </BarChart>
@@ -846,6 +1010,7 @@ const BudgetPage = () => {
           </div>
         )}
 
+        {/* Expense Distribution - Fixed with legend instead of inline labels */}
         {pieData.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-sm">
             <div className="border-b border-slate-100 p-4">
@@ -854,26 +1019,38 @@ const BudgetPage = () => {
               </h2>
             </div>
             <div className="p-4">
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={40}
+                    outerRadius={70}
                     paddingAngle={2}
                     dataKey="value"
-                    label={({ name, percent }) => `${name.substring(0, 10)}${name.length > 10 ? '...' : ''} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
                   >
                     {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ fontSize: '12px' }} />
                 </PieChart>
               </ResponsiveContainer>
+              {/* Legend below chart */}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 max-h-[110px] overflow-y-auto">
+                {pieData.map((entry, index) => {
+                  const total = pieData.reduce((s, e) => s + e.value, 0);
+                  const pct = total > 0 ? Math.round(entry.value / total * 100) : 0;
+                  return (
+                    <div key={entry.name} className="flex items-center gap-1.5 text-[10px] leading-tight py-0.5">
+                      <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-slate-600 truncate" title={entry.name}>{entry.name}</span>
+                      <span className="font-mono text-slate-400 flex-shrink-0 ml-auto">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -1532,6 +1709,178 @@ const BudgetPage = () => {
                 </div>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {/* Smart Receipts Tab */}
+      {activeTab === 'smart-receipts' && (
+        <div className="space-y-6">
+          {/* Upload Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#00205B]">Smart Receipt Upload</h2>
+              <p className="text-sm text-slate-500">
+                Upload receipt images — items are auto-extracted and categorized to your budget
+              </p>
+            </div>
+            <label className="cursor-pointer" data-testid="upload-smart-receipt">
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.heic" onChange={handleSmartReceiptUpload} className="hidden" />
+              <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-sm transition-colors ${
+                receiptUploading ? 'bg-slate-200 text-slate-500' : 'bg-[#00205B] text-white hover:bg-[#001845]'
+              }`}>
+                <Upload className="w-4 h-4" />
+                {receiptUploading ? 'Processing...' : 'Upload Receipt'}
+              </span>
+            </label>
+          </div>
+
+          {/* Parsed Receipt Review */}
+          {parsedReceipt && (
+            <div className="bg-white border-2 border-[#00205B]/20 rounded-sm p-5 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-bold text-[#00205B]">
+                    {parsedReceipt.vendor || 'Receipt'}
+                  </h3>
+                  <div className="flex gap-4 text-sm text-slate-500 mt-1">
+                    {parsedReceipt.date && <span>Date: {parsedReceipt.date}</span>}
+                    {parsedReceipt.total && <span>Total: <strong className="text-slate-700">${parsedReceipt.total.toFixed(2)}</strong></span>}
+                  </div>
+                </div>
+                {parsedReceipt.receipt_url && !parsedReceipt.receipt_url.startsWith('data:') && (
+                  <a href={parsedReceipt.receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">
+                    View Image
+                  </a>
+                )}
+              </div>
+
+              {/* Line Items with Category Selection */}
+              <div className="border border-slate-200 rounded-sm overflow-hidden">
+                <table className="w-full text-sm" data-testid="receipt-items-table">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="w-8 p-3"><input type="checkbox" checked={receiptItems.every(i => i.include)} onChange={(e) => setReceiptItems(receiptItems.map(i => ({ ...i, include: e.target.checked })))} /></th>
+                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase">Item</th>
+                      <th className="text-right p-3 text-xs font-semibold text-slate-600 uppercase w-28">Amount</th>
+                      <th className="text-left p-3 text-xs font-semibold text-slate-600 uppercase w-52">Category</th>
+                      <th className="text-center p-3 text-xs font-semibold text-slate-600 uppercase w-20">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receiptItems.map((item, idx) => (
+                      <tr key={item.key} className={`border-t border-slate-100 ${!item.include ? 'opacity-40' : ''}`}>
+                        <td className="p-3">
+                          <input type="checkbox" checked={item.include} onChange={(e) => {
+                            const updated = [...receiptItems];
+                            updated[idx] = { ...updated[idx], include: e.target.checked };
+                            setReceiptItems(updated);
+                          }} />
+                        </td>
+                        <td className="p-3">{item.description}</td>
+                        <td className="p-3 text-right font-mono">${item.amount.toFixed(2)}</td>
+                        <td className="p-3">
+                          <Select value={item.category} onValueChange={(val) => {
+                            const updated = [...receiptItems];
+                            updated[idx] = { ...updated[idx], category: val };
+                            setReceiptItems(updated);
+                          }}>
+                            <SelectTrigger className="w-full rounded-sm text-xs h-8" data-testid={`receipt-category-${idx}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(parsedReceipt.available_categories || budgetCategories).map(cat => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            item.confidence >= 0.5 ? 'bg-emerald-100 text-emerald-700' :
+                            item.confidence >= 0.2 ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            {Math.round(item.confidence * 100)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50">
+                    <tr>
+                      <td className="p-3" />
+                      <td className="p-3 font-semibold">
+                        Selected: {receiptItems.filter(i => i.include).length} items
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold">
+                        ${receiptItems.filter(i => i.include).reduce((s, i) => s + i.amount, 0).toFixed(2)}
+                      </td>
+                      <td className="p-3" colSpan={2}>
+                        <Button
+                          onClick={handleConfirmReceipt}
+                          disabled={confirming || receiptItems.filter(i => i.include).length === 0}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm"
+                          data-testid="confirm-receipt-btn"
+                        >
+                          {confirming ? 'Adding...' : 'Add to Budget'}
+                        </Button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              
+              <Button variant="outline" size="sm" onClick={() => { setParsedReceipt(null); setReceiptItems([]); }} className="rounded-sm">
+                Discard
+              </Button>
+            </div>
+          )}
+
+          {/* No receipt uploaded yet */}
+          {!parsedReceipt && !receiptUploading && (
+            <div className="bg-white border border-dashed border-slate-300 rounded-sm p-12 text-center">
+              <Receipt className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+              <p className="text-slate-500">Upload a receipt photo to auto-extract line items</p>
+              <p className="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP, PDF</p>
+            </div>
+          )}
+
+          {receiptUploading && (
+            <div className="bg-white border border-slate-200 rounded-sm p-12 text-center">
+              <div className="animate-pulse">
+                <Receipt className="w-12 h-12 mx-auto mb-3 text-[#00205B]/40" />
+                <p className="text-[#00205B] font-medium">Analyzing receipt...</p>
+                <p className="text-xs text-slate-400 mt-1">Extracting items and matching categories</p>
+              </div>
+            </div>
+          )}
+
+          {/* Receipt History */}
+          {receiptHistory.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-sm p-4">
+              <h3 className="font-semibold text-sm text-slate-700 mb-3 uppercase tracking-wide">Previous Uploads</h3>
+              <div className="space-y-2">
+                {receiptHistory.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-sm text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        r.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {r.status === 'confirmed' ? 'Added' : 'Pending'}
+                      </span>
+                      <span className="font-medium">{r.vendor || r.filename}</span>
+                      {r.total && <span className="text-xs font-mono text-slate-500">${r.total.toFixed(2)}</span>}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <span>{r.line_items?.length || 0} items</span>
+                      <span>{new Date(r.uploaded_at).toLocaleDateString()}</span>
+                      <span>by {r.uploaded_by}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}

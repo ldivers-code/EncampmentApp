@@ -6,6 +6,8 @@ from io import BytesIO
 import pandas as pd
 from datetime import datetime, timezone
 import uuid
+import os
+import logging
 
 from database import db, api_router
 from models import (
@@ -468,6 +470,338 @@ async def delete_budget_item(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Budget item not found")
     return {"message": "Budget item deleted successfully"}
+
+
+
+# ================= SMART RECEIPT UPLOAD =================
+
+class ReceiptLineItem(BaseModel):
+    description: str
+    amount: float
+    suggested_category: str
+    confidence: float = 0.0
+
+class ReceiptParseResult(BaseModel):
+    vendor: Optional[str] = None
+    date: Optional[str] = None
+    total: Optional[float] = None
+    line_items: List[ReceiptLineItem] = []
+    raw_text: Optional[str] = None
+
+CATEGORY_KEYWORDS = {
+    "DFAC Budget": ["food", "meal", "breakfast", "lunch", "dinner", "snack", "catering", "grocery", "produce", "meat", "dairy", "beverage", "drink", "bread", "rice", "pasta", "fruit", "vegetable", "cafeteria", "kitchen", "dining"],
+    "T-Shirts & Merchandise": ["shirt", "t-shirt", "tshirt", "polo", "apparel", "hat", "patch", "coin", "merchandise", "merch", "clothing", "uniform", "printing", "embroidery", "screen print"],
+    "Graduation Banquet": ["banquet", "graduation", "ceremony", "award", "trophy", "plaque", "certificate", "frame", "ribbon"],
+    "Logistics": ["supply", "supplies", "office", "paper", "pen", "tape", "staple", "folder", "binder", "clipboard", "marker", "battery", "flashlight", "radio", "tool", "hardware", "storage", "bin", "container"],
+    "Health Services": ["medical", "medicine", "bandage", "first aid", "gauze", "glove", "mask", "sanitizer", "thermometer", "health", "sunscreen", "bug spray", "ice pack"],
+    "Public Affairs": ["banner", "sign", "poster", "flag", "photo", "camera", "display", "social media", "marketing", "flyer", "brochure"],
+    "Advanced Training": ["training", "manual", "book", "course", "simulation", "equipment", "compass", "map", "rope", "obstacle"],
+    "Commandant's Supplies": ["commandant", "leadership", "commander", "office", "admin"],
+    "Deputy Commandant's Supplies": ["deputy", "assistant"],
+    "Participant Fees": ["registration", "fee", "tuition", "enrollment"],
+    "Donations": ["donation", "sponsor", "contribution", "gift"],
+    "Refunds": ["refund", "return", "reimbursement", "credit"],
+}
+
+def categorize_item(description: str, existing_categories: list) -> tuple:
+    """Auto-categorize a line item based on keywords. Returns (category, confidence)"""
+    desc_lower = description.lower()
+    
+    best_category = "Logistics"
+    best_score = 0
+    
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        score = sum(1 for kw in keywords if kw in desc_lower)
+        if score > best_score:
+            best_score = score
+            best_category = category
+    
+    # Try matching against actual budget categories from DB
+    for cat in existing_categories:
+        cat_lower = cat.lower()
+        cat_words = cat_lower.replace("'", "").replace("-", " ").split()
+        score = sum(1 for w in cat_words if w in desc_lower and len(w) > 2)
+        if score > best_score:
+            best_score = score
+            best_category = cat
+    
+    confidence = min(1.0, best_score * 0.4) if best_score > 0 else 0.1
+    return best_category, confidence
+
+
+def parse_receipt_text(text: str) -> dict:
+    """Parse receipt text into structured data"""
+    import re
+    lines = text.strip().split('\n')
+    
+    vendor = None
+    date = None
+    total = None
+    line_items = []
+    
+    # First non-empty line is often the vendor
+    for line in lines[:5]:
+        line = line.strip()
+        if line and len(line) > 2 and not any(c.isdigit() for c in line[:3]):
+            vendor = line
+            break
+    
+    # Find amounts with $ or decimal patterns
+    amount_pattern = re.compile(r'\$?\s*(\d{1,6}[.,]\d{2})\b')
+    date_pattern = re.compile(r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})')
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        
+        # Try to find date
+        if not date:
+            date_match = date_pattern.search(stripped)
+            if date_match:
+                date = date_match.group(1)
+        
+        # Find line items with amounts
+        amounts = amount_pattern.findall(stripped)
+        if amounts:
+            amount_str = amounts[-1].replace(',', '')
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                continue
+            
+            # Check if this is a total line
+            if any(w in stripped.lower() for w in ['total', 'grand total', 'amount due', 'balance due', 'subtotal']):
+                if 'sub' not in stripped.lower():
+                    total = amount
+                continue
+            
+            # Extract description (text before the amount)
+            desc = amount_pattern.sub('', stripped).strip(' -$:')
+            if desc and len(desc) > 1:
+                line_items.append({
+                    "description": desc,
+                    "amount": amount,
+                })
+    
+    if not total and line_items:
+        total = sum(item["amount"] for item in line_items)
+    
+    return {
+        "vendor": vendor,
+        "date": date,
+        "total": total,
+        "line_items": line_items,
+    }
+
+
+@api_router.post("/budget/receipt-upload")
+async def smart_receipt_upload(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_finance_access())
+):
+    """Upload a receipt image/PDF. Extracts line items, auto-categorizes to budget categories.
+    Returns parsed items with suggested categories that can be confirmed/changed by user."""
+    import base64
+    
+    allowed = ('.jpg', '.jpeg', '.png', '.webp', '.pdf', '.heic')
+    if not any(file.filename.lower().endswith(ext) for ext in allowed):
+        raise HTTPException(status_code=400, detail="Supported formats: JPG, PNG, WEBP, PDF")
+    
+    contents = await file.read()
+    
+    # Get existing budget categories for matching
+    budget_items = await db.budget.find({"is_deleted": {"$ne": True}}, {"_id": 0, "category": 1}).to_list(500)
+    existing_categories = list(set(item.get("category", "") for item in budget_items if item.get("category")))
+    
+    parsed = {"vendor": None, "date": None, "total": None, "line_items": []}
+    
+    # Try OCR-like extraction
+    # If image, try to use the file content for text extraction
+    is_image = any(file.filename.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp', '.heic'))
+    
+    if is_image:
+        # Try using emergent integrations for image-to-text (GPT Vision)
+        try:
+            from emergentintegrations.llm.chat import chat, ChatMessage, ChatModel
+            
+            b64_content = base64.b64encode(contents).decode('utf-8')
+            mime = 'image/jpeg' if file.filename.lower().endswith(('.jpg', '.jpeg')) else 'image/png'
+            data_url = f"data:{mime};base64,{b64_content}"
+            
+            api_key = os.environ.get("EMERGENT_API_KEY", "")
+            
+            messages = [
+                ChatMessage(
+                    role="user",
+                    content=f"Extract ALL items and their prices from this receipt. Format each line as: ITEM_DESCRIPTION | $AMOUNT\nAlso include the store/vendor name on the first line as: VENDOR: name\nAnd the date as: DATE: date\nAnd the total as: TOTAL: $amount",
+                    images=[data_url]
+                )
+            ]
+            
+            result = await chat(
+                api_key=api_key,
+                model=ChatModel.GPT_4O,
+                messages=messages
+            )
+            
+            raw_text = result.message
+            
+            # Parse the structured response
+            lines = raw_text.strip().split('\n')
+            vendor = None
+            date = None
+            total = None
+            line_items = []
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.upper().startswith('VENDOR:'):
+                    vendor = line.split(':', 1)[1].strip()
+                elif line.upper().startswith('DATE:'):
+                    date = line.split(':', 1)[1].strip()
+                elif line.upper().startswith('TOTAL:'):
+                    total_str = line.split(':', 1)[1].strip().replace('$', '').replace(',', '')
+                    try:
+                        total = float(total_str)
+                    except ValueError:
+                        pass
+                elif '|' in line:
+                    parts = line.split('|')
+                    desc = parts[0].strip().lstrip('- ')
+                    amt_str = parts[-1].strip().replace('$', '').replace(',', '')
+                    try:
+                        amt = float(amt_str)
+                        line_items.append({"description": desc, "amount": amt})
+                    except ValueError:
+                        pass
+            
+            parsed = {"vendor": vendor, "date": date, "total": total, "line_items": line_items, "raw_text": raw_text}
+            
+        except Exception as e:
+            # Fallback: store as unprocessed receipt
+            parsed["raw_text"] = f"OCR processing unavailable: {str(e)}"
+    
+    # Auto-categorize each line item
+    categorized_items = []
+    for item in parsed.get("line_items", []):
+        category, confidence = categorize_item(item["description"], existing_categories)
+        categorized_items.append({
+            "description": item["description"],
+            "amount": item["amount"],
+            "suggested_category": category,
+            "confidence": round(confidence, 2),
+        })
+    
+    # If no items extracted, create a single item for the whole receipt
+    if not categorized_items and parsed.get("total"):
+        category, confidence = categorize_item(
+            parsed.get("vendor", "") or file.filename,
+            existing_categories
+        )
+        categorized_items.append({
+            "description": parsed.get("vendor", file.filename),
+            "amount": parsed["total"],
+            "suggested_category": category,
+            "confidence": round(confidence, 2),
+        })
+    
+    # Store receipt image in object storage
+    receipt_url = None
+    try:
+        from file_storage import put_object
+        ext = os.path.splitext(file.filename)[1]
+        object_key = f"receipts/{uuid.uuid4()}{ext}"
+        receipt_url = await put_object(object_key, contents, file.content_type or 'image/jpeg')
+    except Exception:
+        # Fall back to base64 data URL
+        b64 = base64.b64encode(contents).decode('utf-8')
+        mime = file.content_type or 'application/octet-stream'
+        receipt_url = f"data:{mime};base64,{b64}"
+    
+    # Save the receipt record
+    receipt_record = {
+        "id": str(uuid.uuid4()),
+        "filename": file.filename,
+        "receipt_url": receipt_url,
+        "vendor": parsed.get("vendor"),
+        "date": parsed.get("date"),
+        "total": parsed.get("total"),
+        "line_items": categorized_items,
+        "raw_text": parsed.get("raw_text"),
+        "status": "pending_review",
+        "uploaded_by": user.get("name", user.get("email")),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.receipt_uploads.insert_one(receipt_record)
+    receipt_record.pop("_id", None)
+    
+    return {
+        "receipt_id": receipt_record["id"],
+        "vendor": parsed.get("vendor"),
+        "date": parsed.get("date"),
+        "total": parsed.get("total"),
+        "line_items": categorized_items,
+        "receipt_url": receipt_url,
+        "available_categories": sorted(existing_categories),
+    }
+
+
+@api_router.post("/budget/receipt-confirm")
+async def confirm_receipt_items(
+    data: dict,
+    user: dict = Depends(require_finance_access())
+):
+    """Confirm receipt items and add them to budget. User can change categories before confirming."""
+    receipt_id = data.get("receipt_id")
+    items = data.get("items", [])
+    
+    if not receipt_id or not items:
+        raise HTTPException(status_code=400, detail="receipt_id and items required")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    created = []
+    
+    for item in items:
+        budget_item = {
+            "id": str(uuid.uuid4()),
+            "category": item.get("category", "Logistics"),
+            "item_name": item.get("description", "Receipt item"),
+            "estimated": item.get("amount", 0),
+            "actual": item.get("amount", 0),
+            "item_type": "expense",
+            "payment_status": "paid",
+            "payment_date": now,
+            "vendor": item.get("vendor", ""),
+            "receipt_id": receipt_id,
+            "notes": f"From receipt upload: {item.get('vendor', '')}",
+            "created_at": now,
+            "updated_at": now,
+            "is_deleted": False,
+        }
+        await db.budget.insert_one(budget_item)
+        budget_item.pop("_id", None)
+        created.append(budget_item)
+    
+    # Update receipt status
+    await db.receipt_uploads.update_one(
+        {"id": receipt_id},
+        {"$set": {"status": "confirmed", "confirmed_at": now, "confirmed_by": user.get("name")}}
+    )
+    
+    return {"message": f"{len(created)} items added to budget", "items": created}
+
+
+@api_router.get("/budget/receipt-uploads")
+async def get_receipt_uploads(user: dict = Depends(require_finance_access())):
+    """Get all uploaded receipts with their parsed items"""
+    receipts = await db.receipt_uploads.find(
+        {},
+        {"_id": 0, "raw_text": 0}
+    ).sort("uploaded_at", -1).to_list(100)
+    return receipts
 
 
 

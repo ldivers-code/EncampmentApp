@@ -371,6 +371,27 @@ export const getPaymentImportHistory = async () => {
   return response.data;
 };
 
+// Smart Receipt Upload
+export const smartReceiptUpload = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/budget/receipt-upload`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  });
+  return response.data;
+};
+
+export const confirmReceiptItems = async (receiptId, items) => {
+  const response = await axios.post(`${API}/budget/receipt-confirm`, { receipt_id: receiptId, items }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getReceiptUploads = async () => {
+  const response = await axios.get(`${API}/budget/receipt-uploads`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 
 // Documents
 export const getDocuments = async () => {
