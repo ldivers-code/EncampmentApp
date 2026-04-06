@@ -122,6 +122,34 @@ const Connector = ({ type = 'vertical', className = '' }) => {
   return null;
 };
 
+// CAP rank ordering for sorting (higher rank = lower index = sorts first)
+const SENIOR_RANK_ORDER = [
+  'Col', 'Lt Col', 'Maj', 'Capt', '1st Lt', '2nd Lt', '2dLt',
+  'CMSgt', 'SMSgt', 'MSgt', 'TSgt', 'SSgt', 'SrA', 'A1C', 'Amn', 'AB',
+  'SM'
+];
+
+const CADET_RANK_ORDER = [
+  'C/Col', 'C/Lt Col', 'C/Maj', 'C/Capt',
+  'C/1stLt', 'C/1st Lt', 'C/2dLt', 'C/2nd Lt',
+  'C/CMSgt', 'C/SMSgt', 'C/MSgt', 'C/TSgt', 'C/SSgt',
+  'C/SrA', 'C/A1C', 'C/Amn', 'C/AB'
+];
+
+const getRankIndex = (rank, isSenior) => {
+  const orderList = isSenior ? SENIOR_RANK_ORDER : CADET_RANK_ORDER;
+  const idx = orderList.findIndex(r => r === rank);
+  return idx === -1 ? orderList.length : idx;
+};
+
+const sortParticipantsByRankThenName = (list, isSenior) => {
+  return [...list].sort((a, b) => {
+    const rankDiff = getRankIndex(a.rank, isSenior) - getRankIndex(b.rank, isSenior);
+    if (rankDiff !== 0) return rankDiff;
+    return (a.last_name || '').localeCompare(b.last_name || '');
+  });
+};
+
 const OrgChartPage = () => {
   const { canEdit, user } = useAuth();
   const [roles, setRoles] = useState([]);
@@ -700,14 +728,45 @@ const OrgChartPage = () => {
                     value={selectedRole.assigned_participant_id || 'vacant'}
                     onValueChange={(value) => handleAssign(value === 'vacant' ? null : value)}
                   >
-                    <SelectTrigger className="mt-1 rounded-sm">
+                    <SelectTrigger className="mt-1 rounded-sm" data-testid="assign-member-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="vacant"><span className="text-amber-600 italic">Vacant</span></SelectItem>
-                      {participants.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.rank} {p.first_name} {p.last_name}</SelectItem>
-                      ))}
+                      {(() => {
+                        const seniors = sortParticipantsByRankThenName(
+                          participants.filter(p => p.member_type === 'SENIOR'),
+                          true
+                        );
+                        const cadets = sortParticipantsByRankThenName(
+                          participants.filter(p => p.member_type !== 'SENIOR'),
+                          false
+                        );
+                        return (
+                          <>
+                            {seniors.length > 0 && (
+                              <>
+                                <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 sticky">Senior Members</div>
+                                {seniors.map(p => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    <span className="font-medium">{p.rank}</span> {p.last_name}, {p.first_name}
+                                  </SelectItem>
+                                ))}
+                              </>
+                            )}
+                            {cadets.length > 0 && (
+                              <>
+                                <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 sticky mt-1">Cadets</div>
+                                {cadets.map(p => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    <span className="font-medium">{p.rank}</span> {p.last_name}, {p.first_name}
+                                  </SelectItem>
+                                ))}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                     </SelectContent>
                   </Select>
                 ) : (
