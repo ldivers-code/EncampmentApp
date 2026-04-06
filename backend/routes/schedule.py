@@ -334,6 +334,57 @@ def _extract_location(title: str, notes: str) -> str:
     return ''
 
 
+def _clean_title(raw_title: str) -> tuple[str, str]:
+    """Split a raw spreadsheet title into (clean_title, extra_notes).
+
+    Strips parenthetical planning notes (closed or unclosed), inline
+    comments, and long trailing descriptions.
+    """
+    title = raw_title.strip()
+    extra = ''
+
+    # 1. Closed parenthetical notes — e.g. "(On Your Own, Not Paid for by ENC)"
+    paren_match = re.search(r'\s*\(([^)]{15,})\)', title)
+    if paren_match:
+        extra = paren_match.group(1).strip()
+        title = title[:paren_match.start()].strip()
+        # Grab any text AFTER the closing paren too
+        after = title[paren_match.end():].strip() if paren_match.end() < len(raw_title) else ''
+        remainder = raw_title[paren_match.end():].strip()
+        if remainder:
+            extra += ' — ' + remainder
+            title = title  # already set above
+
+    # 2. Unclosed parenthetical — e.g. "(cut check in down to..."
+    if not extra:
+        unclosed = re.search(r'\s*\([^)]{15,}$', title)
+        if unclosed:
+            extra = title[unclosed.start():].strip().lstrip('(').strip()
+            title = title[:unclosed.start()].strip()
+
+    # 2b. Strip short parenthetical abbreviations like (Ops), (Sppt), (HQ)
+    title = re.sub(r'\s*\([^)]{1,6}\)', '', title).strip()
+
+    # 3. If still very long (>55 chars), split at a natural boundary
+    if len(title) > 55:
+        for sep in [' - ', ' / ', ', ', '/ ', '//']:
+            idx = title.find(sep, 20)
+            if 0 < idx < 55:
+                extra = title[idx + len(sep):].strip() + (' — ' + extra if extra else '')
+                title = title[:idx].strip()
+                break
+        # Last resort: truncate at last space before 55 chars
+        if len(title) > 55:
+            idx = title.rfind(' ', 0, 55)
+            if idx > 20:
+                extra = title[idx + 1:].strip() + (' — ' + extra if extra else '')
+                title = title[:idx].strip()
+
+    # Remove trailing slashes / whitespace
+    title = title.rstrip(' /')
+    return title, extra
+
+
 @api_router.post("/schedule/import")
 async def import_schedule(
     file: UploadFile = File(...),
@@ -467,15 +518,19 @@ async def import_schedule(
 
                 event_type = _classify_event(row['code'], row['activity'])
                 location = _extract_location(row['activity'], row['notes'])
+                clean_title, extra_notes = _clean_title(row['activity'])
+
+                # Combine extracted notes with spreadsheet notes column
+                combined_notes = ' — '.join(filter(None, [extra_notes, row['notes']]))
 
                 parsed_events.append({
                     'date': target_date,
                     'start_time': row['time'],
                     'end_time': end_time,
-                    'title': row['activity'],
+                    'title': clean_title,
                     'event_type': event_type,
                     'location': location,
-                    'notes': row['notes'],
+                    'notes': combined_notes,
                 })
 
         if not parsed_events:
@@ -504,10 +559,15 @@ async def import_schedule(
             await db.schedule.insert_one(doc)
             imported_count += 1
 
-        # Mark schedule as modified but not published, increment version
+        # Mark schedule as published and increment version
+        now_pub = datetime.now(timezone.utc).isoformat()
         await db.schedule_settings.update_one(
             {"_id": "settings"},
-            {"$set": {"is_published": False, "last_modified_at": now}, "$inc": {"version": 1}},
+            {"$set": {
+                "is_published": True,
+                "last_published_at": now_pub,
+                "last_modified_at": now_pub,
+            }, "$inc": {"version": 1}},
             upsert=True
         )
 
@@ -519,7 +579,7 @@ async def import_schedule(
         type_summary = ', '.join(f"{v} {k}" for k, v in sorted(type_counts.items()))
 
         return {
-            "message": f"Successfully imported {imported_count} events for Jul 17-24, 2026 from {len(SHEET_DATE_MAP)} day sheets. Breakdown: {type_summary}. Schedule is in draft mode.",
+            "message": f"Successfully imported {imported_count} events for Jul 17-24, 2026 from {len(SHEET_DATE_MAP)} day sheets. Breakdown: {type_summary}. Schedule is now published.",
             "imported_count": imported_count,
             "type_breakdown": type_counts,
         }
