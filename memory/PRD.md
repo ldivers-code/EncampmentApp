@@ -74,6 +74,16 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - Fixed f-string without placeholders in budget.py
 - Cleaned up unused imports in CadetHealthSection
 
+## Completed Cadet Photo Feature (April 6, 2026)
+- Parents, Commanders, Staff, and roster editors can upload cadet photos
+- Photos stored via Emergent Object Storage (real, not mocked)
+- Small avatar thumbnails in roster table view and By Flight grouped view
+- Larger avatar in cadet detail modal with hover-to-upload overlay
+- Parents upload from "My Cadet" header section
+- Backend: POST/GET/DELETE /api/participants/{id}/photo
+- GET supports ?auth=token query param for img src tags
+- File validation: JPEG, PNG, WEBP, HEIC/HEIF, max 5MB
+
 ## Remaining Backlog
 ### P1 — Code Quality (Lower Priority)
 - Insecure token storage (localStorage → httpOnly cookies or memory)
