@@ -10,8 +10,7 @@ from datetime import datetime, timezone
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "commander@test.cap.gov"
-COMMANDER_PASSWORD = "test123"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 class TestPresenceEndpoints:
     """Tests for /api/presence/* endpoints"""

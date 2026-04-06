@@ -8,12 +8,13 @@ Tests the GET /api/participants/export-pdf endpoint with 3 formats:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from iteration_37.json
-TEST_EMAIL = "testadmin@cap.gov"
-TEST_PASSWORD = "TestPass123!"
+TEST_EMAIL = ADMIN_EMAIL
+TEST_PASSWORD = ADMIN_PASSWORD
 
 
 @pytest.fixture(scope="module")

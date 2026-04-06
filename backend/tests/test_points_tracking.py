@@ -7,6 +7,7 @@ Point Tracking API Tests
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -23,7 +24,7 @@ class TestPointsTracking:
             login_url = f"{BASE_URL}/api/auth/login"
             login_data = {
                 "email": "commander@test.cap.gov",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             }
             response = requests.post(login_url, json=login_data)
             if response.status_code == 200:
@@ -267,7 +268,7 @@ class TestScheduleFilter:
             login_url = f"{BASE_URL}/api/auth/login"
             login_data = {
                 "email": "commander@test.cap.gov",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             }
             response = requests.post(login_url, json=login_data)
             if response.status_code == 200:

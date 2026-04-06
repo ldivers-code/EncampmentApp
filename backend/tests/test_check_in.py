@@ -7,6 +7,7 @@ Also tests support cadre roles and their permissions
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -21,7 +22,7 @@ class TestCheckInAuth:
     def test_login_commander(self):
         """Test commander login for check-in access"""
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -50,7 +51,7 @@ class TestCheckInSummary:
         self.session.headers.update({"Content-Type": "application/json"})
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -114,7 +115,7 @@ class TestCheckInRoster:
         self.session.headers.update({"Content-Type": "application/json"})
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -211,7 +212,7 @@ class TestCheckInStepOperations:
         self.session.headers.update({"Content-Type": "application/json"})
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -317,7 +318,7 @@ class TestCheckInBulkOperations:
         self.session.headers.update({"Content-Type": "application/json"})
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -410,7 +411,7 @@ class TestSupportCadreRoles:
         """Test that support cadre roles are defined in backend"""
         # Login as commander to check users
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -439,7 +440,7 @@ class TestSupportCadreRoles:
         
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200
@@ -465,7 +466,7 @@ class TestCheckInCleanup:
         self.session.headers.update({"Content-Type": "application/json"})
         # Login as commander
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         if response.status_code == 200:

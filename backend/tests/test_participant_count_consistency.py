@@ -19,6 +19,7 @@ Tests verify:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -36,8 +37,8 @@ class TestParticipantCountConsistency:
     def auth_token(self):
         """Get authentication token for admin user"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "testadmin@cap.gov",
-            "password": "TestPass123!"
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
         data = response.json()

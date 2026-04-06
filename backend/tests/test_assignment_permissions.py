@@ -15,10 +15,9 @@ import uuid
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "commander@test.com"
-COMMANDER_PASSWORD = "test123"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 EXEC_CADRE_EMAIL = "execcadre@cap.test.com"
-EXEC_CADRE_PASSWORD = "test123"
+EXEC_CADRE_PASSWORD = COMMANDER_PASSWORD
 
 
 class TestAssignmentPermissions:

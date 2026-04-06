@@ -36,4 +36,4 @@ app = FastAPI(title="CAP Encampment Roster API")
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)

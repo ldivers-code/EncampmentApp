@@ -13,7 +13,7 @@ import { uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto } from '../service
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function MyCadetPage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const [cadet, setCadet] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [health, setHealth] = useState(null);
@@ -35,17 +35,17 @@ export default function MyCadetPage() {
     notes_for_hso: '', signature: '',
   });
 
-  const headers = { Authorization: `Bearer ${token}` };
+  const fetchOpts = { credentials: 'include' };
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const [cadetRes, schedRes, healthRes, pointsRes, mealsRes] = await Promise.all([
-        fetch(`${API}/api/parent/my-cadet`, { headers }),
-        fetch(`${API}/api/parent/my-cadet/schedule`, { headers }),
-        fetch(`${API}/api/parent/my-cadet/health-incidents`, { headers }),
-        fetch(`${API}/api/parent/my-cadet/points`, { headers }),
-        fetch(`${API}/api/parent/my-cadet/meals`, { headers }),
+        fetch(`${API}/api/parent/my-cadet`, fetchOpts),
+        fetch(`${API}/api/parent/my-cadet/schedule`, fetchOpts),
+        fetch(`${API}/api/parent/my-cadet/health-incidents`, fetchOpts),
+        fetch(`${API}/api/parent/my-cadet/points`, fetchOpts),
+        fetch(`${API}/api/parent/my-cadet/meals`, fetchOpts),
       ]);
 
       if (!cadetRes.ok) {
@@ -63,17 +63,15 @@ export default function MyCadetPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const loadOtcForm = useCallback(async () => {
-    if (!token) return;
+    if (!user) return;
     setOtcLoading(true);
     try {
-      const res = await fetch(`${API}/api/parent/my-cadet/otc-permission`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API}/api/parent/my-cadet/otc-permission`, fetchOpts);
       if (res.ok) {
         const data = await res.json();
         setOtcData(data);
@@ -99,7 +97,7 @@ export default function MyCadetPage() {
     } finally {
       setOtcLoading(false);
     }
-  }, [token]);
+  }, [user]);
 
   const submitOtcForm = async () => {
     // Client-side validation
@@ -125,7 +123,8 @@ export default function MyCadetPage() {
     try {
       const res = await fetch(`${API}/api/parent/my-cadet/otc-permission`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(otcForm),
       });
       const data = await res.json();

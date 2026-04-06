@@ -10,12 +10,11 @@ import io
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "commander@test.com"
-COMMANDER_PASSWORD = "test123"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 # Non-finance user for access denial tests
 CADRE_EMAIL = "cadre@cap.us"
-CADRE_PASSWORD = "test123"
+CADRE_PASSWORD = COMMANDER_PASSWORD
 
 
 @pytest.fixture(scope="module")

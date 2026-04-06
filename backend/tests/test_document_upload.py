@@ -12,11 +12,12 @@ import pytest
 import requests
 import os
 import uuid
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials (Commander role)
-TEST_EMAIL = "ldivers@cap.gov"
+TEST_EMAIL = COMMANDER_EMAIL
 TEST_PASSWORD = "26GO@lie!"
 
 # Existing test handbook ID for download testing

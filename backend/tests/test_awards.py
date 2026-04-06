@@ -6,6 +6,7 @@ import pytest
 import requests
 import os
 from datetime import datetime, timedelta
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cadre-hub.preview.emergentagent.com')
 
@@ -17,7 +18,7 @@ class TestAwardsFeature:
         """Login as commander and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "commander@test.cap.gov",
-            "password": "test123"
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
         token = response.json().get("access_token")
@@ -318,7 +319,7 @@ class TestAwardsFeature:
         # Login as staff (not commander)
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": "staff@test.cap.gov",
-            "password": "test123"
+            "password": COMMANDER_PASSWORD
         })
         
         if login_response.status_code != 200:

@@ -10,6 +10,7 @@ Features tested:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -26,7 +27,7 @@ class TestHealthServicesLogin:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us", 
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         
         print(f"Login response status: {response.status_code}")
@@ -49,7 +50,7 @@ class TestHealthImportSummary:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         if response.status_code != 200:
             pytest.skip("Could not authenticate")
@@ -94,7 +95,7 @@ class TestCadetAllergies:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         if response.status_code != 200:
             pytest.skip("Could not authenticate")
@@ -155,7 +156,7 @@ class TestCadetOTCApprovals:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         if response.status_code != 200:
             pytest.skip("Could not authenticate")
@@ -216,7 +217,7 @@ class TestHealthDashboard:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         if response.status_code != 200:
             pytest.skip("Could not authenticate")
@@ -250,7 +251,7 @@ class TestImportEndpoint:
         if response.status_code == 401:
             response = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "email": "commander@cap.us",
-                "password": "test123"
+                "password": COMMANDER_PASSWORD
             })
         if response.status_code != 200:
             pytest.skip("Could not authenticate")

@@ -6,6 +6,7 @@ import pytest
 import requests
 import os
 import uuid
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cadre-hub.preview.emergentagent.com')
 
@@ -21,7 +22,7 @@ class TestMyFlightAPIs:
         # Login as commander
         login_response = self.session.post(f"{BASE_URL}/api/auth/login", json={
             "email": "commander@test.cap.gov",
-            "password": "test123"
+            "password": COMMANDER_PASSWORD
         })
         assert login_response.status_code == 200, f"Login failed: {login_response.text}"
         

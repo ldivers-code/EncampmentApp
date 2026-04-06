@@ -9,6 +9,7 @@ Test suite for Unit Assignment and Flight-Specific Scheduling features
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -19,7 +20,7 @@ class TestConfig:
     def get_commander_token():
         response = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "commander@test.com", "password": "test123"}
+            json={"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}
         )
         if response.status_code == 200:
             return response.json()["access_token"]

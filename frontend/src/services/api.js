@@ -3,9 +3,12 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// All requests include credentials (httpOnly cookies)
+axios.defaults.withCredentials = true;
+
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('cap_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // Auth is now handled via httpOnly cookies — no localStorage tokens
+  return {};
 };
 
 // Presence / Active Users
@@ -1462,8 +1465,8 @@ export const uploadCadetPhoto = async (participantId, file) => {
 };
 
 export const getCadetPhotoUrl = (participantId) => {
-  const token = localStorage.getItem('cap_token');
-  return `${API}/participants/${participantId}/photo?auth=${token}`;
+  // Cookies are sent automatically by the browser for same-origin requests
+  return `${API}/participants/${participantId}/photo`;
 };
 
 export const deleteCadetPhoto = async (participantId) => {

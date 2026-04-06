@@ -830,7 +830,6 @@ const MedicalRosterTab = ({ hasFullAccess }) => {
 // ==================== MAIN DASHBOARD ====================
 const HealthServicesDashboard = () => {
   const { user } = useAuth();
-  const token = localStorage.getItem('cap_token');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
@@ -912,7 +911,7 @@ const HealthServicesDashboard = () => {
     setOtcLoading(true);
     try {
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/otc-permissions/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
       if (res.ok) setOtcDashboard(await res.json());
     } catch (e) { console.error('Failed to load OTC dashboard:', e); }
@@ -922,7 +921,7 @@ const HealthServicesDashboard = () => {
   const reviewOtcForm = async (capid) => {
     try {
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/otc-permissions/${capid}/review`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }
+        method: 'POST', credentials: 'include'
       });
       if (res.ok) {
         toast.success('Form marked as reviewed');

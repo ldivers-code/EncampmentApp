@@ -10,6 +10,7 @@ Test suite for extracted route modules:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -20,8 +21,8 @@ class TestAuth:
     def auth_token(self):
         """Login and get auth token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200, f"Login failed: {response.text}"
         data = response.json()
@@ -36,8 +37,8 @@ class TestAuth:
     def test_login_success(self):
         """Test login with commander credentials"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         data = response.json()
@@ -52,8 +53,8 @@ class TestNotificationRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -112,8 +113,8 @@ class TestTrainingRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -178,8 +179,8 @@ class TestCheckInRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -233,8 +234,8 @@ class TestBarracksRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -287,8 +288,8 @@ class TestScheduleChangesRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -332,8 +333,8 @@ class TestHealthAlertsRoutes:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -368,8 +369,8 @@ class TestDashboardAndCore:
     @pytest.fixture(scope="class")
     def auth_headers(self):
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert response.status_code == 200
         return {"Authorization": f"Bearer {response.json()['access_token']}"}

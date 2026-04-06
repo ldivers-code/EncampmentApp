@@ -1,5 +1,5 @@
 """Cadet photo upload, retrieval, and deletion routes."""
-from fastapi import Depends, HTTPException, UploadFile, File, Query, Header
+from fastapi import Depends, HTTPException, UploadFile, File, Query, Header, Request
 from fastapi.responses import Response
 from typing import Optional
 from datetime import datetime, timezone
@@ -94,16 +94,20 @@ async def upload_cadet_photo(
 @api_router.get("/participants/{participant_id}/photo")
 async def get_cadet_photo(
     participant_id: str,
+    request: Request,
     auth: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None)
 ):
-    """Serve a cadet's photo. Supports both header and query param auth for <img> tags."""
-    # Auth check - support both Authorization header and ?auth= query param
+    """Serve a cadet's photo. Supports cookie, header, and query param auth for <img> tags."""
     from permissions import get_current_user_from_token
     token = None
-    if authorization and authorization.startswith("Bearer "):
+    # 1. httpOnly cookie
+    token = request.cookies.get("access_token")
+    # 2. Authorization header
+    if not token and authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
-    elif auth:
+    # 3. Query param fallback
+    if not token and auth:
         token = auth
 
     if not token:

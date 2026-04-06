@@ -13,8 +13,7 @@ import os
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from iteration_38.json
-COMMANDER_EMAIL = "testadmin@cap.gov"
-COMMANDER_PASSWORD = "TestPass123!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 
 class TestFlightReassignmentAPI:

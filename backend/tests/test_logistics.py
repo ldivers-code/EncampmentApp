@@ -13,14 +13,13 @@ API = f"{BASE_URL}/api"
 LOG_API = f"{API}/logistics"
 
 # Test credentials - Commander has admin access for logistics
-COMMANDER_EMAIL = "ldivers@cap.gov"
-COMMANDER_PASSWORD = "26GO@lie!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 ALT_COMMANDER_EMAIL = "commander@cap.us"
-ALT_COMMANDER_PASSWORD = "test123"
+ALT_COMMANDER_PASSWORD = COMMANDER_PASSWORD
 
 CADRE_EMAIL = "cadre@cap.us"
-CADRE_PASSWORD = "test123"
+CADRE_PASSWORD = COMMANDER_PASSWORD
 
 
 class TestHelpers:

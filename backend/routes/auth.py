@@ -1,5 +1,5 @@
 """Auth, Password Reset, Presence, and Profile routes"""
-from fastapi import Depends, HTTPException, UploadFile, File
+from fastapi import Depends, HTTPException, UploadFile, File, Response
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import uuid
@@ -11,7 +11,7 @@ import base64
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-from database import db, api_router, SENDGRID_API_KEY, SENDGRID_SENDER_EMAIL
+from database import db, api_router, SENDGRID_API_KEY, SENDGRID_SENDER_EMAIL, JWT_EXPIRATION_HOURS
 from models import (
     UserRole, UserCreate, UserLogin, UserProfileUpdate, UserResponse, TokenResponse,
     ChangePasswordRequest
@@ -21,11 +21,25 @@ from permissions import (
     get_default_permissions, get_current_user, require_role
 )
 
+COOKIE_MAX_AGE = JWT_EXPIRATION_HOURS * 60 * 60  # seconds
+
+def _set_auth_cookie(response: Response, token: str):
+    """Set the access_token as an httpOnly cookie."""
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=COOKIE_MAX_AGE,
+        path="/",
+    )
+
 
 # ================= AUTH ROUTES =================
 
 @api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, response: Response):
     email = user_data.email.strip().lower()
     existing = await db.users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
     if existing:
@@ -74,6 +88,7 @@ async def register(user_data: UserCreate):
     await db.users.insert_one(user_doc)
     
     token = create_token(user_id, user_data.email, assigned_role)
+    _set_auth_cookie(response, token)
     
     return TokenResponse(
         access_token=token,
@@ -92,13 +107,14 @@ async def register(user_data: UserCreate):
     )
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, response: Response):
     email = credentials.email.strip().lower()
     user = await db.users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}}, {"_id": 0})
     if not user or not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_token(user["id"], user["email"], user["role"])
+    _set_auth_cookie(response, token)
     
     return TokenResponse(
         access_token=token,
@@ -113,6 +129,12 @@ async def login(credentials: UserLogin):
             created_at=user["created_at"]
         )
     )
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    """Clear the httpOnly auth cookie."""
+    response.delete_cookie(key="access_token", path="/")
+    return {"message": "Logged out"}
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):

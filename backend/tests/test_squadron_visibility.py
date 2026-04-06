@@ -14,15 +14,16 @@ Features tested:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-COMMANDER_CREDS = {"email": "commander@test.com", "password": "test123"}
-SQUADRON_COMMANDER_CREDS = {"email": "sqcc@test.com", "password": "test123"}  # role=squadron_commander, squadron=6th_cts
-TRAINING_OFFICER_CREDS = {"email": "to@test.com", "password": "test123"}  # role=training_officer, squadron=21st_cts
+COMMANDER_CREDS = {"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}
+SQUADRON_COMMANDER_CREDS = {"email": "sqcc@test.com", "password": COMMANDER_PASSWORD}  # role=squadron_commander, squadron=6th_cts
+TRAINING_OFFICER_CREDS = {"email": "to@test.com", "password": COMMANDER_PASSWORD}  # role=training_officer, squadron=21st_cts
 PARENT_CREDS = {"email": "jane.hundley@test.com", "password": "parent123"}
-CADRE_ALPHA_CREDS = {"email": "commander@cap.us", "password": "test123"}  # role=exec_cadre, flight=alpha
+CADRE_ALPHA_CREDS = {"email": "commander@cap.us", "password": COMMANDER_PASSWORD}  # role=exec_cadre, flight=alpha
 
 # Squadron-flight mappings
 SQUADRON_FLIGHTS = {

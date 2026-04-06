@@ -1,7 +1,7 @@
 """Authentication helpers, permission checking, and RBAC utilities"""
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
@@ -74,9 +74,28 @@ async def send_approval_email(to_email: str, user_name: str, app_url: str = ""):
         logging.error(f"Failed to send approval email to {to_email}: {str(e)}")
         return False
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def _extract_token(request: Request, credentials: Optional[HTTPAuthorizationCredentials]) -> str:
+    """Extract JWT from httpOnly cookie, Authorization header, or query param."""
+    # 1. httpOnly cookie (most secure)
+    token = request.cookies.get("access_token")
+    if token:
+        return token
+    # 2. Authorization: Bearer header (API clients, curl)
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    # 3. Query param (for img src tags)
+    token = request.query_params.get("auth")
+    if token:
+        return token
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    token = _extract_token(request, credentials)
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -109,14 +128,22 @@ async def get_current_user_from_token(token: str):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def require_role(allowed_roles: List[str]):
-    async def role_checker(user: dict = Depends(get_current_user)):
+    async def role_checker(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ):
+        user = await get_current_user(request, credentials)
         if user["role"] not in allowed_roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user
     return role_checker
 
 def require_health_view():
-    async def checker(user: dict = Depends(get_current_user)):
+    async def checker(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ):
+        user = await get_current_user(request, credentials)
         perms = user.get('permissions', {})
         if perms.get('health_view') or perms.get('health_full') or perms.get('page_health'):
             return user
@@ -124,7 +151,11 @@ def require_health_view():
     return checker
 
 def require_health_full():
-    async def checker(user: dict = Depends(get_current_user)):
+    async def checker(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ):
+        user = await get_current_user(request, credentials)
         perms = user.get('permissions', {})
         if perms.get('health_full'):
             return user
@@ -132,7 +163,11 @@ def require_health_full():
     return checker
 
 def require_check_in_access():
-    async def checker(user: dict = Depends(get_current_user)):
+    async def checker(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ):
+        user = await get_current_user(request, credentials)
         perms = user.get('permissions', {})
         if perms.get('check_in_view') or perms.get('check_in_edit') or perms.get('page_check_in'):
             return user

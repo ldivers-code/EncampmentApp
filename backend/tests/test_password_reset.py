@@ -8,13 +8,14 @@ Tests for:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 COMMANDER_CREDENTIALS = {
     "email": "commander@test.cap.gov",
-    "password": "test123"
+    "password": COMMANDER_PASSWORD
 }
 
 TEST_USER = {
@@ -163,7 +164,7 @@ class TestResetPasswordAPI:
         response = requests.post(f"{BASE_URL}/api/auth/forgot-password", params=params)
         new_token = response.json().get("debug_token")
         if new_token:
-            params = {"token": new_token, "new_password": "test123"}
+            params = {"token": new_token, "new_password": COMMANDER_PASSWORD}
             requests.post(f"{BASE_URL}/api/auth/reset-password", params=params)
     
     def test_reset_password_with_invalid_token(self):
@@ -244,7 +245,7 @@ class TestAdminResetPasswordAPI:
         print("User can login with new password set by admin")
         
         # Reset password back for other tests
-        params = {"new_password": "test123"}
+        params = {"new_password": COMMANDER_PASSWORD}
         requests.post(
             f"{BASE_URL}/api/users/{user_id}/reset-password",
             params=params,
@@ -324,7 +325,7 @@ class TestFullPasswordResetFlow:
         response = requests.post(f"{BASE_URL}/api/auth/forgot-password", params=params)
         new_token = response.json().get("debug_token")
         if new_token:
-            params = {"token": new_token, "new_password": "test123"}
+            params = {"token": new_token, "new_password": COMMANDER_PASSWORD}
             requests.post(f"{BASE_URL}/api/auth/reset-password", params=params)
     
     def test_token_becomes_invalid_after_use(self):
@@ -353,7 +354,7 @@ class TestFullPasswordResetFlow:
         response = requests.post(f"{BASE_URL}/api/auth/forgot-password", params=params)
         new_token = response.json().get("debug_token")
         if new_token:
-            params = {"token": new_token, "new_password": "test123"}
+            params = {"token": new_token, "new_password": COMMANDER_PASSWORD}
             requests.post(f"{BASE_URL}/api/auth/reset-password", params=params)
 
 

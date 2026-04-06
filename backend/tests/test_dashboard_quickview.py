@@ -9,10 +9,9 @@ import os
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "testadmin@cap.gov"
-COMMANDER_PASSWORD = "TestPass123!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 CADRE_EMAIL = "testcadre@cap.gov"
-CADRE_PASSWORD = "TestPass123!"
+CADRE_PASSWORD = ADMIN_PASSWORD
 
 
 class TestDashboardQuickview:

@@ -12,8 +12,7 @@ from datetime import datetime, timedelta
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "ldivers@cap.gov"
-COMMANDER_PASSWORD = "26GO@lie!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 # Test user for dining_facility role
 TEST_DINING_USER_EMAIL = "TEST_dining_test@cap.gov"

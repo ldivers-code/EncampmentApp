@@ -14,12 +14,10 @@ import uuid
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-ADMIN_EMAIL = "testadmin@cap.gov"
-ADMIN_PASSWORD = "TestPass123!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 # Test user for unauthorized access
 TEST_CADRE_EMAIL = f"test_cadre_{uuid.uuid4().hex[:8]}@test.com"
-TEST_CADRE_PASSWORD = "TestPass123!"
 TEST_CADRE_CAPID = f"TEST{uuid.uuid4().hex[:6].upper()}"
 
 
@@ -174,7 +172,7 @@ class TestUserParticipantSync:
         # Create a user with the same CAPID
         user_response = requests.post(f"{BASE_URL}/api/auth/register", json={
             "email": test_email,
-            "password": "TestPass123!",
+            "password": ADMIN_PASSWORD,
             "name": "Sync Test User",
             "role": "cadre",
             "capid": test_capid
@@ -219,7 +217,7 @@ class TestUserParticipantSync:
         # Register user
         user_response = requests.post(f"{BASE_URL}/api/auth/register", json={
             "email": test_email,
-            "password": "TestPass123!",
+            "password": ADMIN_PASSWORD,
             "name": test_name,
             "role": "staff",
             "capid": test_capid

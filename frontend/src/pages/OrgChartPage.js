@@ -29,7 +29,8 @@ import {
   Network,
   Layers,
   AlertCircle,
-  Check
+  Check,
+  Printer
 } from 'lucide-react';
 
 // Color mapping based on role type - matching flight/squadron colors
@@ -547,9 +548,18 @@ const OrgChartPage = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
+    <div className="p-6 lg:p-8 animate-fade-in print-container">
+      {/* Print-only header */}
+      <div className="print-header">
+        <h1>Tennessee Wing CAP Encampment — Org Chart</h1>
+        <div className="print-meta">
+          <div>Printed {new Date().toLocaleDateString()}</div>
+          <div>{roles.length} positions</div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 no-print">
         <div>
           <div className="flex items-center gap-3">
             <Network className="w-8 h-8 text-[#00205B]" />
@@ -564,6 +574,15 @@ const OrgChartPage = () => {
 
         {canEdit() && (
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="rounded-sm border-slate-300 text-slate-700 hover:bg-slate-50"
+              onClick={() => window.print()}
+              data-testid="print-orgchart-btn"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print
+            </Button>
             {roles.length === 0 && ['commander', 'executive_staff'].includes(user?.role) && (
               <Button 
                 variant="outline" 

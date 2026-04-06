@@ -6,6 +6,9 @@ const API = `${BACKEND_URL}/api`;
 
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
+// All requests include credentials (httpOnly cookies)
+axios.defaults.withCredentials = true;
+
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
@@ -18,70 +21,62 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('cap_token'));
   const [loading, setLoading] = useState(true);
   const [activeUsers, setActiveUsers] = useState({ count: 0, users: [] });
   const heartbeatIntervalRef = useRef(null);
 
   // Send heartbeat to server
   const sendHeartbeat = useCallback(async () => {
-    if (!token) return;
+    if (!user) return;
     try {
-      await axios.post(`${API}/presence/heartbeat`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post(`${API}/presence/heartbeat`);
     } catch (error) {
       console.error('Heartbeat error:', error);
     }
-  }, [token]);
+  }, [user]);
 
   // Fetch active users
   const fetchActiveUsers = useCallback(async () => {
-    if (!token) return;
+    if (!user) return;
     try {
-      const response = await axios.get(`${API}/presence/active-users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(`${API}/presence/active-users`);
       setActiveUsers(response.data);
     } catch (error) {
       console.error('Fetch active users error:', error);
     }
-  }, [token]);
+  }, [user]);
 
   // Start heartbeat when authenticated
   useEffect(() => {
-    if (token && user) {
-      // Send initial heartbeat
+    if (user) {
       sendHeartbeat();
       fetchActiveUsers();
       
-      // Set up interval for heartbeat and active users refresh
       heartbeatIntervalRef.current = setInterval(() => {
         sendHeartbeat();
         fetchActiveUsers();
       }, HEARTBEAT_INTERVAL);
 
-      // Cleanup on unmount or logout
       return () => {
         if (heartbeatIntervalRef.current) {
           clearInterval(heartbeatIntervalRef.current);
         }
       };
     }
-  }, [token, user, sendHeartbeat, fetchActiveUsers]);
+  }, [user, sendHeartbeat, fetchActiveUsers]);
 
-  // Handle page visibility change (mark offline when tab hidden for long)
+  // Handle page visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && token) {
+      if (document.visibilityState === 'visible' && user) {
         sendHeartbeat();
         fetchActiveUsers();
       }
     };
 
-    const handleBeforeUnload = async () => {
-      if (token) {
-        // Try to send offline status (may not complete)
+    const handleBeforeUnload = () => {
+      if (user) {
+        // sendBeacon sends cookies automatically for same-origin
         navigator.sendBeacon && navigator.sendBeacon(
           `${API}/presence/offline`,
           JSON.stringify({})
@@ -96,63 +91,51 @@ export const AuthProvider = ({ children }) => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [token, sendHeartbeat, fetchActiveUsers]);
+  }, [user, sendHeartbeat, fetchActiveUsers]);
 
   useEffect(() => {
     const initAuth = async () => {
-      if (token) {
-        try {
-          const response = await axios.get(`${API}/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setUser(response.data);
-        } catch (error) {
-          console.error('Auth init error:', error);
-          logout();
-        }
+      try {
+        // Cookie is sent automatically — if valid, we get user data
+        const response = await axios.get(`${API}/auth/me`);
+        setUser(response.data);
+      } catch (error) {
+        // No valid session cookie
+        setUser(null);
       }
       setLoading(false);
     };
     initAuth();
-  }, [token]);
+  }, []);
 
   const login = async (email, password) => {
     const response = await axios.post(`${API}/auth/login`, { email, password });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem('cap_token', access_token);
-    setToken(access_token);
+    const { user: userData } = response.data;
     setUser(userData);
     return userData;
   };
 
   const register = async (userData) => {
     const response = await axios.post(`${API}/auth/register`, userData);
-    const { access_token, user: newUser } = response.data;
-    localStorage.setItem('cap_token', access_token);
-    setToken(access_token);
+    const { user: newUser } = response.data;
     setUser(newUser);
     return newUser;
   };
 
   const logout = async () => {
-    // Try to mark offline before logging out
-    if (token) {
-      try {
-        await axios.post(`${API}/presence/offline`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (e) {
-        // Ignore errors
-      }
-    }
-    
     // Clear heartbeat interval
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
     }
     
-    localStorage.removeItem('cap_token');
-    setToken(null);
+    // Call backend to clear httpOnly cookie + mark offline
+    try {
+      await axios.post(`${API}/presence/offline`);
+    } catch (e) { /* ignore */ }
+    try {
+      await axios.post(`${API}/auth/logout`);
+    } catch (e) { /* ignore */ }
+    
     setUser(null);
     setActiveUsers({ count: 0, users: [] });
   };
@@ -178,7 +161,6 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user,
-      token,
       loading,
       login,
       register,

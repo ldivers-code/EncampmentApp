@@ -10,6 +10,7 @@ Tests for:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -20,7 +21,7 @@ class TestAuth:
     def auth_token(self):
         """Login as commander and get token"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
+            "email": COMMANDER_EMAIL,
             "password": "Test1234!"
         })
         assert response.status_code == 200, f"Login failed: {response.text}"

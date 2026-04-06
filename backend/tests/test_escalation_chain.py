@@ -15,6 +15,7 @@ import pytest
 import requests
 import os
 import time
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -30,8 +31,8 @@ class TestEscalationChain:
         """Login as commander and exec_cadre users"""
         # Login as commander
         response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         if response.status_code == 200:
             TestEscalationChain.commander_token = response.json()["access_token"]
@@ -39,7 +40,7 @@ class TestEscalationChain:
         # Login as exec_cadre
         response = api_client.post(f"{BASE_URL}/api/auth/login", json={
             "email": "commander@cap.us",
-            "password": "test123"
+            "password": COMMANDER_PASSWORD
         })
         if response.status_code == 200:
             TestEscalationChain.exec_cadre_token = response.json()["access_token"]
@@ -293,8 +294,8 @@ class TestExistingEscalatedReport:
         
         # Login as commander
         response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         
         if response.status_code != 200:
@@ -333,8 +334,8 @@ class TestReportCreationLogic:
         
         # Login as commander
         response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         
         if response.status_code != 200:

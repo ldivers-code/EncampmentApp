@@ -5,6 +5,7 @@ This test verifies that all API endpoints return the correct squadron labels.
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -19,8 +20,8 @@ class TestSquadronNameRefactoring:
         
         # Login to get token
         response = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         if response.status_code == 200:
             token = response.json().get("access_token")

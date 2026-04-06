@@ -11,11 +11,12 @@ Tests for:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-TEST_EMAIL = "commander@test.com"
+TEST_EMAIL = COMMANDER_EMAIL
 TEST_PASSWORD = "Test1234!"
 
 

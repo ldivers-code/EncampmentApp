@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -45,7 +45,9 @@ import {
   Briefcase,
   Star,
   FileText,
-  Camera
+  Camera,
+  Shuffle,
+  Printer
 } from 'lucide-react';
 
 // Simple avatar component that shows photo or initials
@@ -117,6 +119,7 @@ const RosterPage = () => {
   // Flight-grouped view
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'flight'
   const [flightGroupedData, setFlightGroupedData] = useState([]);
+  const [autoBalancing, setAutoBalancing] = useState(false);
 
   // Check if user can see full roster details (sensitive info)
   const canViewSensitiveData = () => {
@@ -193,10 +196,7 @@ const RosterPage = () => {
 
   const loadFlightGrouped = async () => {
     try {
-      const token = localStorage.getItem('cap_token');
-      const res = await axios.get(`${API}/api/participants/by-flight`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API}/api/participants/by-flight`);
       setFlightGroupedData(res.data);
     } catch (error) {
       console.error('Failed to load flight-grouped data');
@@ -510,14 +510,33 @@ const RosterPage = () => {
     e.target.value = '';
   };
 
+  const handleAutoBalance = async () => {
+    setAutoBalancing(true);
+    try {
+      const result = await autoAssignUnassignedStudents();
+      if (result.assigned === 0) {
+        toast.info('All students already have flight assignments');
+      } else {
+        toast.success(`Auto-assigned ${result.assigned} student${result.assigned > 1 ? 's' : ''} to flights`);
+        loadParticipants();
+        loadStats();
+        loadFlightDistribution();
+        if (viewMode === 'flight') loadFlightGrouped();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Auto-balance failed');
+    } finally {
+      setAutoBalancing(false);
+    }
+  };
+
   const handleExportPdf = async (format) => {
     setExporting(true);
     setExportMenuOpen(false);
     try {
       const API = process.env.REACT_APP_BACKEND_URL;
-      const token = localStorage.getItem('token');
       const response = await fetch(`${API}/api/participants/export-pdf?format=${format}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include'
       });
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
@@ -634,9 +653,18 @@ const RosterPage = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
+    <div className="p-6 lg:p-8 animate-fade-in print-container">
+      {/* Print-only header */}
+      <div className="print-header">
+        <h1>Tennessee Wing CAP Encampment — Roster</h1>
+        <div className="print-meta">
+          <div>Printed {new Date().toLocaleDateString()}</div>
+          <div>{participants.length} participants</div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4 mb-4">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4 mb-4 no-print">
         <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
@@ -678,6 +706,24 @@ const RosterPage = () => {
               </label>
             )}
             
+            {/* Auto-Balance Flights button (students tab only) */}
+            {categoryTab === 'students' && canEdit() && (
+              <Button
+                variant="outline"
+                className="rounded-sm border-violet-600 text-violet-600 hover:bg-violet-50"
+                disabled={autoBalancing}
+                onClick={handleAutoBalance}
+                data-testid="auto-balance-flights-btn"
+              >
+                {autoBalancing ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Shuffle className="w-4 h-4 mr-2" />
+                )}
+                {autoBalancing ? 'Balancing...' : 'Auto-Balance Flights'}
+              </Button>
+            )}
+
             {/* General Import */}
             <label className="cursor-pointer">
               <input
@@ -758,6 +804,17 @@ const RosterPage = () => {
                 </div>
               )}
             </div>
+
+            {/* Print Roster */}
+            <Button
+              variant="outline"
+              className="rounded-sm border-slate-300 text-slate-700 hover:bg-slate-50 no-print"
+              onClick={() => window.print()}
+              data-testid="print-roster-btn"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print
+            </Button>
             
             <Dialog open={isModalOpen} onOpenChange={(open) => {
               setIsModalOpen(open);
@@ -1295,7 +1352,7 @@ const RosterPage = () => {
       ) : (
       <>
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6">
+      <div className="bg-white border border-slate-200 rounded-sm p-4 mb-6 no-print">
         {/* Main filter row */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">

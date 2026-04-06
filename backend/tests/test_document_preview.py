@@ -11,13 +11,14 @@ Features tested:
 import pytest
 import requests
 import os
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
     BASE_URL = 'https://cadre-hub.preview.emergentagent.com'
 
 # Test credentials
-TEST_EMAIL = "ldivers@cap.gov"
+TEST_EMAIL = COMMANDER_EMAIL
 TEST_PASSWORD = "26GO@lie!"
 
 # Test document IDs

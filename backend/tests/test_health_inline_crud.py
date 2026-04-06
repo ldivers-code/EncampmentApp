@@ -17,8 +17,7 @@ import uuid
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "testadmin@cap.gov"
-COMMANDER_PASSWORD = "TestPass123!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 # Test CAPID with existing allergy data
 TEST_CAPID = "684152"  # Marfio, Mia - has 2 allergies (Milk and Latex)

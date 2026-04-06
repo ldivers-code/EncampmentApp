@@ -19,8 +19,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cadre-hub.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "ldivers@cap.gov"
-COMMANDER_PASSWORD = "Password123!"
+from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 
 # Generate unique test user emails
 TEST_USER_PREFIX = f"TEST_perms_{uuid.uuid4().hex[:6]}"

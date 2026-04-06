@@ -1,0 +1,123 @@
+/* Print-specific stylesheet for CAP Encampment app */
+@media print {
+  /* Hide non-printable elements */
+  nav,
+  [data-testid="sidebar"],
+  .sidebar,
+  .no-print,
+  button:not(.print-include),
+  [role="dialog"],
+  .toast-container,
+  header,
+  footer,
+  [data-testid="notification-bell"],
+  [data-testid="active-users"] {
+    display: none !important;
+  }
+
+  /* Reset layout for full-page print */
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Print header */
+  .print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #00205B;
+  }
+  .print-header h1 {
+    font-size: 16pt;
+    font-weight: bold;
+    color: #00205B;
+  }
+  .print-header .print-meta {
+    font-size: 9pt;
+    color: #555;
+    text-align: right;
+  }
+
+  /* Tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 4px 6px !important;
+    text-align: left;
+  }
+  th {
+    background-color: #00205B !important;
+    color: white !important;
+    font-weight: bold;
+  }
+  tr:nth-child(even) {
+    background-color: #f5f5f5 !important;
+  }
+
+  /* Org Chart print */
+  .orgchart-print-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px;
+    font-size: 9pt;
+  }
+  .orgchart-print-grid .role-card {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    break-inside: avoid;
+  }
+  .orgchart-print-grid .role-title {
+    font-weight: bold;
+    color: #00205B;
+    font-size: 10pt;
+  }
+  .orgchart-print-grid .role-person {
+    font-size: 9pt;
+  }
+
+  /* Flight roster cards */
+  .print-flight-section {
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+  .print-flight-section h3 {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #00205B;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+  }
+
+  /* Page margins */
+  @page {
+    size: landscape;
+    margin: 0.5in;
+  }
+}
+
+/* Hide print header by default (only show when printing) */
+.print-header {
+  display: none;
+}
