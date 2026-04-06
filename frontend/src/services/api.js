@@ -1448,3 +1448,29 @@ export const updateSBEmergency = async (d) => { const r = await axios.put(`${SB}
 // Audit & Seed
 export const getSBAudit = async () => { const r = await axios.get(`${SB}/audit`, { headers: getAuthHeaders() }); return r.data; };
 export const seedSBData = async () => { const r = await axios.post(`${SB}/seed`, {}, { headers: getAuthHeaders() }); return r.data; };
+
+// Cadet Photos
+export const uploadCadetPhoto = async (participantId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(
+    `${API}/participants/${participantId}/photo`,
+    formData,
+    { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+export const getCadetPhotoUrl = (participantId) => {
+  const token = localStorage.getItem('cap_token');
+  return `${API}/participants/${participantId}/photo?auth=${token}`;
+};
+
+export const deleteCadetPhoto = async (participantId) => {
+  const response = await axios.delete(
+    `${API}/participants/${participantId}/photo`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+

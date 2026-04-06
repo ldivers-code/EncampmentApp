@@ -6,8 +6,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../context/AuthContext';
-import { User, Calendar, Heart, Award, Utensils, CheckCircle2, AlertTriangle, Clock, MapPin, Shield, FileCheck, Pill } from 'lucide-react';
+import { User, Calendar, Heart, Award, Utensils, CheckCircle2, AlertTriangle, Clock, MapPin, Shield, FileCheck, Pill, Camera } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto } from '../services/api';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -25,6 +26,7 @@ export default function MyCadetPage() {
   const [otcData, setOtcData] = useState(null);
   const [otcLoading, setOtcLoading] = useState(false);
   const [otcSubmitting, setOtcSubmitting] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [otcForm, setOtcForm] = useState({
     parent_name: '', parent_relationship: '', parent_phone: '', parent_email: '',
     medications: {},
@@ -168,8 +170,52 @@ export default function MyCadetPage() {
       {/* Cadet Header */}
       <div className="bg-[#00205B] text-white p-6 rounded-sm">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
-            <Shield className="w-7 h-7" />
+          <div className="relative group">
+            {cadet.photo_path ? (
+              <img
+                src={getCadetPhotoUrl(cadet.id)}
+                alt={`${cadet.first_name} ${cadet.last_name}`}
+                className="w-16 h-16 rounded-full object-cover border-2 border-white/30"
+                data-testid="cadet-photo"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div 
+              className={`w-16 h-16 rounded-full bg-white/20 items-center justify-center text-xl font-bold ${cadet.photo_path ? 'hidden' : 'flex'}`}
+              data-testid="cadet-initials-avatar"
+            >
+              {cadet.first_name?.charAt(0)}{cadet.last_name?.charAt(0)}
+            </div>
+            <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" data-testid="parent-upload-photo">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={photoUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setPhotoUploading(true);
+                  try {
+                    await uploadCadetPhoto(cadet.id, file);
+                    toast.success('Photo uploaded successfully!');
+                    setCadet(prev => ({ ...prev, photo_path: 'uploaded' }));
+                  } catch (err) {
+                    toast.error(err?.response?.data?.detail || 'Failed to upload photo');
+                  } finally {
+                    setPhotoUploading(false);
+                  }
+                }}
+              />
+              {photoUploading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Camera className="w-5 h-5 text-white" />
+              )}
+            </label>
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-bold" data-testid="cadet-name">
@@ -184,6 +230,7 @@ export default function MyCadetPage() {
               )}
               {cadet.squadron && <span>{cadet.squadron.replace('_', ' ').toUpperCase()}</span>}
             </div>
+            <p className="text-xs text-white/50 mt-1">Hover on photo to update</p>
           </div>
         </div>
       </div>

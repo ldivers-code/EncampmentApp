@@ -113,7 +113,7 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
          "gender": 1, "age": 1, "wing": 1, "unit": 1,
          "email": 1, "phone": 1, "cell_phone": 1,
          "cadet_parent_email": 1, "cadet_parent_phone": 1, "cadet_parent_name": 1,
-         "member_type": 1}
+         "member_type": 1, "photo_path": 1}
     ).to_list(1000)
     
     flights_map = {}
@@ -140,6 +140,7 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
             "parent_email": p.get("cadet_parent_email", ""),
             "parent_phone": p.get("cadet_parent_phone", ""),
             "parent_name": p.get("cadet_parent_name", ""),
+            "photo_path": p.get("photo_path", ""),
         }
         
         if not flight:

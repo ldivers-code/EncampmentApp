@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -44,8 +44,34 @@ import {
   GraduationCap,
   Briefcase,
   Star,
-  FileText
+  FileText,
+  Camera
 } from 'lucide-react';
+
+// Simple avatar component that shows photo or initials
+const CadetAvatar = ({ participant, size = 'sm' }) => {
+  const [hasPhoto, setHasPhoto] = React.useState(!!participant?.photo_path);
+  const [imgError, setImgError] = React.useState(false);
+  const sizeClasses = size === 'lg' ? 'w-20 h-20 text-2xl' : size === 'md' ? 'w-10 h-10 text-sm' : 'w-7 h-7 text-[10px]';
+  const initials = `${participant?.first_name?.charAt(0) || ''}${participant?.last_name?.charAt(0) || ''}`;
+  
+  if (hasPhoto && !imgError) {
+    return (
+      <img
+        src={getCadetPhotoUrl(participant.id)}
+        alt={`${participant.first_name} ${participant.last_name}`}
+        className={`${sizeClasses} rounded-full object-cover flex-shrink-0 border border-slate-200`}
+        onError={() => { setImgError(true); setHasPhoto(false); }}
+        data-testid={`cadet-photo-${participant.capid}`}
+      />
+    );
+  }
+  return (
+    <div className={`${sizeClasses} rounded-full bg-[#00205B] text-white flex items-center justify-center font-bold flex-shrink-0`} data-testid={`cadet-initials-${participant?.capid}`}>
+      {initials}
+    </div>
+  );
+};
 
 const RosterPage = () => {
   const { canEdit, user } = useAuth();
@@ -1238,7 +1264,12 @@ const RosterPage = () => {
                       <tbody className="divide-y divide-slate-100">
                         {group.members.map((m) => (
                           <tr key={m.id} className="hover:bg-white/60 transition-colors">
-                            <td className="px-4 py-2.5 font-medium">{m.rank} {m.last_name}, {m.first_name}</td>
+                            <td className="px-4 py-2.5 font-medium">
+                              <div className="flex items-center gap-2">
+                                <CadetAvatar participant={m} size="sm" />
+                                <span>{m.rank} {m.last_name}, {m.first_name}</span>
+                              </div>
+                            </td>
                             <td className="px-4 py-2.5 font-mono text-xs">{m.capid}</td>
                             <td className="px-4 py-2.5 text-xs">{m.unit}</td>
                             <td className="px-4 py-2.5 text-xs">{m.gender}</td>
@@ -1498,8 +1529,13 @@ const RosterPage = () => {
                     <td className="font-mono text-[#00205B] font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.capid}</td>
                     <td className="cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.rank}</td>
                     <td className="font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>
-                      {p.last_name}, {p.first_name}
-                      {p.is_removed && <span className="ml-2 text-xs text-red-500">(Removed)</span>}
+                      <div className="flex items-center gap-2">
+                        <CadetAvatar participant={p} size="sm" />
+                        <span>
+                          {p.last_name}, {p.first_name}
+                          {p.is_removed && <span className="ml-2 text-xs text-red-500">(Removed)</span>}
+                        </span>
+                      </div>
                     </td>
                     {/* Editable Flight Cell */}
                     <td onClick={(e) => e.stopPropagation()}>
@@ -1764,8 +1800,33 @@ const RosterPage = () => {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#00205B] text-white flex items-center justify-center text-lg font-bold">
-                    {selectedParticipant.first_name?.charAt(0)}{selectedParticipant.last_name?.charAt(0)}
+                  <div className="relative group">
+                    <CadetAvatar participant={selectedParticipant} size="lg" />
+                    {(user?.role === 'commander' || user?.role === 'dcp' || user?.role === 'executive_staff' ||
+                      user?.role === 'exec_cadre' || user?.role === 'staff' || user?.role === 'plans_programs' ||
+                      user?.role === 'cadre' || user?.role === 'finance' ||
+                      user?.role === 'squadron_commander' || user?.role === 'training_officer') && (
+                      <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" data-testid="upload-photo-overlay">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              await uploadCadetPhoto(selectedParticipant.id, file);
+                              toast.success('Photo uploaded successfully');
+                              setSelectedParticipant(prev => ({ ...prev, photo_path: 'uploaded' }));
+                              loadParticipants();
+                            } catch (err) {
+                              toast.error(err?.response?.data?.detail || 'Failed to upload photo');
+                            }
+                          }}
+                        />
+                        <Camera className="w-5 h-5 text-white" />
+                      </label>
+                    )}
                   </div>
                   <div>
                     <p className="text-xl font-bold text-[#00205B]">
