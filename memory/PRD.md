@@ -4,26 +4,27 @@
 Build an interactive roster and management application for a Civil Air Patrol (CAP) encampment titled "Tennessee Wing Civil Air Patrol Encampment".
 
 ## Core Features (Implemented)
-- **Roster Management**: Interactive roster with live filtering, search, RBAC inline editing, Kanban drag-and-drop, flight-grouped views, cadet contact info
+- **Roster Management**: Interactive roster with live filtering, search, RBAC inline editing, Kanban drag-and-drop, flight-grouped views, cadet contact info, cadet photo uploads
 - **Student Upload System**: Excel upload with automatic flight assignment
-- **Org Chart**: Hierarchical org chart with rich text, auto-syncing roles for Squadron/Flight leadership
+- **Org Chart**: Hierarchical org chart with rich text, auto-syncing roles, rank-sorted assignment dropdowns (Senior Members vs Cadets)
 - **Health Services**: Medical roster tracking allergies, OTC approvals, Parent OTC Medication Permission Form, Parent email notifications for incidents
 - **Check-In & Barracks**: Multi-step in-processing, open-bay bunk assignments
 - **Granular RBAC**: Complex role-based permissions, dual-assignments, Parent role with admin approval
-- **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission
+- **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission, photo upload
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR), Income vs Expenses charts
 - **Notifications**: In-app bell notifications
-- **Schedule**: Full event scheduling with date navigation and encampment date management
+- **Schedule**: Full event scheduling with date navigation, encampment date management, **Excel spreadsheet import** with 11 event categories
 - **Analytics**: Participation analytics, flight distribution, age groups
 - **Logistics**: Inventory, lost & found, radios, comms, callsigns, vehicles, facilities, supply requests
 - **Status Board**: Live-updating display for encampment status
 
 ## Tech Stack
 - **Frontend**: React 19, Tailwind CSS, Shadcn UI, DOMPurify, Recharts
-- **Backend**: FastAPI, MongoDB, python-dateutil
-- **Architecture**: Modular FastAPI routes (28 modules in /backend/routes/)
+- **Backend**: FastAPI, MongoDB, openpyxl for Excel parsing
+- **Architecture**: Modular FastAPI routes (28+ modules in /backend/routes/)
+- **Integrations**: Emergent Object Storage (cadet photos), SendGrid (mocked)
 
-## Code Architecture (Updated April 2026)
+## Code Architecture
 ```
 /app/
 ├── backend/
@@ -31,67 +32,45 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 │   ├── database.py
 │   ├── models.py
 │   ├── permissions.py
-│   ├── logistics.py           # Fixed lint (27 issues resolved)
-│   └── routes/                # 28 modular route files
+│   ├── file_storage.py        # Emergent Object Storage
+│   └── routes/                # 28+ modular route files
 │       ├── auth.py, users.py, parent.py, participants.py
 │       ├── health_services.py, schedule.py, budget.py
+│       ├── photos.py, google_sheets.py
 │       ├── otc_permissions.py, flights.py, ...
 └── frontend/
     └── src/
         ├── App.js
         ├── components/
-        │   ├── CadetHealthSection.js    # 676 lines (was 1129)
-        │   ├── health/                   # NEW: Extracted dialogs
-        │   │   ├── MedicationFormDialog.js
-        │   │   ├── AdminLogFormDialog.js
-        │   │   ├── IncidentFormDialog.js
-        │   │   └── CustodyFormDialog.js
+        │   ├── health/         # Extracted health dialog components
         │   ├── Sidebar.js, NotificationBell.js, RichTextEditor.js
         ├── pages/
-        │   ├── BudgetPage.js            # 1410 lines (was 1947)
-        │   ├── budget/                   # NEW: Extracted tabs
-        │   │   ├── PaymentReportsTab.js
-        │   │   ├── SmartReceiptTab.js
-        │   │   └── ReceiptRepositoryTab.js
-        │   ├── AdminPage.js             # 1006 lines (was 1274)
-        │   ├── admin/                    # NEW: Extracted tab
-        │   │   └── AdminSettingsTab.js
-        │   ├── HealthServicesDashboard.js, SchedulePage.js
-        │   ├── RosterPage.js, MyCadetPage.js, MyFlightPage.js
+        │   ├── budget/         # Extracted budget tabs
+        │   ├── admin/          # Extracted admin tabs
+        │   ├── SchedulePage.js # Excel import, 11 event categories
+        │   ├── RosterPage.js   # Flight views, photo avatars
+        │   ├── OrgChartPage.js # Rank-sorted dropdowns
+        │   ├── MyCadetPage.js  # Parent portal
         │   └── ...
         └── services/
             └── api.js
 ```
 
-## Completed Code Quality Work (April 3, 2026)
-- Fixed 11 array index keys across HealthServicesDashboard, SchedulePage, MyFlightPage
-- Fixed hook dependencies in SchedulePage, TrainingOfficerPage
-- Removed dead useEffect in SchedulePage
-- Extracted BudgetPage into 3 sub-components (-537 lines)
-- Extracted AdminPage Settings tab into AdminSettingsTab (-268 lines)
-- Extracted CadetHealthSection into 4 dialog sub-components (-453 lines)
-- Fixed 27 backend lint issues in logistics.py (one-liners, bare excepts)
-- Fixed f-string without placeholders in budget.py
-- Cleaned up unused imports in CadetHealthSection
+## Schedule Event Categories (11 total)
+General, Training, Ceremony, Meal, Recreation, PT, Admin, Leadership, Academics, **Aerospace**, **Character**
 
-## Completed Org Chart Rank Sorting (April 6, 2026)
-- Assignment dropdown now groups participants into "Senior Members" and "Cadets" sections
-- Each group sorted by CAP rank order (Maj > SMSgt > TSgt for seniors; C/Maj > C/Capt > C/1stLt for cadets)
-- Within same rank, sorted alphabetically by last name
-- Vacant option remains at top
-
-## Completed Cadet Photo Feature (April 6, 2026)
-- Parents, Commanders, Staff, and roster editors can upload cadet photos
-- Photos stored via Emergent Object Storage (real, not mocked)
-- Small avatar thumbnails in roster table view and By Flight grouped view
-- Larger avatar in cadet detail modal with hover-to-upload overlay
-- Parents upload from "My Cadet" header section
-- Backend: POST/GET/DELETE /api/participants/{id}/photo
-- GET supports ?auth=token query param for img src tags
-- File validation: JPEG, PNG, WEBP, HEIC/HEIF, max 5MB
+## Completed Excel Schedule Sync (April 6, 2026)
+- Built real multi-sheet Excel parser using openpyxl (replaced hardcoded schedule)
+- Parses sheets named by day ('Sat Jun 14' through 'Sat. June 21')
+- Maps 2025 dates to 2026 encampment dates (Jun 14→Jul 17, Jun 15→Jul 18, etc.)
+- Classifies events using CAP curriculum codes: F=PT, C=Character, A=Aerospace, L=Leadership, X=Admin/Meals
+- Filters out task/notes rows, department headers, location sub-labels
+- Added Aerospace (bg-sky-600) and Character (bg-rose-600) frontend categories
+- 207 events imported across 8 days, re-upload replaces schedule (idempotent)
+- Testing: Iteration 50 — 100% pass rate (12/12 backend, all frontend verified)
 
 ## Remaining Backlog
-### P1 — Code Quality (Lower Priority)
+### P1 — Code Quality
 - Insecure token storage (localStorage → httpOnly cookies or memory)
 - Hardcoded test secrets in Python test files → use env vars/fixtures
 
@@ -105,8 +84,8 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 
 ## 3rd Party Integrations
 - SendGrid (Email) — requires user API key, currently MOCKED
-- Emergent Object Storage — uses Emergent LLM Key
+- Emergent Object Storage — uses Emergent LLM Key (implemented for Photo Uploads)
 - Smart Receipt OCR — currently MOCKED (simulated string-matching)
 
 ## DB Collections
-users, participants, budget, receipts, otc_permissions, notifications, schedule, barracks, health_profiles, org_chart, flights, logistics (inventory, lost_found, radios, comms, callsigns, vehicles, facilities, supply_requests)
+users, participants, budget, receipts, otc_permissions, notifications, schedule, schedule_settings, barracks, health_profiles, org_chart, org_chart_roles, flights, logistics (inventory, lost_found, radios, comms, callsigns, vehicles, facilities, supply_requests), google_sheets_settings
