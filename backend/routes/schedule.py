@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 from io import BytesIO
 import uuid
 import logging
-import pandas as pd
+import re
+
+import openpyxl
 
 from database import db, api_router
 from models import UserRole, ScheduleEventCreate, ScheduleEventResponse
@@ -208,7 +210,7 @@ async def delete_schedule_event(
     try:
         await create_notification(
             db, title="Schedule Event Cancelled",
-            message=f"A schedule event has been removed",
+            message="A schedule event has been removed",
             notification_type="schedule",
             target_roles=["all"],
             link="/schedule",
@@ -219,211 +221,312 @@ async def delete_schedule_event(
     
     return {"message": "Event deleted successfully"}
 
+def _parse_time_value(val) -> str | None:
+    """Convert Excel time cell to HH:MM string. Handles '0600', 1345.0, datetime, etc."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+
+    # datetime object (e.g. header row date) — skip
+    if hasattr(val, 'strftime'):
+        return None
+
+    # Strip trailing .0 from floats like '1345.0'
+    if s.endswith('.0'):
+        s = s[:-2]
+
+    # Must be 3 or 4 digit military time (e.g. '600' or '1345')
+    if not re.match(r'^\d{3,4}$', s):
+        return None
+
+    s = s.zfill(4)          # '600' -> '0600'
+    hh, mm = int(s[:2]), int(s[2:])
+    if hh > 23 or mm > 59:
+        return None
+    return f"{hh:02d}:{mm:02d}"
+
+
+def _classify_event(code: str, title: str) -> str:
+    """Determine event_type from the CAP curriculum code and title keywords."""
+    code = code.strip().split('/')[0].strip().upper()  # handle 'X8 / L6'
+    title_lower = title.lower()
+
+    # --- Code‑prefix mapping (most reliable) ---
+    if code.startswith('F'):                   # F1-F4 = fitness
+        return 'pt'
+    if code.startswith('C'):                   # C1-C9 = character / core values
+        # C9 is graduation ceremony
+        if code == 'C9':
+            return 'ceremony'
+        return 'character'
+    if code.startswith('A'):                   # A-codes = aerospace field trips
+        return 'aerospace'
+    if code.startswith('L'):
+        num_part = code[1:]
+        if num_part in ('1', '4', '5'):        # Report/Reveille/Retreat formations
+            return 'ceremony'
+        if num_part in ('6', '7', '22'):       # Drill, Parade, Flt CC time
+            return 'training'
+        if num_part.startswith('2'):            # L20-L25 = inspections/dorm prep
+            return 'admin'
+        if num_part.startswith('3'):            # L30-L32 = TLPs
+            return 'leadership'
+        # L10-L13 = leadership modules
+        return 'leadership'
+    if code.startswith('X'):
+        num_part = code[1:]
+        if num_part in ('7', '8', '9'):        # Meals
+            return 'meal'
+        if num_part == '5':                    # First Call
+            return 'ceremony'
+        if num_part in ('6', '13'):            # Shower / personal time
+            return 'recreation'
+        if num_part == '18':                   # Awards social
+            return 'ceremony'
+        return 'admin'
+    if code == 'PRE':
+        return 'admin'
+
+    # --- Keyword fallback when no code ---
+    if any(k in title_lower for k in ['calisthenics', 'fitness', 'obstacle', 'sports', 'guidon run', 'daily sport']):
+        return 'pt'
+    if any(k in title_lower for k in ['breakfast', 'lunch', 'dinner', 'meal', 'dfac', 'dishes', 'dining', 'pastries']):
+        return 'meal'
+    if any(k in title_lower for k in ['formation', 'retreat', 'reveille', 'parade', 'graduation', 'ceremony', 'first call']):
+        return 'ceremony'
+    if any(k in title_lower for k in ['core values', 'honor agreement', 'chaplain', 'character development', 'drug-free']):
+        return 'character'
+    if any(k in title_lower for k in ['drone', 'rocket', 'astronomy', 'cyber', 'mobile lab', 'military power',
+                                       'simulator', 'fit to fly', 'parachute', 'maintenance hangar',
+                                       'chattanooga']):
+        return 'aerospace'
+    if any(k in title_lower for k in ['leadership', 'wingmen', 'warrior', 'tlp', 'team leadership', 'discipline']):
+        return 'leadership'
+    if any(k in title_lower for k in ['quiz', 'academics', 'handbook', 'assessment']):
+        return 'academics'
+    if any(k in title_lower for k in ['personal time', 'shower', 'break', 'recreation', 'trivia', 'game room',
+                                       'flex time', 'honor flight']):
+        return 'recreation'
+    if any(k in title_lower for k in ['sign in', 'pack', 'room', 'setup', 'inspection', 'uniform', 'nametag',
+                                       'clean', 'critique', 'thank you', 'check', 'packing', 'lights out',
+                                       'schedule review', 'operations', 'barracks', 'transit', 'arrive',
+                                       'set up', 'headshot', 'organized for next day', 'parent orient']):
+        return 'admin'
+    return 'training'
+
+
+def _extract_location(title: str, notes: str) -> str:
+    """Pull location hints from title/notes."""
+    combined = f"{title} {notes}".lower()
+    if 'dfac' in combined or 'dining' in combined:
+        return 'DFAC'
+    if 'pt field' in combined:
+        return 'PT Field'
+    if 'rifle range' in combined:
+        return 'Field (Rifle Range)'
+    if 'chattanooga' in combined:
+        return 'Chattanooga'
+    loc_match = re.search(r'\b(TR[\-\s]?\d+[A-Z]?|F\d+|Conex)\b', f"{title} {notes}", re.IGNORECASE)
+    if loc_match:
+        return loc_match.group(0).upper()
+    return ''
+
+
 @api_router.post("/schedule/import")
 async def import_schedule(
     file: UploadFile = File(...),
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
-    """Import schedule from Excel file. Dates are shifted to July 17-24."""
+    """Import schedule from the multi-sheet CAP Encampment Excel file.
+
+    Each sheet represents one day (e.g. 'Sat Jun 14').  Column A = military
+    time, B = activity, C = curriculum code, D = hours, I/J = notes.
+    Dates in the spreadsheet (Jun 14‑21 2025) are re‑mapped to the 2026
+    encampment window (Jul 17‑24).
+    """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
-    
+
     try:
         contents = await file.read()
-        # Read the Excel file to validate it's a valid schedule file
-        # The actual parsing is complex due to the merged cells, so we use predefined data
-        _ = pd.read_excel(BytesIO(contents), sheet_name=0)
-        
-        # Event type mapping based on keywords (used by predefined data)
-        def get_event_type(title: str) -> str:
-            title_lower = title.lower()
-            if any(k in title_lower for k in ['pt', 'calisthenics', 'fitness', 'obstacle', 'sports', 'guidon run']):
-                return 'pt'
-            elif any(k in title_lower for k in ['lunch', 'dinner', 'breakfast', 'meal', 'dfac', 'dishes', 'dining']):
-                return 'meal'
-            elif any(k in title_lower for k in ['formation', 'retreat', 'reveille', 'parade', 'graduation', 'ceremony']):
-                return 'ceremony'
-            elif any(k in title_lower for k in ['leadership', 'core values', 'wingmen', 'warrior', 'tlp', 'honor']):
-                return 'leadership'
-            elif any(k in title_lower for k in ['classroom', 'quiz', 'academics', 'drone', 'rocket', 'cyber', 'astronomy']):
-                return 'academics'
-            elif any(k in title_lower for k in ['personal time', 'shower', 'break', 'recreation', 'trivia']):
-                return 'recreation'
-            elif any(k in title_lower for k in ['admin', 'sign in', 'pack', 'room', 'setup', 'inspection', 'uniform']):
-                return 'admin'
-            else:
-                return 'training'
-        
-        # Predefined schedule for July 17-24 based on extracted data
-        schedule_data = [
-            # July 17 - Staff/Cadre Arrival Day
-            {"date": "2026-07-17", "start_time": "06:00", "end_time": "10:00", "title": "Staff & Cadre Transit to Site", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "10:00", "end_time": "12:00", "title": "Sign In / Room Assignments", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "10:00", "end_time": "12:00", "title": "Intensity Training", "event_type": "training", "squadron": "staff"},
-            {"date": "2026-07-17", "start_time": "12:00", "end_time": "13:30", "title": "Barracks Setup", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "13:30", "end_time": "14:15", "title": "Lunch", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-17", "start_time": "14:15", "end_time": "15:00", "title": "Welcome, Safety Briefing, Expectations", "event_type": "training", "location": ""},
-            {"date": "2026-07-17", "start_time": "15:00", "end_time": "16:00", "title": "Operations Setup / Nametags", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "16:00", "end_time": "17:00", "title": "Break / Uniform Prep", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-17", "start_time": "17:00", "end_time": "17:15", "title": "Schedule Review", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "17:15", "end_time": "18:00", "title": "Dinner", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-17", "start_time": "18:00", "end_time": "19:00", "title": "Retreat Formation", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-17", "start_time": "19:00", "end_time": "20:00", "title": "Classroom Orientation & Setup", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "20:00", "end_time": "21:00", "title": "Support Office Orientation", "event_type": "admin", "location": ""},
-            {"date": "2026-07-17", "start_time": "21:00", "end_time": "22:00", "title": "Personal Time / Showers", "event_type": "recreation", "location": ""},
-            
-            # July 18 - Student In-processing Day
-            {"date": "2026-07-18", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-18", "start_time": "06:15", "end_time": "07:00", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-18", "start_time": "07:00", "end_time": "07:30", "title": "Personal Time / Showers", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-18", "start_time": "07:30", "end_time": "08:15", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-18", "start_time": "08:15", "end_time": "09:15", "title": "I-Day Setup & Practice Run", "event_type": "admin", "location": ""},
-            {"date": "2026-07-18", "start_time": "09:15", "end_time": "09:45", "title": "Student Reception / In-Processing", "event_type": "admin", "location": ""},
-            {"date": "2026-07-18", "start_time": "09:30", "end_time": "10:00", "title": "Parent Orientation", "event_type": "admin", "location": ""},
-            {"date": "2026-07-18", "start_time": "09:45", "end_time": "10:15", "title": "Welcome, Overview, Safety", "event_type": "training", "location": ""},
-            {"date": "2026-07-18", "start_time": "10:00", "end_time": "10:15", "title": "Report to Flights", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-18", "start_time": "10:15", "end_time": "11:00", "title": "Training Officer Overview", "event_type": "training", "location": ""},
-            {"date": "2026-07-18", "start_time": "11:00", "end_time": "12:00", "title": "Lunch / Drill Evaluations", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-18", "start_time": "15:30", "end_time": "15:45", "title": "Honor Agreement", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-18", "start_time": "15:45", "end_time": "17:00", "title": "Dormitory Orientation", "event_type": "training", "location": ""},
-            {"date": "2026-07-18", "start_time": "17:15", "end_time": "17:45", "title": "Initial Skills Assessment", "event_type": "training", "location": ""},
-            {"date": "2026-07-18", "start_time": "18:00", "end_time": "18:45", "title": "Wingmen & The Warrior Spirit", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-18", "start_time": "18:45", "end_time": "19:45", "title": "Team Leadership Problem #1", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-18", "start_time": "20:00", "end_time": "21:00", "title": "Dinner / Drill Evaluations", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-18", "start_time": "21:00", "end_time": "22:00", "title": "Group Retreat", "event_type": "ceremony", "location": ""},
-            
-            # July 19 - Day 1
-            {"date": "2026-07-19", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-19", "start_time": "06:15", "end_time": "06:30", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-19", "start_time": "06:30", "end_time": "07:00", "title": "Shower, Dress", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-19", "start_time": "07:00", "end_time": "07:30", "title": "Group Reveille Formation", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-19", "start_time": "07:30", "end_time": "08:45", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-19", "start_time": "09:00", "end_time": "11:45", "title": "Drones/Rockets", "event_type": "academics", "location": "Conex Area / T-7"},
-            {"date": "2026-07-19", "start_time": "11:45", "end_time": "14:00", "title": "Lunch", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-19", "start_time": "14:30", "end_time": "16:15", "title": "Drones/Rockets (Continued)", "event_type": "academics", "location": "Conex Area / T-7"},
-            {"date": "2026-07-19", "start_time": "16:15", "end_time": "17:15", "title": "Dormitory & Uniform Prep", "event_type": "admin", "location": ""},
-            {"date": "2026-07-19", "start_time": "17:15", "end_time": "17:45", "title": "Dormitory Inspection #1", "event_type": "admin", "location": ""},
-            {"date": "2026-07-19", "start_time": "17:45", "end_time": "18:00", "title": "Parade Practice", "event_type": "training", "location": ""},
-            {"date": "2026-07-19", "start_time": "18:00", "end_time": "19:00", "title": "Dinner / Drill", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-19", "start_time": "21:00", "end_time": "22:00", "title": "Group Retreat", "event_type": "ceremony", "location": ""},
-            
-            # July 20 - Day 2
-            {"date": "2026-07-20", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-20", "start_time": "06:15", "end_time": "06:30", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-20", "start_time": "06:30", "end_time": "06:45", "title": "Guidon Run", "event_type": "pt", "location": ""},
-            {"date": "2026-07-20", "start_time": "06:45", "end_time": "07:30", "title": "Change to ABU / Breakfast Prep", "event_type": "admin", "location": ""},
-            {"date": "2026-07-20", "start_time": "07:30", "end_time": "09:00", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-20", "start_time": "09:00", "end_time": "11:00", "title": "Obstacle Course", "event_type": "pt", "location": "F4"},
-            {"date": "2026-07-20", "start_time": "11:00", "end_time": "12:30", "title": "Quiz & Review", "event_type": "academics", "location": ""},
-            {"date": "2026-07-20", "start_time": "12:30", "end_time": "13:30", "title": "Team Leadership Problem #2", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-20", "start_time": "13:30", "end_time": "16:15", "title": "Lunch / Drill", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-20", "start_time": "17:00", "end_time": "17:30", "title": "The Core Values", "event_type": "leadership", "location": "TR5"},
-            {"date": "2026-07-20", "start_time": "17:30", "end_time": "18:00", "title": "Becoming a Core Values Leader", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-20", "start_time": "18:00", "end_time": "19:00", "title": "Mobile Lab - Air National Guard", "event_type": "academics", "location": ""},
-            {"date": "2026-07-20", "start_time": "20:45", "end_time": "21:15", "title": "Parade Practice/Drill", "event_type": "training", "location": ""},
-            {"date": "2026-07-20", "start_time": "21:15", "end_time": "22:15", "title": "Cadet Handbook Review", "event_type": "academics", "location": ""},
-            
-            # July 21 - Day 3
-            {"date": "2026-07-21", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-21", "start_time": "06:15", "end_time": "06:30", "title": "Safety Briefing", "event_type": "training", "location": ""},
-            {"date": "2026-07-21", "start_time": "06:30", "end_time": "07:00", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-21", "start_time": "07:00", "end_time": "07:30", "title": "Shower, Dress", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-21", "start_time": "07:30", "end_time": "09:00", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-21", "start_time": "09:00", "end_time": "11:00", "title": "Obstacle Course", "event_type": "pt", "location": "F4"},
-            {"date": "2026-07-21", "start_time": "11:00", "end_time": "12:30", "title": "Quiz & Review", "event_type": "academics", "location": ""},
-            {"date": "2026-07-21", "start_time": "12:30", "end_time": "13:30", "title": "Team Leadership Problem #2", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-21", "start_time": "13:30", "end_time": "16:15", "title": "Lunch / Drill", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-21", "start_time": "17:00", "end_time": "17:30", "title": "The Core Values", "event_type": "leadership", "location": "TR5"},
-            {"date": "2026-07-21", "start_time": "17:30", "end_time": "18:00", "title": "Becoming a Core Values Leader", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-21", "start_time": "18:00", "end_time": "19:00", "title": "Mobile Lab", "event_type": "academics", "location": ""},
-            {"date": "2026-07-21", "start_time": "20:45", "end_time": "21:15", "title": "Parade Practice/Drill", "event_type": "training", "location": ""},
-            {"date": "2026-07-21", "start_time": "21:15", "end_time": "22:15", "title": "Cadet Handbook Review", "event_type": "academics", "location": ""},
-            
-            # July 22 - Day 4
-            {"date": "2026-07-22", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-22", "start_time": "06:15", "end_time": "06:30", "title": "Group Reveille Formation", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-22", "start_time": "06:30", "end_time": "07:00", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-22", "start_time": "07:00", "end_time": "07:30", "title": "Shower, Dress", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-22", "start_time": "07:30", "end_time": "09:00", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-22", "start_time": "09:00", "end_time": "09:45", "title": "Travel to Chattanooga", "event_type": "admin", "location": ""},
-            {"date": "2026-07-22", "start_time": "09:15", "end_time": "12:45", "title": "Military Power - Field Trip", "event_type": "training", "location": "Chattanooga"},
-            {"date": "2026-07-22", "start_time": "12:45", "end_time": "13:15", "title": "Chaplain Services", "event_type": "ceremony", "location": "TR6"},
-            {"date": "2026-07-22", "start_time": "13:15", "end_time": "13:45", "title": "Dorm & Uniform Inspection", "event_type": "admin", "location": ""},
-            {"date": "2026-07-22", "start_time": "14:00", "end_time": "17:15", "title": "Dinner / Drill", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-22", "start_time": "20:45", "end_time": "21:45", "title": "Group Retreat", "event_type": "ceremony", "location": ""},
-            
-            # July 23 - Day 5
-            {"date": "2026-07-23", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-23", "start_time": "06:15", "end_time": "06:30", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-23", "start_time": "06:30", "end_time": "07:00", "title": "Change to ABU", "event_type": "admin", "location": ""},
-            {"date": "2026-07-23", "start_time": "07:00", "end_time": "07:30", "title": "Shower, Dress", "event_type": "recreation", "location": ""},
-            {"date": "2026-07-23", "start_time": "07:30", "end_time": "09:00", "title": "Breakfast", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-23", "start_time": "09:00", "end_time": "10:30", "title": "The Leadership Concept", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-23", "start_time": "10:30", "end_time": "12:00", "title": "Leadership Quiz", "event_type": "academics", "location": ""},
-            {"date": "2026-07-23", "start_time": "12:00", "end_time": "13:30", "title": "Chaplain Service", "event_type": "ceremony", "location": "TR-7"},
-            {"date": "2026-07-23", "start_time": "13:30", "end_time": "15:30", "title": "Team Leadership Problem #3", "event_type": "leadership", "location": ""},
-            {"date": "2026-07-23", "start_time": "15:30", "end_time": "17:00", "title": "Lunch", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-23", "start_time": "17:00", "end_time": "17:45", "title": "Dinner / Drill", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-23", "start_time": "20:00", "end_time": "20:20", "title": "Parade Practice", "event_type": "training", "location": ""},
-            {"date": "2026-07-23", "start_time": "20:20", "end_time": "20:40", "title": "Astronomy", "event_type": "academics", "location": "TR-7"},
-            {"date": "2026-07-23", "start_time": "20:40", "end_time": "21:00", "title": "Cyber Training", "event_type": "academics", "location": "TR-7"},
-            {"date": "2026-07-23", "start_time": "21:00", "end_time": "22:00", "title": "Cadet Advisories", "event_type": "training", "location": ""},
-            
-            # July 24 - Graduation Day
-            {"date": "2026-07-24", "start_time": "06:00", "end_time": "06:15", "title": "First Call", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-24", "start_time": "06:15", "end_time": "06:30", "title": "Daily Calisthenics", "event_type": "pt", "location": "PT Field"},
-            {"date": "2026-07-24", "start_time": "06:30", "end_time": "07:00", "title": "Group Reveille Formation", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-24", "start_time": "07:00", "end_time": "07:30", "title": "Encampment Critique", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "07:30", "end_time": "09:00", "title": "Room Packing", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "09:00", "end_time": "09:45", "title": "Thank You Cards", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "09:45", "end_time": "10:45", "title": "Common Area Deep Clean", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "10:45", "end_time": "11:00", "title": "Flight Rooms Final Check", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "11:00", "end_time": "11:45", "title": "Shower & Dress (Blues)", "event_type": "admin", "location": ""},
-            {"date": "2026-07-24", "start_time": "11:45", "end_time": "12:45", "title": "Parade Practice", "event_type": "training", "location": ""},
-            {"date": "2026-07-24", "start_time": "12:45", "end_time": "13:45", "title": "Lunch", "event_type": "meal", "location": "DFAC"},
-            {"date": "2026-07-24", "start_time": "13:15", "end_time": "13:45", "title": "Parents Arrive", "event_type": "ceremony", "location": ""},
-            {"date": "2026-07-24", "start_time": "13:45", "end_time": "14:45", "title": "Graduation Parade", "event_type": "ceremony", "location": "Parade Field"},
-            {"date": "2026-07-24", "start_time": "14:45", "end_time": "15:30", "title": "Graduation Ceremony", "event_type": "ceremony", "location": ""},
-        ]
-        
-        # Clear existing schedule
+        wb = openpyxl.load_workbook(BytesIO(contents), data_only=True)
+
+        # Ordered mapping: sheet name -> target 2026 date
+        # The spreadsheet days correspond 1-to-1 with Jul 17-24.
+        SHEET_DATE_MAP = {
+            'Sat Jun 14':  '2026-07-17',   # Staff/Cadre arrival
+            'Sun Jun 15':  '2026-07-18',   # I-Day
+            'Mon. Jun 16': '2026-07-19',
+            'Tues Jun 17': '2026-07-20',
+            'Wed. Jun 18': '2026-07-21',
+            'Thurs Jun 19':'2026-07-22',
+            'Fri Jun 20':  '2026-07-23',
+            'Sat. June 21':'2026-07-24',   # Graduation
+        }
+
+        parsed_events = []
+
+        for sheet_name, target_date in SHEET_DATE_MAP.items():
+            if sheet_name not in wb.sheetnames:
+                continue
+            ws = wb[sheet_name]
+
+            # Collect raw rows: (time_str, activity, code, hours, notes)
+            raw_rows = []
+            current_time = None
+            for row_idx in range(1, ws.max_row + 1):
+                time_cell = ws.cell(row_idx, 1).value
+                activity_cell = ws.cell(row_idx, 2).value
+                code_cell = ws.cell(row_idx, 3).value
+                hours_cell = ws.cell(row_idx, 4).value
+                notes_cell = None
+                for col in range(9, min(ws.max_column + 1, 12)):
+                    v = ws.cell(row_idx, col).value
+                    if v and str(v).strip():
+                        notes_cell = str(v).strip()
+                        break
+
+                parsed_time = _parse_time_value(time_cell)
+                if parsed_time:
+                    current_time = parsed_time
+
+                if not activity_cell:
+                    continue
+                activity = str(activity_cell).strip()
+                # Skip header row, task rows, uniform rows, empty labels
+                if activity.lower() in ('activity', 'code', 'hrs', ''):
+                    continue
+                if activity.lower().startswith(('tasks:', 'uniform', 'senior staff uniform', 'officer of the day')):
+                    continue
+                # Skip department task entries (Logistics, Public Affairs, etc.)
+                skip_keywords = [
+                    'vehicle inspection', 'get supplies', 'issuing of radios',
+                    'shirts counted', 'fuel cov', 'gather up sports',
+                    'close up shop', 'start inventory', 'check on comms',
+                    'gather hand receipts', 'comm radio support', 'cov inspection',
+                    'determine cov', 'support comm', 'brief encampment staff',
+                    'publish last staff', 'set up administrative',
+                    'confirm chaplain', 'senior member led', 'cadet flight cadre led',
+                    'cadet cadre', 'mix of sm/cadet', 'plans and programs',
+                    'public affairs',
+                ]
+                if any(kw in activity.lower() for kw in skip_keywords):
+                    continue
+                # Skip pure sub-labels without their own time (like department headers)
+                if activity.lower() in ('logistics', 'finance', 'communications', 'health services'):
+                    continue
+                # Skip location-only sub-labels and task-tracker entries
+                if any(kw in activity.lower() for kw in [
+                    'field accross from rifle range', 'field across from rifle range',
+                    'continue with pictures', 'continue the photos', 'awards tracking',
+                    'encampment awards tracking', 'tracking for encampment',
+                    'support activities for capturing',
+                ]):
+                    continue
+                # Skip sub-labels like 'Field Across from Rifle range', 'Rain Alternative' without own time
+                if not current_time:
+                    continue
+
+                code_str = str(code_cell).strip() if code_cell and str(code_cell).strip().lower() not in ('none', 'code', 'n/a', '') else ''
+                hours_val = None
+                if hours_cell:
+                    try:
+                        hours_val = float(hours_cell)
+                    except (ValueError, TypeError):
+                        pass
+
+                raw_rows.append({
+                    'time': current_time,
+                    'activity': activity,
+                    'code': code_str,
+                    'hours': hours_val,
+                    'notes': notes_cell or ''
+                })
+
+            # Compute end times: use explicit hours if available, else next event's start
+            for i, row in enumerate(raw_rows):
+                if row['hours'] and row['hours'] > 0:
+                    # Compute end from start + hours
+                    h, m = map(int, row['time'].split(':'))
+                    total_min = h * 60 + m + int(row['hours'] * 60)
+                    end_h, end_m = divmod(total_min, 60)
+                    if end_h > 23:
+                        end_h = 22
+                        end_m = 0
+                    end_time = f"{end_h:02d}:{end_m:02d}"
+                elif i + 1 < len(raw_rows) and raw_rows[i + 1]['time'] != row['time']:
+                    end_time = raw_rows[i + 1]['time']
+                else:
+                    # Default: 15 min block
+                    h, m = map(int, row['time'].split(':'))
+                    total_min = h * 60 + m + 15
+                    end_h, end_m = divmod(total_min, 60)
+                    end_time = f"{end_h:02d}:{end_m:02d}"
+
+                event_type = _classify_event(row['code'], row['activity'])
+                location = _extract_location(row['activity'], row['notes'])
+
+                parsed_events.append({
+                    'date': target_date,
+                    'start_time': row['time'],
+                    'end_time': end_time,
+                    'title': row['activity'],
+                    'event_type': event_type,
+                    'location': location,
+                    'notes': row['notes'],
+                })
+
+        if not parsed_events:
+            raise HTTPException(status_code=400, detail="No schedule events found in the Excel file. Expected sheets named by day (e.g. 'Sat Jun 14').")
+
+        # Clear existing schedule and insert parsed events
         await db.schedule.delete_many({})
-        
-        imported_count = 0
+
         now = datetime.now(timezone.utc).isoformat()
-        
-        for event in schedule_data:
-            event_id = str(uuid.uuid4())
-            # Convert squadron to target_groups format
-            target_groups = ["all"]
-            if event.get("squadron") == "staff":
-                target_groups = ["staff"]
-            
+        imported_count = 0
+
+        for ev in parsed_events:
             doc = {
-                "id": event_id,
-                "title": event["title"],
-                "description": "",
-                "date": event["date"],
-                "start_time": event["start_time"],
-                "end_time": event["end_time"],
-                "location": event.get("location", ""),
-                "event_type": event["event_type"],
-                "target_groups": target_groups,
+                "id": str(uuid.uuid4()),
+                "title": ev['title'],
+                "description": ev['notes'],
+                "date": ev['date'],
+                "start_time": ev['start_time'],
+                "end_time": ev['end_time'],
+                "location": ev['location'],
+                "event_type": ev['event_type'],
+                "target_groups": ["all"],
                 "created_at": now,
-                "updated_at": now
+                "updated_at": now,
             }
             await db.schedule.insert_one(doc)
             imported_count += 1
-        
+
         # Mark schedule as modified but not published, increment version
         await db.schedule_settings.update_one(
             {"_id": "settings"},
             {"$set": {"is_published": False, "last_modified_at": now}, "$inc": {"version": 1}},
             upsert=True
         )
-        
-        return {"message": f"Successfully imported {imported_count} events for July 17-24, 2026. Schedule is in draft mode."}
+
+        # Count events by type for summary
+        type_counts = {}
+        for ev in parsed_events:
+            t = ev['event_type']
+            type_counts[t] = type_counts.get(t, 0) + 1
+        type_summary = ', '.join(f"{v} {k}" for k, v in sorted(type_counts.items()))
+
+        return {
+            "message": f"Successfully imported {imported_count} events for Jul 17-24, 2026 from {len(SHEET_DATE_MAP)} day sheets. Breakdown: {type_summary}. Schedule is in draft mode.",
+            "imported_count": imported_count,
+            "type_breakdown": type_counts,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
+        logging.error(f"Schedule import error: {e}")
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
 @api_router.delete("/schedule/clear")

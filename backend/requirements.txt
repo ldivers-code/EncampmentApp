@@ -104,6 +104,7 @@ requests-oauthlib==2.0.0
 rich==14.3.2
 rpds-py==0.30.0
 rsa==4.9.1
+ruff==0.15.9
 s3transfer==0.16.0
 s5cmd==0.2.0
 sendgrid==6.12.5

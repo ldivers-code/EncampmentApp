@@ -123,7 +123,9 @@ const SchedulePage = () => {
     { value: 'pt', label: 'PT', color: 'bg-red-600', mobileColor: 'border-l-red-600' },
     { value: 'admin', label: 'Admin', color: 'bg-slate-600', mobileColor: 'border-l-slate-600' },
     { value: 'leadership', label: 'Leadership', color: 'bg-indigo-600', mobileColor: 'border-l-indigo-600' },
-    { value: 'academics', label: 'Academics', color: 'bg-teal-600', mobileColor: 'border-l-teal-600' }
+    { value: 'academics', label: 'Academics', color: 'bg-teal-600', mobileColor: 'border-l-teal-600' },
+    { value: 'aerospace', label: 'Aerospace', color: 'bg-sky-600', mobileColor: 'border-l-sky-600' },
+    { value: 'character', label: 'Character', color: 'bg-rose-600', mobileColor: 'border-l-rose-600' }
   ];
 
   const targetGroupOptions = [
