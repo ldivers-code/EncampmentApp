@@ -74,6 +74,12 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - Fixed f-string without placeholders in budget.py
 - Cleaned up unused imports in CadetHealthSection
 
+## Completed Org Chart Rank Sorting (April 6, 2026)
+- Assignment dropdown now groups participants into "Senior Members" and "Cadets" sections
+- Each group sorted by CAP rank order (Maj > SMSgt > TSgt for seniors; C/Maj > C/Capt > C/1stLt for cadets)
+- Within same rank, sorted alphabetically by last name
+- Vacant option remains at top
+
 ## Completed Cadet Photo Feature (April 6, 2026)
 - Parents, Commanders, Staff, and roster editors can upload cadet photos
 - Photos stored via Emergent Object Storage (real, not mocked)
