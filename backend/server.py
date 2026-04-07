@@ -86,6 +86,7 @@ import routes.points
 import routes.parent
 import routes.otc_permissions
 import routes.photos
+import routes.assignments
 
 # Auth routes extracted to routes/auth.py
 # User management routes extracted to routes/users.py

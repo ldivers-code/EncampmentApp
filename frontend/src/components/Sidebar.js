@@ -23,6 +23,7 @@ import {
   Shield,
   Heart,
   ClipboardCheck,
+  ClipboardList,
   Package,
   Monitor,
   UtensilsCrossed,
@@ -92,6 +93,7 @@ const Sidebar = ({ children }) => {
   } else {
     // Meal Plan Schedule visible to all non-parent roles
     navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
+    navItems.push({ path: '/assignments', icon: ClipboardList, label: 'Assignments' });
 
   // Financial Tracker visible to commander, executive_staff, finance
   if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {

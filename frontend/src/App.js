@@ -28,6 +28,7 @@ import StatusBoardDisplay from "./pages/StatusBoardDisplay";
 import CheckInPage from "./pages/CheckInPage";
 import BarracksPage from "./pages/BarracksPage";
 import MyCadetPage from "./pages/MyCadetPage";
+import AssignmentsPage from "./pages/AssignmentsPage";
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, loading, user } = useAuth();
@@ -123,6 +124,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['parent']}>
             <MyCadetPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assignments"
+        element={
+          <ProtectedRoute>
+            <AssignmentsPage />
           </ProtectedRoute>
         }
       />
