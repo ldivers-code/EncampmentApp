@@ -4,9 +4,10 @@
 Build an interactive roster and management application for a Civil Air Patrol (CAP) encampment titled "Tennessee Wing Civil Air Patrol Encampment".
 
 ## Core Features (Implemented)
-- **Roster Management**: Interactive roster with live filtering, search, RBAC inline editing, Kanban drag-and-drop, flight-grouped views, cadet contact info, cadet photo uploads, **auto-balance flight distribution**, **print-friendly layout**
+- **Roster Management**: Interactive roster with live filtering, search, RBAC inline editing, Kanban drag-and-drop, flight-grouped views, cadet contact info, cadet photo uploads, auto-balance flight distribution, print-friendly layout
+- **Assignments System**: Create assignments with rubric-based grading criteria, text+file submissions, rubric-based grading by Exec Cadre, in-app + email reminders for non-submitters, per-flight and individual targeting
 - **Student Upload System**: Excel upload with automatic flight assignment
-- **Org Chart**: Hierarchical org chart with rich text, auto-syncing roles, rank-sorted assignment dropdowns, **print-friendly layout**
+- **Org Chart**: Hierarchical org chart with rich text, auto-syncing roles, rank-sorted assignment dropdowns, print-friendly layout
 - **Health Services**: Medical roster tracking allergies, OTC approvals, Parent OTC Medication Permission Form, Parent email notifications for incidents
 - **Check-In & Barracks**: Multi-step in-processing, open-bay bunk assignments
 - **Granular RBAC**: Complex role-based permissions, dual-assignments, Parent role with admin approval
@@ -17,59 +18,64 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Analytics**: Participation analytics, flight distribution, age groups
 - **Logistics**: Inventory, lost & found, radios, comms, callsigns, vehicles, facilities, supply requests
 - **Status Board**: Live-updating display for encampment status
-- **Auth Security**: **httpOnly cookie-based JWT authentication** (migrated from localStorage)
+- **Auth Security**: httpOnly cookie-based JWT authentication
 
 ## Tech Stack
 - **Frontend**: React 19, Tailwind CSS, Shadcn UI, DOMPurify, Recharts
 - **Backend**: FastAPI, MongoDB, openpyxl for Excel parsing
-- **Architecture**: Modular FastAPI routes (28+ modules in /backend/routes/)
+- **Architecture**: Modular FastAPI routes (29+ modules in /backend/routes/)
 - **Auth**: httpOnly cookies (primary) + Bearer header (backward compat) + query param (?auth= for img tags)
-- **Integrations**: Emergent Object Storage (cadet photos), SendGrid (mocked)
+- **Integrations**: Emergent Object Storage (cadet photos, assignment file uploads), SendGrid (mocked)
+
+## Assignments System Details
+- **Creators**: Exec Cadre, Executive Staff, Training Officers, Commander, DCP
+- **Graders**: Exec Cadre, Executive Staff, Commander, DCP
+- **Submissions**: Text responses + optional file uploads (stored via Emergent Object Storage)
+- **Grading**: Rubric-based — multiple criteria with individual point values, total auto-calculated
+- **Reminders**: In-app notifications + email (SendGrid, currently mocked)
+- **Targeting**: All cadre, specific flights, or individual users
+- **Collections**: `assignments`, `assignment_submissions`
 
 ## Code Architecture
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Startup/middleware only (~193 lines)
-│   ├── database.py            # HTTPBearer(auto_error=False)
+│   ├── server.py
+│   ├── database.py
 │   ├── models.py
-│   ├── permissions.py         # Cookie + header + query param auth
+│   ├── permissions.py
 │   ├── file_storage.py
 │   ├── tests/
-│   │   ├── conftest.py        # Shared test credentials from env vars
-│   │   └── test_*.py          # All using conftest imports
-│   └── routes/                # 28+ modular route files
-│       ├── auth.py            # Sets/clears httpOnly cookies
-│       ├── photos.py          # Cookie-aware photo serving
-│       ├── schedule.py        # Real Excel parser with openpyxl
+│   │   ├── conftest.py
+│   │   └── test_*.py
+│   └── routes/
+│       ├── assignments.py     # NEW: Full CRUD, submissions, grading, reminders
+│       ├── auth.py
+│       ├── photos.py
+│       ├── schedule.py
 │       └── ...
 └── frontend/
     └── src/
         ├── App.js
-        ├── styles/print.css   # Print-specific stylesheet
-        ├── context/AuthContext.js  # Cookie-based, no localStorage
-        ├── services/api.js        # withCredentials: true
+        ├── styles/print.css
+        ├── context/AuthContext.js
+        ├── services/api.js
+        ├── components/Sidebar.js
         ├── pages/
-        │   ├── RosterPage.js      # Auto-Balance + Print buttons
-        │   ├── OrgChartPage.js    # Print button
+        │   ├── AssignmentsPage.js  # NEW: Create, Submit, Detail, Grade dialogs
+        │   ├── RosterPage.js
+        │   ├── OrgChartPage.js
         │   └── ...
 ```
 
-## Schedule Event Categories (11 total)
-General, Training, Ceremony, Meal, Recreation, PT, Admin, Leadership, Academics, Aerospace, Character
-
 ## Completed Work Log
-- **Apr 6, 2026**: Excel Schedule Sync — real multi-sheet parser, Aerospace & Character categories (Test: Iteration 50 - 100%)
-- **Apr 6, 2026**: Secure Token Storage — httpOnly cookie auth migration, removed all localStorage refs (Test: Iteration 51 - 100%)
-- **Apr 6, 2026**: Test Secrets Cleanup — conftest.py with env-based credentials across all test files
-- **Apr 6, 2026**: Auto-Balance Flights — button distributes unassigned students (Test: Iteration 51 - 100%)
-- **Apr 6, 2026**: Print-Friendly Views — CSS print stylesheet, print buttons on Roster & Org Chart (Test: Iteration 51 - 100%)
+- **Apr 6**: Excel Schedule Sync, Secure Token Storage, Test Secrets Cleanup, Auto-Balance Flights, Print-Friendly Views
+- **Apr 7**: Assignments System (CRUD, rubric grading, submissions, reminders)
 
 ## Remaining Backlog
-- Attendance tracking per event (user said not needed)
-- Senior Barracks individual room assignments (user said cadets only)
-- Any other user-requested features
+- SendGrid API key integration (currently mocked for emails/reminders)
+- Any additional user-requested features
 
 ## 3rd Party Integrations
 - SendGrid (Email) — requires user API key, currently MOCKED
-- Emergent Object Storage — uses Emergent LLM Key (implemented for Photo Uploads)
+- Emergent Object Storage — uses Emergent LLM Key (photos + assignment files)
