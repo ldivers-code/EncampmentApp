@@ -46,9 +46,8 @@ export default function AssignmentsPage() {
     fetchAssignments();
     // Fetch flights & users for assignment creation
     if (isCreator) {
-      axios.get(`${API}/participants/stats`).then(r => {
-        const flightNames = Object.keys(r.data?.flight_distribution || {}).filter(f => f && f !== 'Unassigned');
-        setFlights(flightNames);
+      axios.get(`${API}/flights`).then(r => {
+        setFlights(r.data.map(f => ({ value: f.value, label: f.label })));
       }).catch(() => {});
       axios.get(`${API}/users`).then(r => {
         setCadreUsers(r.data.filter(u => ['cadre', 'exec_cadre'].includes(u.role)));
@@ -136,7 +135,7 @@ export default function AssignmentsPage() {
                     <span>Due: <span className="font-medium text-slate-600">{new Date(a.due_date + 'T00:00:00').toLocaleDateString()}</span></span>
                     <span>By: {a.created_by_name}</span>
                     <span className="capitalize">
-                      {a.target_type === 'flight' ? `Flights: ${a.target_flights?.join(', ')}` :
+                      {a.target_type === 'flight' ? `Flights: ${a.target_flights?.map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(', ')}` :
                        a.target_type === 'individual' ? 'Individual' : 'All Cadre'}
                     </span>
                     {a.rubric?.length > 0 && <span>{a.rubric.length} rubric criteria</span>}
@@ -283,17 +282,17 @@ function CreateAssignmentDialog({ flights, cadreUsers, onClose, onCreated }) {
               <label className="text-sm font-medium text-slate-700">Select Flights</label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {flights.map(f => (
-                  <label key={f} className="flex items-center gap-1 text-sm">
-                    <input type="checkbox" checked={form.target_flights.includes(f)}
+                  <label key={f.value} className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" checked={form.target_flights.includes(f.value)}
                       onChange={e => {
                         setForm(prev => ({
                           ...prev,
                           target_flights: e.target.checked
-                            ? [...prev.target_flights, f]
-                            : prev.target_flights.filter(x => x !== f)
+                            ? [...prev.target_flights, f.value]
+                            : prev.target_flights.filter(x => x !== f.value)
                         }));
                       }} />
-                    {f}
+                    {f.label}
                   </label>
                 ))}
               </div>
