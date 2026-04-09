@@ -48,6 +48,7 @@ import {
   FileEdit
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
+import SquadronScheduleView from '../components/SquadronScheduleView';
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
@@ -975,6 +976,14 @@ const SchedulePage = () => {
                 <Grid3X3 className="w-4 h-4" />
               </button>
               <button
+                onClick={() => setViewMode('squadron')}
+                className={`px-3 py-2 text-sm ${viewMode === 'squadron' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                data-testid="view-squadron-btn"
+                title="Squadron View"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-2 text-sm ${viewMode === 'list' ? 'bg-[#00205B] text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
                 data-testid="view-list-btn"
@@ -1451,6 +1460,26 @@ const SchedulePage = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+
+      {/* Squadron View - Multi-column grid by CTS/Flight */}
+      {!isMobile && viewMode === 'squadron' && (
+        <div>
+          <div className="bg-[#00205B] text-white p-3 text-center rounded-t-sm">
+            <h2 className="font-bold uppercase tracking-wide" style={{ fontFamily: 'Chivo, sans-serif' }}>
+              {format(selectedDate, 'EEEE, MMMM d, yyyy')} - {getDayLabel(selectedDate)}
+            </h2>
+          </div>
+          <SquadronScheduleView
+            events={events.filter(e => isSameDay(parseISO(e.date), selectedDate))}
+            timeSlots={timeSlots}
+            canEdit={canEdit()}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onTimeSlotClick={handleTimeSlotClick}
+          />
         </div>
       )}
 
