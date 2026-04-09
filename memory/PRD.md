@@ -12,6 +12,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Check-In & Barracks**: Multi-step in-processing, open-bay bunk assignments
 - **Granular RBAC**: Complex role-based permissions, dual-assignments, Parent role with admin approval, Exec Cadre delegated admin access (role assignment only)
 - **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission, photo upload
+- **Honor Agreement System**: Role-based digital honor agreements (Cadre Honor Agreement for cadre/exec_cadre, Senior Staff Honor Agreement for all staff roles). Blocking modal on login until signed. Scroll-to-unlock signature mechanism. Admin can send in-app reminders to unsigned members.
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR via GPT-4o), Income vs Expenses charts
 - **Meal Plan Schedule**: Period-based meal planning for Cadre & Staff Training Weekend (May 29-30, 2026) and Encampment (Jul 17-24, 2026)
 - **Notifications**: In-app bell notifications
