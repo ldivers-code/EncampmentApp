@@ -44,11 +44,11 @@ const SQUADRONS = [
   {
     id: '16th_cts',
     label: '16th OPS SUP',
-    color: 'bg-amber-600',
-    headerBg: 'bg-amber-600',
+    color: 'bg-slate-500',
+    headerBg: 'bg-slate-400',
     headerText: 'text-white',
-    cellBg: 'bg-amber-50',
-    cellBorder: 'border-amber-200',
+    cellBg: 'bg-slate-50',
+    cellBorder: 'border-slate-200',
     flights: []
   }
 ];
