@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import {
-  Plus, Edit2, Trash2, UtensilsCrossed, ChevronLeft, ChevronRight,
-  Loader2, Coffee, Sun, Sunset, Cookie, Clock, Users, AlertCircle
+  Plus, Edit2, Trash2, UtensilsCrossed,
+  Loader2, Coffee, Sun, Sunset, Cookie, Users, AlertCircle
 } from 'lucide-react';
 
 const MEAL_TYPES = [
@@ -20,23 +20,32 @@ const MEAL_TYPES = [
   { value: 'snack', label: 'Snack', icon: Cookie, color: 'bg-green-50 border-green-200 text-green-800', time: '' }
 ];
 
+const PERIODS = [
+  {
+    id: 'training',
+    label: 'Cadre & Staff Training Weekend',
+    shortLabel: 'Training Weekend',
+    dates: ['2026-05-29', '2026-05-30'],
+    description: 'May 29 - 30, 2026'
+  },
+  {
+    id: 'encampment',
+    label: 'Encampment',
+    shortLabel: 'Encampment',
+    dates: ['2026-07-17', '2026-07-18', '2026-07-19', '2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24'],
+    description: 'July 17 - 24, 2026'
+  }
+];
+
 const getMealInfo = (type) => MEAL_TYPES.find(m => m.value === type) || MEAL_TYPES[0];
 
-const formatDate = (dateStr) => {
+const formatDayHeader = (dateStr) => {
   const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-};
-
-const getWeekDates = (startDate) => {
-  const dates = [];
-  const start = new Date(startDate);
-  start.setDate(start.getDate() - start.getDay()); // Start from Sunday
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split('T')[0]);
-  }
-  return dates;
+  return {
+    dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    dayNum: d.getDate(),
+    monthDay: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  };
 };
 
 const MealPlanPage = () => {
@@ -45,23 +54,14 @@ const MealPlanPage = () => {
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [activePeriod, setActivePeriod] = useState('encampment');
 
   const [formData, setFormData] = useState({
     date: '', meal_type: 'breakfast', menu_items: '',
     location: '', time: '', notes: '', headcount: '', dietary_notes: ''
   });
 
-  const today = new Date();
-  const currentWeekStart = new Date(today);
-  currentWeekStart.setDate(today.getDate() - today.getDay() + (weekOffset * 7));
-  const weekDates = getWeekDates(currentWeekStart.toISOString().split('T')[0]);
-
-  const weekLabel = (() => {
-    const start = new Date(weekDates[0] + 'T12:00:00');
-    const end = new Date(weekDates[6] + 'T12:00:00');
-    return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  })();
+  const currentPeriod = PERIODS.find(p => p.id === activePeriod);
 
   const loadMeals = useCallback(async () => {
     try {
@@ -84,6 +84,8 @@ const MealPlanPage = () => {
         return (order[a.meal_type] || 99) - (order[b.meal_type] || 99);
       });
   };
+
+  const periodMealCount = currentPeriod.dates.reduce((acc, d) => acc + getMealsForDate(d).length, 0);
 
   const openAdd = (date, mealType) => {
     const mealInfo = getMealInfo(mealType);
@@ -157,22 +159,21 @@ const MealPlanPage = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 animate-fade-in">
+    <div className="p-3 sm:p-6 lg:p-8 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
             Meal Plan Schedule
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {meals.length} meal{meals.length !== 1 ? 's' : ''} planned
+            {periodMealCount} meal{periodMealCount !== 1 ? 's' : ''} planned for {currentPeriod.shortLabel}
           </p>
         </div>
         {canEditMealPlan() && (
           <Button
             onClick={() => {
-              const todayStr = new Date().toISOString().split('T')[0];
-              openAdd(todayStr, 'breakfast');
+              openAdd(currentPeriod.dates[0], 'breakfast');
             }}
             className="bg-[#00205B] hover:bg-[#001540] rounded-sm"
             data-testid="add-meal-btn"
@@ -183,34 +184,39 @@ const MealPlanPage = () => {
         )}
       </div>
 
-      {/* Week Navigation */}
-      <div className="bg-white border border-slate-200 rounded-sm p-3 mb-6 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w - 1)} data-testid="prev-week-btn">
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <div className="text-center">
-          <span className="font-semibold text-slate-900 text-sm">{weekLabel}</span>
-          {weekOffset !== 0 && (
+      {/* Period Selector */}
+      <div className="bg-white border border-slate-200 rounded-sm mb-6 overflow-hidden" data-testid="period-selector">
+        <div className="flex">
+          {PERIODS.map(period => (
             <button
-              onClick={() => setWeekOffset(0)}
-              className="ml-3 text-xs text-[#00205B] hover:underline"
+              key={period.id}
+              onClick={() => setActivePeriod(period.id)}
+              className={`flex-1 px-4 py-3 text-center transition-colors border-b-2 ${
+                activePeriod === period.id
+                  ? 'bg-[#00205B] text-white border-[#00205B]'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border-transparent'
+              }`}
+              data-testid={`period-${period.id}`}
             >
-              Today
+              <div className="font-bold text-xs sm:text-sm uppercase tracking-tight">{period.shortLabel}</div>
+              <div className={`text-[10px] sm:text-xs mt-0.5 ${activePeriod === period.id ? 'text-blue-200' : 'text-slate-400'}`}>
+                {period.description}
+              </div>
             </button>
-          )}
+          ))}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w + 1)} data-testid="next-week-btn">
-          <ChevronRight className="w-4 h-4" />
-        </Button>
       </div>
 
-      {/* Week Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-7 gap-3">
-        {weekDates.map(date => {
+      {/* Date Grid */}
+      <div className={`grid gap-3 ${
+        currentPeriod.id === 'training'
+          ? 'grid-cols-1 sm:grid-cols-2'
+          : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8'
+      }`}>
+        {currentPeriod.dates.map(date => {
           const dateMeals = getMealsForDate(date);
+          const { dayName, dayNum, monthDay } = formatDayHeader(date);
           const isToday = date === new Date().toISOString().split('T')[0];
-          const dayName = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-          const dayNum = new Date(date + 'T12:00:00').getDate();
 
           return (
             <div
@@ -222,6 +228,7 @@ const MealPlanPage = () => {
               <div className={`px-3 py-2 border-b text-center ${isToday ? 'bg-[#00205B] text-white border-[#00205B]' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="text-[10px] uppercase tracking-wider font-bold">{dayName}</div>
                 <div className="text-lg font-bold">{dayNum}</div>
+                <div className={`text-[10px] ${isToday ? 'text-blue-200' : 'text-slate-400'}`}>{monthDay}</div>
               </div>
 
               {/* Meals */}
@@ -313,14 +320,23 @@ const MealPlanPage = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide text-slate-600">Date *</Label>
-                <Input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
-                  required
-                  className="mt-1 rounded-sm"
-                  data-testid="meal-date-input"
-                />
+                <Select value={formData.date} onValueChange={(v) => setFormData(p => ({ ...p, date: v }))}>
+                  <SelectTrigger className="mt-1 rounded-sm" data-testid="meal-date-input">
+                    <SelectValue placeholder="Select date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIODS.flatMap(period =>
+                      period.dates.map(d => {
+                        const fd = formatDayHeader(d);
+                        return (
+                          <SelectItem key={d} value={d}>
+                            {fd.dayName} {fd.monthDay} ({period.shortLabel})
+                          </SelectItem>
+                        );
+                      })
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-xs uppercase tracking-wide text-slate-600">Meal Type *</Label>

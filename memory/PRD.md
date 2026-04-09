@@ -13,6 +13,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Granular RBAC**: Complex role-based permissions, dual-assignments, Parent role with admin approval, Exec Cadre delegated admin access (role assignment only)
 - **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission, photo upload
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR via GPT-4o), Income vs Expenses charts
+- **Meal Plan Schedule**: Period-based meal planning for Cadre & Staff Training Weekend (May 29-30, 2026) and Encampment (Jul 17-24, 2026)
 - **Notifications**: In-app bell notifications
 - **Schedule**: Full event scheduling with 11 categories (including Aerospace & Character), Excel multi-sheet import with date mapping
 - **Analytics**: Participation analytics, flight distribution, age groups
@@ -72,7 +73,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 ## Completed Work Log
 - **Apr 6**: Excel Schedule Sync, Secure Token Storage, Test Secrets Cleanup, Auto-Balance Flights, Print-Friendly Views
 - **Apr 7**: Assignments System (CRUD, rubric grading, submissions, reminders)
-- **Apr 9**: Admin user grouping by Staff/Cadre/Parent with alphabetical sorting, Exec Cadre delegated admin access with restricted view, Fixed receipt OCR env var, Fixed AdminPage compilation error
+- **Apr 9**: Admin user grouping by Staff/Cadre/Parent with alphabetical sorting, Exec Cadre delegated admin access with restricted view, Fixed receipt OCR env var, Fixed AdminPage compilation error, Meal Plan updated to Training Weekend (May 29-30) and Encampment (Jul 17-24) periods only
 
 ## Remaining Backlog
 - SendGrid API key integration (currently mocked for emails/reminders)
