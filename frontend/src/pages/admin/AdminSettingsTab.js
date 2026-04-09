@@ -136,6 +136,39 @@ const AdminSettingsTab = ({
         </div>
       </div>
 
+      {/* Honor Agreement Management */}
+      <div className="bg-white border border-slate-200 rounded-sm">
+        <div className="border-b border-slate-100 p-4">
+          <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            <Shield className="w-4 h-4" />
+            Honor Agreement Reminders
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">Send notifications to cadre/staff who haven't signed their Honor Agreement</p>
+        </div>
+        <div className="p-4">
+          <Button
+            onClick={async () => {
+              try {
+                const { sendHonorAgreementReminders } = await import('../../services/api');
+                const result = await sendHonorAgreementReminders();
+                if (result.count === 0) {
+                  alert('All cadre and staff have already signed their Honor Agreement!');
+                } else {
+                  alert(`Sent reminders to ${result.count} user(s):\n\n${result.unsigned_users.map(u => `- ${u.name} (${u.email})`).join('\n')}`);
+                }
+              } catch (err) {
+                alert('Failed to send reminders: ' + (err.response?.data?.detail || err.message));
+              }
+            }}
+            className="bg-amber-600 hover:bg-amber-700 rounded-sm"
+            data-testid="send-honor-reminders-btn"
+          >
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Send Reminders to Unsigned Members
+          </Button>
+        </div>
+      </div>
+
       {/* Google Sheets Sync */}
       <div className="bg-white border border-slate-200 rounded-sm">
         <div className="border-b border-slate-100 p-4">

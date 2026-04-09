@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getNotificationBadges } from '../services/api';
 import NotificationBell from './NotificationBell';
+import HonorAgreementModal, { needsHonorAgreement } from './HonorAgreementModal';
 import { 
   LayoutDashboard, 
   Users, 
@@ -34,7 +35,7 @@ import {
 import { Button } from '../components/ui/button';
 
 const Sidebar = ({ children }) => {
-  const { user, logout, canEdit, activeUsers } = useAuth();
+  const { user, logout, canEdit, activeUsers, refreshUser } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -204,6 +205,7 @@ const Sidebar = ({ children }) => {
   };
 
   return (
+    <>
     <div className="min-h-screen flex bg-slate-50">
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between">
@@ -390,6 +392,15 @@ const Sidebar = ({ children }) => {
         </div>
       </main>
     </div>
+
+    {/* Honor Agreement Modal - blocks app until signed */}
+    {needsHonorAgreement(user) && (
+      <HonorAgreementModal
+        user={user}
+        onComplete={() => refreshUser()}
+      />
+    )}
+    </>
   );
 };
 

@@ -147,8 +147,106 @@ async def get_me(user: dict = Depends(get_current_user)):
         squadron=user.get("squadron"),
         flight=user.get("flight"),
         created_at=user["created_at"],
-        permissions=user.get("permissions")
+        permissions=user.get("permissions"),
+        honor_agreement_signed=user.get("honor_agreement_signed"),
+        honor_agreement_type=user.get("honor_agreement_type"),
+        honor_agreement_signed_at=user.get("honor_agreement_signed_at")
     )
+
+
+# ================= HONOR AGREEMENT ROUTES =================
+
+CADRE_ROLES = [UserRole.CADRE, UserRole.EXEC_CADRE]
+STAFF_ROLES = [
+    UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+    UserRole.TRAINING_OFFICER, UserRole.LOGISTICS, UserRole.FINANCE,
+    UserRole.PLANS_PROGRAMS, UserRole.STAFF, UserRole.HEALTH_SERVICES,
+    UserRole.DINING_FACILITY, UserRole.SUPPORT_LOGISTICS, UserRole.SUPPORT_COMMS,
+    UserRole.SUPPORT_PA, UserRole.SUPPORT_DINING, UserRole.SUPPORT_HEALTH,
+    UserRole.SQUADRON_COMMANDER
+]
+
+def get_agreement_type(role: str) -> Optional[str]:
+    """Return 'cadre' or 'staff' based on role, or None if no agreement needed."""
+    if role in CADRE_ROLES:
+        return "cadre"
+    elif role in STAFF_ROLES:
+        return "staff"
+    return None
+
+@api_router.post("/auth/sign-honor-agreement")
+async def sign_honor_agreement(
+    data: dict,
+    user: dict = Depends(get_current_user)
+):
+    """Sign the honor agreement. Requires typed signature name."""
+    signature_name = (data.get("signature_name") or "").strip()
+    if not signature_name:
+        raise HTTPException(status_code=400, detail="Signature (typed name) is required")
+    
+    agreement_type = get_agreement_type(user["role"])
+    if not agreement_type:
+        raise HTTPException(status_code=400, detail="Your role does not require an honor agreement")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "honor_agreement_signed": True,
+            "honor_agreement_type": agreement_type,
+            "honor_agreement_signed_at": now,
+            "honor_agreement_signature_name": signature_name
+        }}
+    )
+    
+    return {
+        "message": "Honor agreement signed successfully",
+        "agreement_type": agreement_type,
+        "signed_at": now
+    }
+
+@api_router.post("/auth/send-honor-agreement-reminders")
+async def send_honor_agreement_reminders(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+):
+    """Send in-app notifications to all users who haven't signed their honor agreement."""
+    all_roles = CADRE_ROLES + STAFF_ROLES
+    unsigned_users = await db.users.find(
+        {
+            "role": {"$in": all_roles},
+            "is_approved": True,
+            "$or": [
+                {"honor_agreement_signed": {"$ne": True}},
+                {"honor_agreement_signed": {"$exists": False}}
+            ]
+        },
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
+    ).to_list(500)
+    
+    now = datetime.now(timezone.utc).isoformat()
+    notifications = []
+    for u in unsigned_users:
+        agreement_type = get_agreement_type(u["role"])
+        label = "Cadre" if agreement_type == "cadre" else "Senior Staff"
+        notifications.append({
+            "id": str(uuid.uuid4()),
+            "user_id": u["id"],
+            "type": "honor_agreement",
+            "title": "Honor Agreement Required",
+            "message": f"Please sign the {label} Honor Agreement before Encampment. Go to your profile or log in again to complete it.",
+            "read": False,
+            "created_at": now
+        })
+    
+    if notifications:
+        await db.notifications.insert_many(notifications)
+    
+    return {
+        "message": f"Sent reminders to {len(notifications)} user(s)",
+        "count": len(notifications),
+        "unsigned_users": [{"id": u["id"], "name": u["name"], "email": u["email"]} for u in unsigned_users]
+    }
+
 
 
 # ================= PASSWORD RESET ROUTES =================

@@ -324,6 +324,9 @@ class UserResponse(BaseModel):
     linked_participant_id: Optional[str] = None
     support_section: Optional[str] = None
     permissions: Optional[dict] = None
+    honor_agreement_signed: Optional[bool] = None
+    honor_agreement_type: Optional[str] = None
+    honor_agreement_signed_at: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str

@@ -158,6 +158,13 @@ export const AuthProvider = ({ children }) => {
   
   const isCommander = () => hasRole(['dcp', 'commander', 'executive_staff']);
 
+  const refreshUser = async () => {
+    try {
+      const response = await axios.get(`${API}/auth/me`);
+      setUser(response.data);
+    } catch (e) { /* ignore */ }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -173,7 +180,8 @@ export const AuthProvider = ({ children }) => {
       isCommander,
       isAuthenticated: !!user,
       activeUsers,
-      refreshActiveUsers: fetchActiveUsers
+      refreshActiveUsers: fetchActiveUsers,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

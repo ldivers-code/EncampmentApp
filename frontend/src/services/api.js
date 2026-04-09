@@ -1477,3 +1477,15 @@ export const deleteCadetPhoto = async (participantId) => {
   return response.data;
 };
 
+
+// ================= HONOR AGREEMENT =================
+export const signHonorAgreement = async (signatureName) => {
+  const response = await axios.post(`${API}/auth/sign-honor-agreement`, { signature_name: signatureName }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const sendHonorAgreementReminders = async () => {
+  const response = await axios.post(`${API}/auth/send-honor-agreement-reminders`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
