@@ -16,7 +16,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR via GPT-4o), Income vs Expenses charts
 - **Meal Plan Schedule**: Period-based meal planning for Cadre & Staff Training Weekend (May 29-30, 2026) and Encampment (Jul 17-24, 2026)
 - **Notifications**: In-app bell notifications
-- **Schedule**: Full event scheduling with 11 categories (including Aerospace & Character), Excel multi-sheet import with date mapping
+- **Schedule**: Full event scheduling with 11 categories (including Aerospace & Character), Excel multi-sheet import with date mapping, Squadron View (multi-column grid showing 6th/21st/22nd CTS flights and 16th OPS SUP side-by-side, color-coded)
 - **Analytics**: Participation analytics, flight distribution, age groups
 - **Logistics**: Inventory, lost & found, radios, comms, callsigns, vehicles, facilities, supply requests
 - **Status Board**: Live-updating display for encampment status
@@ -74,7 +74,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 ## Completed Work Log
 - **Apr 6**: Excel Schedule Sync, Secure Token Storage, Test Secrets Cleanup, Auto-Balance Flights, Print-Friendly Views
 - **Apr 7**: Assignments System (CRUD, rubric grading, submissions, reminders)
-- **Apr 9**: Admin user grouping by Staff/Cadre/Parent with alphabetical sorting, Exec Cadre delegated admin access with restricted view, Fixed receipt OCR env var, Fixed AdminPage compilation error, Meal Plan updated to Training Weekend (May 29-30) and Encampment (Jul 17-24) periods only
+- **Apr 9**: Admin RBAC, Meal Plan periods, Honor Agreement System, Squadron Schedule View (6th/21st/22nd CTS + 16th OPS SUP multi-column grid with color-coded A-F flights)
 
 ## Remaining Backlog
 - SendGrid API key integration (currently mocked for emails/reminders)
