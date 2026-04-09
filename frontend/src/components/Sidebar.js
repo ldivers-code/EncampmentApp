@@ -147,8 +147,8 @@ const Sidebar = ({ children }) => {
     navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
   }
 
-  // Admin - NOT visible to dining_facility
-  if (['dcp', 'commander', 'executive_staff'].includes(user?.role)) {
+  // Admin - visible to command staff and exec cadre
+  if (['dcp', 'commander', 'executive_staff', 'exec_cadre'].includes(user?.role)) {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }
 

@@ -50,7 +50,9 @@ export default function AssignmentsPage() {
         setFlights(r.data.map(f => ({ value: f.value, label: f.label })));
       }).catch(() => {});
       axios.get(`${API}/users`).then(r => {
-        setCadreUsers(r.data.filter(u => ['cadre', 'exec_cadre'].includes(u.role)));
+        const allUsers = r.data.filter(u => u.role !== 'parent');
+        allUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setCadreUsers(allUsers);
       }).catch(() => {});
     }
   }, [fetchAssignments, isCreator]);
@@ -301,22 +303,40 @@ function CreateAssignmentDialog({ flights, cadreUsers, onClose, onCreated }) {
 
           {form.target_type === 'individual' && (
             <div>
-              <label className="text-sm font-medium text-slate-700">Select Cadre Members</label>
-              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-md p-2 mt-1 space-y-1">
-                {cadreUsers.map(u => (
-                  <label key={u.id} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={form.target_users.includes(u.id)}
-                      onChange={e => {
-                        setForm(prev => ({
-                          ...prev,
-                          target_users: e.target.checked
-                            ? [...prev.target_users, u.id]
-                            : prev.target_users.filter(x => x !== u.id)
-                        }));
-                      }} />
-                    {u.name} <span className="text-xs text-slate-400">({u.flight || 'No flight'})</span>
-                  </label>
-                ))}
+              <label className="text-sm font-medium text-slate-700">Select Members</label>
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-md p-2 mt-1">
+                {(() => {
+                  const staffRoles = ['dcp', 'commander', 'executive_staff', 'training_officer', 'logistics',
+                    'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff',
+                    'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health',
+                    'squadron_commander'];
+                  const cadreRoles = ['exec_cadre', 'cadre'];
+                  const groups = [
+                    { label: 'STAFF', users: cadreUsers.filter(u => staffRoles.includes(u.role)) },
+                    { label: 'CADRE', users: cadreUsers.filter(u => cadreRoles.includes(u.role)) },
+                    { label: 'OTHER', users: cadreUsers.filter(u => !staffRoles.includes(u.role) && !cadreRoles.includes(u.role)) },
+                  ].filter(g => g.users.length > 0);
+
+                  return groups.map(g => (
+                    <div key={g.label} className="mb-2">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1 py-1 border-b border-slate-100 mb-1">{g.label}</div>
+                      {g.users.map(u => (
+                        <label key={u.id} className="flex items-center gap-2 text-sm py-0.5 px-1 hover:bg-slate-50 rounded cursor-pointer">
+                          <input type="checkbox" checked={form.target_users.includes(u.id)}
+                            onChange={e => {
+                              setForm(prev => ({
+                                ...prev,
+                                target_users: e.target.checked
+                                  ? [...prev.target_users, u.id]
+                                  : prev.target_users.filter(x => x !== u.id)
+                              }));
+                            }} />
+                          {u.name} <span className="text-xs text-slate-400">({u.role?.replace(/_/g, ' ')})</span>
+                        </label>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           )}

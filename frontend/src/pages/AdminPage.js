@@ -695,7 +695,27 @@ const AdminPage = () => {
                   </td>
                 </tr>
               ) : (
-                users.map(user => (
+                (() => {
+                  const staffRoles = ['dcp', 'commander', 'executive_staff', 'training_officer', 'logistics',
+                    'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff',
+                    'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health',
+                    'squadron_commander'];
+                  const cadreRoles = ['exec_cadre', 'cadre'];
+                  const parentRoles = ['parent'];
+                  const groups = [
+                    { label: 'STAFF', users: users.filter(u => staffRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+                    { label: 'CADRE', users: users.filter(u => cadreRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+                    { label: 'PARENT', users: users.filter(u => parentRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+                  ].filter(g => g.users.length > 0);
+
+                  return groups.map(g => (
+                    <React.Fragment key={g.label}>
+                      <tr>
+                        <td colSpan={8} className="bg-slate-100 py-1.5 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                          {g.label} ({g.users.length})
+                        </td>
+                      </tr>
+                      {g.users.map(user => (
                   <React.Fragment key={user.id}>
                   <tr className="hover:bg-slate-50" data-testid={`user-row-${user.id}`}>
                     <td className="font-medium">
