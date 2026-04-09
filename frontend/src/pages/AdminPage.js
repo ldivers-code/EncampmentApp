@@ -36,10 +36,11 @@ import AdminSettingsTab from './admin/AdminSettingsTab';
 
 const AdminPage = () => {
   const { user: currentUser } = useAuth();
+  const isFullAdmin = ['dcp', 'commander', 'executive_staff'].includes(currentUser?.role);
   const [users, setUsers] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'users'
+  const [activeTab, setActiveTab] = useState(isFullAdmin ? 'pending' : 'users');
   const [matchingParticipants, setMatchingParticipants] = useState({});
   const [loadingMatches, setLoadingMatches] = useState({});
   const [editingPermissions, setEditingPermissions] = useState(null);
@@ -153,8 +154,10 @@ const AdminPage = () => {
 
   useEffect(() => {
     loadUsers();
-    loadPendingUsers();
-    loadGoogleSheetsSettings();
+    if (isFullAdmin) {
+      loadPendingUsers();
+      loadGoogleSheetsSettings();
+    }
   }, []);
 
   // Load Google Sheets settings
@@ -482,6 +485,7 @@ const AdminPage = () => {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 sm:mb-6 border-b border-slate-200 overflow-x-auto">
+        {isFullAdmin && (
         <button
           onClick={() => setActiveTab('pending')}
           className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
@@ -501,6 +505,7 @@ const AdminPage = () => {
             )}
           </span>
         </button>
+        )}
         <button
           onClick={() => setActiveTab('users')}
           className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
@@ -515,6 +520,7 @@ const AdminPage = () => {
             All Users ({users.length})
           </span>
         </button>
+        {isFullAdmin && (
         <button
           onClick={() => setActiveTab('settings')}
           className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
@@ -529,6 +535,7 @@ const AdminPage = () => {
             Settings
           </span>
         </button>
+        )}
       </div>
 
       {/* Pending Users Tab */}
@@ -802,6 +809,7 @@ const AdminPage = () => {
                       )}
                     </td>
                     <td>
+                      {isFullAdmin && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -812,8 +820,10 @@ const AdminPage = () => {
                         {editingPermissions === user.id ? <Unlock className="w-3 h-3 mr-1" /> : <Lock className="w-3 h-3 mr-1" />}
                         {editingPermissions === user.id ? 'Editing...' : 'Permissions'}
                       </Button>
+                      )}
                     </td>
                     <td className="text-right flex items-center gap-1 justify-end">
+                      {isFullAdmin && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -824,7 +834,8 @@ const AdminPage = () => {
                       >
                         <Key className="w-4 h-4" />
                       </Button>
-                      {user.id !== currentUser?.id && (
+                      )}
+                      {isFullAdmin && user.id !== currentUser?.id && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -918,8 +929,11 @@ const AdminPage = () => {
                     </tr>
                   )}
                   </React.Fragment>
-                ))
-              )}
+                ))}
+              </React.Fragment>
+            ))
+          })()
+        )}
             </tbody>
           </table>
         </div>

@@ -629,7 +629,7 @@ async def smart_receipt_upload(
             mime = 'image/jpeg' if file.filename.lower().endswith(('.jpg', '.jpeg')) else 'image/png'
             data_url = f"data:{mime};base64,{b64_content}"
             
-            api_key = os.environ.get("EMERGENT_API_KEY", "")
+            api_key = os.environ.get("EMERGENT_LLM_KEY", "")
             
             messages = [
                 ChatMessage(
