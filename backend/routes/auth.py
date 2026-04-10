@@ -116,24 +116,10 @@ async def login(credentials: UserLogin, response: Response):
     token = create_token(user["id"], user["email"], user["role"])
     _set_auth_cookie(response, token)
     
+    user_data = {k: v for k, v in user.items() if k not in ("_id", "password_hash")}
     return TokenResponse(
         access_token=token,
-        user=UserResponse(
-            id=user["id"],
-            email=user["email"],
-            name=user["name"],
-            role=user["role"],
-            capid=user.get("capid"),
-            squadron=user.get("squadron"),
-            flight=user.get("flight"),
-            created_at=user["created_at"],
-            permissions=user.get("permissions"),
-            honor_agreement_signed=user.get("honor_agreement_signed"),
-            honor_agreement_type=user.get("honor_agreement_type"),
-            honor_agreement_signed_at=user.get("honor_agreement_signed_at"),
-            cadre_unit=user.get("cadre_unit"),
-            cadre_position=user.get("cadre_position")
-        )
+        user=UserResponse(**user_data)
     )
 
 @api_router.post("/auth/logout")
@@ -144,22 +130,8 @@ async def logout(response: Response):
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
-    return UserResponse(
-        id=user["id"],
-        email=user["email"],
-        name=user["name"],
-        role=user["role"],
-        capid=user.get("capid"),
-        squadron=user.get("squadron"),
-        flight=user.get("flight"),
-        created_at=user["created_at"],
-        permissions=user.get("permissions"),
-        honor_agreement_signed=user.get("honor_agreement_signed"),
-        honor_agreement_type=user.get("honor_agreement_type"),
-        honor_agreement_signed_at=user.get("honor_agreement_signed_at"),
-        cadre_unit=user.get("cadre_unit"),
-        cadre_position=user.get("cadre_position")
-    )
+    user_data = {k: v for k, v in user.items() if k not in ("_id", "password_hash")}
+    return UserResponse(**user_data)
 
 
 # ================= HONOR AGREEMENT ROUTES =================

@@ -33,6 +33,15 @@
 - **Role**: exec_cadre
 - **Squadron**: 6th_cts, Flight: alpha
 
+## Lillian Yoder (Cadet Commander)
+- **Email**: 662519@vawg.cap.gov
+- **Password**: Test1234
+- **Role**: exec_cadre
+- **CAPID**: 662519
+- **Rank**: C/LtCol
+- **Cadre Unit**: ops, Position: cadet_commander
+- **Notes**: Live account synced to preview. Linked participant ID: e7c029e1-118e-4cb8-bbf1-1ca60358225f
+
 ## Additional Test Accounts
 - **Email**: testadmin@cap.gov / TestPass123! (commander)
 - ldivers@cap.gov (commander)
