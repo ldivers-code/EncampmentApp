@@ -126,7 +126,11 @@ async def login(credentials: UserLogin, response: Response):
             capid=user.get("capid"),
             squadron=user.get("squadron"),
             flight=user.get("flight"),
-            created_at=user["created_at"]
+            created_at=user["created_at"],
+            permissions=user.get("permissions"),
+            honor_agreement_signed=user.get("honor_agreement_signed"),
+            honor_agreement_type=user.get("honor_agreement_type"),
+            honor_agreement_signed_at=user.get("honor_agreement_signed_at")
         )
     )
 
@@ -246,6 +250,40 @@ async def send_honor_agreement_reminders(
         "count": len(notifications),
         "unsigned_users": [{"id": u["id"], "name": u["name"], "email": u["email"]} for u in unsigned_users]
     }
+
+
+@api_router.get("/auth/honor-agreement-status")
+async def get_honor_agreement_status(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
+):
+    """Get honor agreement signing status for all cadre/staff users."""
+    all_roles = CADRE_ROLES + STAFF_ROLES
+    users = await db.users.find(
+        {"role": {"$in": all_roles}, "is_approved": True},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1,
+         "honor_agreement_signed": 1, "honor_agreement_type": 1,
+         "honor_agreement_signed_at": 1, "honor_agreement_signature_name": 1}
+    ).to_list(500)
+
+    signed = [u for u in users if u.get("honor_agreement_signed")]
+    unsigned = [u for u in users if not u.get("honor_agreement_signed")]
+
+    return {
+        "total": len(users),
+        "signed_count": len(signed),
+        "unsigned_count": len(unsigned),
+        "signed": sorted([{
+            "id": u["id"], "name": u["name"], "email": u["email"], "role": u["role"],
+            "agreement_type": u.get("honor_agreement_type"),
+            "signed_at": u.get("honor_agreement_signed_at"),
+            "signature_name": u.get("honor_agreement_signature_name")
+        } for u in signed], key=lambda x: x["name"]),
+        "unsigned": sorted([{
+            "id": u["id"], "name": u["name"], "email": u["email"], "role": u["role"],
+            "agreement_type": get_agreement_type(u["role"])
+        } for u in unsigned], key=lambda x: x["name"])
+    }
+
 
 
 

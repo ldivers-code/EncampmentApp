@@ -1489,3 +1489,8 @@ export const sendHonorAgreementReminders = async () => {
   return response.data;
 };
 
+export const getHonorAgreementStatus = async () => {
+  const response = await axios.get(`${API}/auth/honor-agreement-status`, { headers: getAuthHeaders() });
+  return response.data;
+};
+

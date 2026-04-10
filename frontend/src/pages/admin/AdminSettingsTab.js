@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { 
   Shield, UserCog, DollarSign, Users, Plane, 
   Cloud, CheckCircle, AlertTriangle, RefreshCw, Clock,
-  FileSpreadsheet, ExternalLink
+  FileSpreadsheet, ExternalLink, XCircle
 } from 'lucide-react';
+import { getHonorAgreementStatus, sendHonorAgreementReminders } from '../../services/api';
 
 const AdminSettingsTab = ({
   gsheetSettings,
@@ -136,38 +137,8 @@ const AdminSettingsTab = ({
         </div>
       </div>
 
-      {/* Honor Agreement Management */}
-      <div className="bg-white border border-slate-200 rounded-sm">
-        <div className="border-b border-slate-100 p-4">
-          <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
-            <Shield className="w-4 h-4" />
-            Honor Agreement Reminders
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">Send notifications to cadre/staff who haven't signed their Honor Agreement</p>
-        </div>
-        <div className="p-4">
-          <Button
-            onClick={async () => {
-              try {
-                const { sendHonorAgreementReminders } = await import('../../services/api');
-                const result = await sendHonorAgreementReminders();
-                if (result.count === 0) {
-                  alert('All cadre and staff have already signed their Honor Agreement!');
-                } else {
-                  alert(`Sent reminders to ${result.count} user(s):\n\n${result.unsigned_users.map(u => `- ${u.name} (${u.email})`).join('\n')}`);
-                }
-              } catch (err) {
-                alert('Failed to send reminders: ' + (err.response?.data?.detail || err.message));
-              }
-            }}
-            className="bg-amber-600 hover:bg-amber-700 rounded-sm"
-            data-testid="send-honor-reminders-btn"
-          >
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Send Reminders to Unsigned Members
-          </Button>
-        </div>
-      </div>
+      {/* Honor Agreement Tracker */}
+      <HonorAgreementTracker />
 
       {/* Google Sheets Sync */}
       <div className="bg-white border border-slate-200 rounded-sm">
@@ -331,6 +302,161 @@ const AdminSettingsTab = ({
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const HonorAgreementTracker = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [tab, setTab] = useState('unsigned');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const result = await getHonorAgreementStatus();
+      setData(result);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendReminders = async () => {
+    setSending(true);
+    try {
+      const result = await sendHonorAgreementReminders();
+      alert(result.count === 0
+        ? 'All cadre and staff have signed!'
+        : `Sent reminders to ${result.count} user(s)`);
+    } catch (err) {
+      alert('Failed: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const formatRole = (role) => role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-sm" data-testid="honor-agreement-tracker">
+      <div className="border-b border-slate-100 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm flex items-center gap-2" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            <Shield className="w-4 h-4" />
+            Honor Agreement Tracker
+          </h2>
+          {data && (
+            <p className="text-xs text-slate-500 mt-1">
+              {data.signed_count} of {data.total} signed ({data.unsigned_count} remaining)
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadData} className="rounded-sm" data-testid="refresh-honor-status">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+          </Button>
+          <Button size="sm" onClick={handleSendReminders} disabled={sending} className="bg-amber-600 hover:bg-amber-700 rounded-sm" data-testid="send-honor-reminders-btn">
+            <AlertTriangle className="w-3.5 h-3.5 mr-1" /> {sending ? 'Sending...' : 'Send Reminders'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      {data && (
+        <div className="px-4 pt-3">
+          <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+            <div
+              className="h-3 bg-emerald-500 rounded-full transition-all"
+              style={{ width: `${data.total > 0 ? (data.signed_count / data.total * 100) : 0}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+            <span>{Math.round(data.total > 0 ? (data.signed_count / data.total * 100) : 0)}% complete</span>
+            <span>{data.signed_count}/{data.total}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 mx-4 mt-3">
+        <button
+          onClick={() => setTab('unsigned')}
+          className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px ${tab === 'unsigned' ? 'border-red-500 text-red-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          data-testid="honor-tab-unsigned"
+        >
+          <XCircle className="w-3 h-3 inline mr-1" />
+          Not Signed ({data?.unsigned_count || 0})
+        </button>
+        <button
+          onClick={() => setTab('signed')}
+          className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px ${tab === 'signed' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          data-testid="honor-tab-signed"
+        >
+          <CheckCircle className="w-3 h-3 inline mr-1" />
+          Signed ({data?.signed_count || 0})
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="p-4">
+        {loading ? (
+          <p className="text-center text-sm text-slate-400 py-4">Loading...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Name</th>
+                  <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Email</th>
+                  <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Role</th>
+                  <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Type</th>
+                  {tab === 'signed' && (
+                    <>
+                      <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Signature</th>
+                      <th className="text-left py-2 px-2 text-xs uppercase text-slate-500 font-medium">Signed At</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {(tab === 'unsigned' ? data?.unsigned : data?.signed)?.map(u => (
+                  <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-2 px-2 font-medium">{u.name}</td>
+                    <td className="py-2 px-2 text-slate-500">{u.email}</td>
+                    <td className="py-2 px-2">
+                      <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{formatRole(u.role)}</span>
+                    </td>
+                    <td className="py-2 px-2">
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${u.agreement_type === 'cadre' ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        {u.agreement_type === 'cadre' ? 'Cadre' : 'Staff'}
+                      </span>
+                    </td>
+                    {tab === 'signed' && (
+                      <>
+                        <td className="py-2 px-2 italic text-slate-600" style={{ fontFamily: 'cursive, serif' }}>{u.signature_name}</td>
+                        <td className="py-2 px-2 text-slate-400 text-xs">{u.signed_at ? new Date(u.signed_at).toLocaleString() : '-'}</td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+                {(tab === 'unsigned' ? data?.unsigned : data?.signed)?.length === 0 && (
+                  <tr>
+                    <td colSpan={tab === 'signed' ? 6 : 4} className="text-center py-6 text-slate-400">
+                      {tab === 'unsigned' ? 'Everyone has signed!' : 'No signatures yet.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
