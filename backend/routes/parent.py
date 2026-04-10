@@ -226,3 +226,133 @@ async def notify_parent_health_incident(participant_id: str, incident_type: str,
             )
     
     return len(parent_users) + len(parents_by_capid)
+
+
+# ================= ADMIN PORTAL CONFIG & PREVIEW =================
+
+ADMIN_ROLES = [UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]
+
+@api_router.get("/parent/portal-config")
+async def get_portal_config(user: dict = Depends(get_current_user)):
+    """Get the parent portal widget configuration."""
+    config = await db.settings.find_one({"type": "parent_portal_config"}, {"_id": 0})
+    if not config:
+        config = {
+            "type": "parent_portal_config",
+            "widgets": {
+                "overview": {"visible": True, "size": "full", "order": 0},
+                "schedule": {"visible": True, "size": "full", "order": 1},
+                "health": {"visible": True, "size": "half", "order": 2},
+                "points": {"visible": True, "size": "half", "order": 3},
+                "meals": {"visible": True, "size": "full", "order": 4},
+                "otc_form": {"visible": True, "size": "full", "order": 5}
+            }
+        }
+    return config
+
+@api_router.put("/parent/portal-config")
+async def update_portal_config(
+    data: dict,
+    user: dict = Depends(get_current_user)
+):
+    """Update the parent portal widget configuration. Admin only."""
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    
+    widgets = data.get("widgets", {})
+    await db.settings.update_one(
+        {"type": "parent_portal_config"},
+        {"$set": {
+            "type": "parent_portal_config",
+            "widgets": widgets,
+            "updated_by": user["id"],
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    return {"message": "Portal configuration saved"}
+
+@api_router.get("/parent/admin-preview/participants")
+async def get_preview_participants(
+    user: dict = Depends(get_current_user)
+):
+    """Get list of participants for admin preview selection."""
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    
+    participants = await db.participants.find(
+        {"is_removed": {"$ne": True}},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1, "capid": 1}
+    ).to_list(500)
+    return sorted(participants, key=lambda p: f"{p.get('last_name', '')} {p.get('first_name', '')}")
+
+@api_router.get("/parent/admin-preview/{participant_id}")
+async def admin_preview_cadet(
+    participant_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Admin preview of a cadet's parent portal data."""
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    
+    cadet = await db.participants.find_one(
+        {"id": participant_id, "is_removed": {"$ne": True}}, {"_id": 0}
+    )
+    if not cadet:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    check_in = await db.check_ins.find_one({"participant_id": participant_id}, {"_id": 0})
+    bunk = await db.bunk_assignments.find_one({"participant_id": participant_id}, {"_id": 0})
+    allergies = await db.hs_allergies.find({"participant_id": participant_id}, {"_id": 0}).to_list(50)
+    
+    dietary = []
+    for a in allergies:
+        if a.get("allergen"):
+            dietary.append(a["allergen"])
+    
+    return {
+        **cadet,
+        "check_in_status": check_in.get("status") if check_in else None,
+        "bunk_assignment": bunk.get("bunk_number") if bunk else None,
+        "building": bunk.get("building") if bunk else None,
+        "dietary_restrictions": dietary,
+        "allergies": allergies
+    }
+
+@api_router.get("/parent/admin-preview/{participant_id}/schedule")
+async def admin_preview_schedule(participant_id: str, user: dict = Depends(get_current_user)):
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    cadet = await db.participants.find_one({"id": participant_id}, {"_id": 0, "flight": 1, "squadron": 1})
+    if not cadet:
+        return []
+    flight = cadet.get("flight")
+    squadron = cadet.get("squadron")
+    query = {"$or": [{"target_groups": "all"}]}
+    if flight:
+        query["$or"].append({"target_groups": flight})
+    if squadron:
+        query["$or"].append({"target_groups": squadron})
+    events = await db.schedule_events.find(query, {"_id": 0}).sort("date", 1).to_list(200)
+    return events
+
+@api_router.get("/parent/admin-preview/{participant_id}/health")
+async def admin_preview_health(participant_id: str, user: dict = Depends(get_current_user)):
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    incidents = await db.hs_incidents.find({"participant_id": participant_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return incidents
+
+@api_router.get("/parent/admin-preview/{participant_id}/points")
+async def admin_preview_points(participant_id: str, user: dict = Depends(get_current_user)):
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    points = await db.points.find({"participant_id": participant_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return points
+
+@api_router.get("/parent/admin-preview/{participant_id}/meals")
+async def admin_preview_meals(participant_id: str, user: dict = Depends(get_current_user)):
+    if user.get("role") not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access only")
+    meals = await db.meal_plans.find({}, {"_id": 0}).sort("date", 1).to_list(200)
+    return meals

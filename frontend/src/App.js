@@ -122,7 +122,7 @@ function AppRoutes() {
       <Route
         path="/my-cadet"
         element={
-          <ProtectedRoute allowedRoles={['parent']}>
+          <ProtectedRoute allowedRoles={['parent', 'dcp', 'commander', 'executive_staff']}>
             <MyCadetPage />
           </ProtectedRoute>
         }
