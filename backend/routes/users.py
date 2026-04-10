@@ -165,7 +165,9 @@ async def assign_user_unit(
         {"$set": {
             "squadron": assignment.squadron,
             "flight": assignment.flight,
-            "support_section": assignment.support_section
+            "support_section": assignment.support_section,
+            "cadre_unit": assignment.cadre_unit,
+            "cadre_position": assignment.cadre_position
         }}
     )
     if result.matched_count == 0:

@@ -130,7 +130,9 @@ async def login(credentials: UserLogin, response: Response):
             permissions=user.get("permissions"),
             honor_agreement_signed=user.get("honor_agreement_signed"),
             honor_agreement_type=user.get("honor_agreement_type"),
-            honor_agreement_signed_at=user.get("honor_agreement_signed_at")
+            honor_agreement_signed_at=user.get("honor_agreement_signed_at"),
+            cadre_unit=user.get("cadre_unit"),
+            cadre_position=user.get("cadre_position")
         )
     )
 
@@ -154,7 +156,9 @@ async def get_me(user: dict = Depends(get_current_user)):
         permissions=user.get("permissions"),
         honor_agreement_signed=user.get("honor_agreement_signed"),
         honor_agreement_type=user.get("honor_agreement_type"),
-        honor_agreement_signed_at=user.get("honor_agreement_signed_at")
+        honor_agreement_signed_at=user.get("honor_agreement_signed_at"),
+        cadre_unit=user.get("cadre_unit"),
+        cadre_position=user.get("cadre_position")
     )
 
 

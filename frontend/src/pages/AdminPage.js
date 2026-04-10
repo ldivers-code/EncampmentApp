@@ -69,43 +69,49 @@ const AdminPage = () => {
   const [syncingNow, setSyncingNow] = useState(false);
 
   const roles = [
-    { value: 'dcp', label: 'Director of Cadet Programs', color: 'bg-yellow-100 text-yellow-900 border-yellow-300' },
-    { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white' },
-    { value: 'executive_staff', label: 'Executive Staff', color: 'bg-[#00205B] text-white' },
-    { value: 'training_officer', label: 'Training Officer', color: 'bg-teal-100 text-teal-800 border-teal-200' },
-    { value: 'logistics', label: 'Logistics', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-    { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-    { value: 'plans_programs', label: 'Plans & Programs', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-    { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-    { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-    { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200' },
-    { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200' },
-    { value: 'dining_facility', label: 'Dining Facility', color: 'bg-orange-100 text-orange-800 border-orange-200' },
-    { value: 'support_logistics', label: 'Support - Logistics', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'support_comms', label: 'Support - Comms', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'support_pa', label: 'Support - Public Affairs', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'support_dining', label: 'Support - Dining', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'support_health', label: 'Support - Health Svc', color: 'bg-slate-200 text-slate-800 border-slate-300' },
-    { value: 'squadron_commander', label: 'Squadron Commander', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-    { value: 'parent', label: 'Parent / Guardian', color: 'bg-sky-100 text-sky-800 border-sky-200' }
+    // Senior Staff (adults)
+    { value: 'dcp', label: 'Director of Cadet Programs', color: 'bg-yellow-100 text-yellow-900 border-yellow-300', group: 'staff' },
+    { value: 'commander', label: 'Commander', color: 'bg-[#00205B] text-white', group: 'staff' },
+    { value: 'executive_staff', label: 'Executive Staff', color: 'bg-[#00205B] text-white', group: 'staff' },
+    { value: 'training_officer', label: 'Training Officer', color: 'bg-teal-100 text-teal-800 border-teal-200', group: 'staff' },
+    { value: 'health_services', label: 'Health Services', color: 'bg-rose-100 text-rose-800 border-rose-200', group: 'staff' },
+    { value: 'finance', label: 'Finance', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', group: 'staff' },
+    { value: 'dining_facility', label: 'Dining Facility', color: 'bg-orange-100 text-orange-800 border-orange-200', group: 'staff' },
+    { value: 'logistics', label: 'Logistics (Senior)', color: 'bg-cyan-100 text-cyan-800 border-cyan-200', group: 'staff' },
+    { value: 'plans_programs', label: 'Plans & Programs (Senior)', color: 'bg-blue-100 text-blue-800 border-blue-200', group: 'staff' },
+    { value: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200', group: 'staff' },
+    // Cadre (cadets)
+    { value: 'exec_cadre', label: 'Executive Cadre', color: 'bg-purple-100 text-purple-800 border-purple-200', group: 'cadre' },
+    { value: 'cadre', label: 'Cadre', color: 'bg-slate-100 text-slate-800 border-slate-200', group: 'cadre' },
+    // Parent
+    { value: 'parent', label: 'Parent / Guardian', color: 'bg-sky-100 text-sky-800 border-sky-200', group: 'parent' }
+  ];
+
+  const cadreUnits = [
+    { value: '', label: 'Not Assigned' },
+    { value: 'ops', label: 'Operations' },
+    { value: 'support', label: 'Support' }
+  ];
+
+  const opsPositions = [
+    { value: '', label: 'Not Assigned' },
+    { value: 'squadron_commander', label: 'Squadron Commander' },
+    { value: 'squadron_superintendent', label: 'Squadron Superintendent' },
+    { value: 'flight_commander', label: 'Flight Commander' },
+    { value: 'flight_sergeant', label: 'Flight Sergeant' }
   ];
 
   const supportSections = [
-    { value: '', label: 'No Section' },
-    { value: 'plans_programs', label: 'Plans & Programs' },
-    { value: 'logistics', label: 'Logistics' },
+    { value: '', label: 'Not Assigned' },
     { value: 'word', label: 'WORD' },
+    { value: 'logistics', label: 'Logistics' },
     { value: 'public_affairs', label: 'Public Affairs' },
     { value: 'dfac', label: 'DFAC' },
-    { value: 'comms', label: 'Comms' }
+    { value: 'plans_programs', label: 'Plans & Programs' }
   ];
 
   const squadrons = [
     { value: 'none', label: 'Not Assigned' },
-    { value: 'staff', label: 'Staff' },
-    { value: 'support_cadre', label: 'Support Cadre' },
-    { value: 'exec_cadre', label: 'Exec Cadre' },
-    { value: 'ops_cadre', label: 'Ops Cadre' },
     { value: '6th_cts', label: '6th CTS' },
     { value: '21st_cts', label: '21st CTS' },
     { value: '22nd_cts', label: '22nd CTS' }
@@ -149,7 +155,8 @@ const AdminPage = () => {
     page_logistics: 'Logistics',
     page_meal_plan: 'Meal Plan',
     page_training: 'Training Officer',
-    page_status_board: 'Status Board'
+    page_status_board: 'Status Board',
+    page_parent_portal: 'Parent Portal'
   };
 
   useEffect(() => {
@@ -316,7 +323,8 @@ const AdminPage = () => {
       page_logistics: false,
       page_meal_plan: false,
       page_training: false,
-      page_status_board: false
+      page_status_board: false,
+      page_parent_portal: false
     });
   };
 
@@ -379,14 +387,31 @@ const AdminPage = () => {
     }
   };
 
-  const handleUnitChange = async (userId, squadron, flight, supportSection) => {
+  const handleUnitChange = async (userId, squadron, flight, supportSection, cadreUnit, cadrePosition) => {
     try {
-      await assignUserUnit(userId, squadron || null, flight || null, supportSection || null);
-      toast.success('Unit assignment updated');
+      await assignUserUnit(userId, squadron || null, flight || null, supportSection || null, cadreUnit || null, cadrePosition || null);
+      toast.success('Assignment updated');
       loadUsers();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to update unit');
+      toast.error(error.response?.data?.detail || 'Failed to update assignment');
     }
+  };
+
+  const handleCadreUnitChange = (userId, newUnit) => {
+    const user = users.find(u => u.id === userId);
+    // Clear position/section/squadron/flight when switching unit
+    handleUnitChange(userId, null, null, null, newUnit || null, null);
+  };
+
+  const handleCadrePositionChange = (userId, newPosition) => {
+    const user = users.find(u => u.id === userId);
+    // Clear squadron/flight when changing position
+    handleUnitChange(userId, null, null, user?.support_section, user?.cadre_unit, newPosition || null);
+  };
+
+  const handleCadreSectionChange = (userId, newSection) => {
+    const user = users.find(u => u.id === userId);
+    handleUnitChange(userId, null, null, newSection || null, user?.cadre_unit, user?.cadre_position);
   };
 
   const handleSquadronChange = (userId, squadron) => {
@@ -395,7 +420,7 @@ const AdminPage = () => {
     const currentFlight = user?.flight;
     const flightInfo = flights.find(f => f.value === currentFlight);
     const newFlight = (flightInfo && flightInfo.squadron === actualSquadron) ? currentFlight : null;
-    handleUnitChange(userId, actualSquadron, newFlight, user?.support_section);
+    handleUnitChange(userId, actualSquadron, newFlight, user?.support_section, user?.cadre_unit, user?.cadre_position);
   };
 
   const handleFlightChange = (userId, flight) => {
@@ -403,13 +428,13 @@ const AdminPage = () => {
     const actualFlight = flight === 'none' ? null : flight;
     const flightInfo = flights.find(f => f.value === actualFlight);
     const squadron = flightInfo?.squadron || user?.squadron || null;
-    handleUnitChange(userId, squadron, actualFlight, user?.support_section);
+    handleUnitChange(userId, squadron, actualFlight, user?.support_section, user?.cadre_unit, user?.cadre_position);
   };
 
   const handleSupportSectionChange = (userId, section) => {
     const user = users.find(u => u.id === userId);
     const actualSection = section === 'none' ? null : section;
-    handleUnitChange(userId, user?.squadron, user?.flight, actualSection);
+    handleUnitChange(userId, user?.squadron, user?.flight, actualSection, user?.cadre_unit, user?.cadre_position);
   };
 
   const handleDelete = async (userId) => {
@@ -687,9 +712,8 @@ const AdminPage = () => {
                 <th className="text-left">Name</th>
                 <th className="text-left">Email</th>
                 <th className="text-left">Role</th>
-                <th className="text-left">Unit</th>
-                <th className="text-left">Flight</th>
-                <th className="text-left">Section</th>
+                <th className="text-left">Unit / Position</th>
+                <th className="text-left">Assignment</th>
                 <th className="text-left">Access</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -704,13 +728,11 @@ const AdminPage = () => {
               ) : (
                 (() => {
                   const staffRoles = ['dcp', 'commander', 'executive_staff', 'training_officer', 'logistics',
-                    'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff',
-                    'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health',
-                    'squadron_commander'];
+                    'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff'];
                   const cadreRoles = ['exec_cadre', 'cadre'];
                   const parentRoles = ['parent'];
                   const groups = [
-                    { label: 'STAFF', users: users.filter(u => staffRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+                    { label: 'SENIOR STAFF', users: users.filter(u => staffRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
                     { label: 'CADRE', users: users.filter(u => cadreRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
                     { label: 'PARENT', users: users.filter(u => parentRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
                   ].filter(g => g.users.length > 0);
@@ -718,7 +740,7 @@ const AdminPage = () => {
                   return groups.map(g => (
                     <React.Fragment key={g.label}>
                       <tr>
-                        <td colSpan={8} className="bg-slate-100 py-1.5 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                        <td colSpan={7} className="bg-slate-100 py-1.5 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                           {g.label} ({g.users.length})
                         </td>
                       </tr>
@@ -744,68 +766,113 @@ const AdminPage = () => {
                         disabled={user.id === currentUser?.id}
                       >
                         <SelectTrigger 
-                          className={`w-32 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
+                          className={`w-36 rounded-sm text-xs font-bold uppercase ${getRoleBadgeColor(user.role)}`}
                           data-testid={`role-select-${user.id}`}
                         >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {roles.map(role => (
+                          <SelectItem disabled value="__staff_header" className="text-xs font-bold text-slate-400">--- Senior Staff ---</SelectItem>
+                          {roles.filter(r => r.group === 'staff').map(role => (
+                            <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                          ))}
+                          <SelectItem disabled value="__cadre_header" className="text-xs font-bold text-slate-400">--- Cadre ---</SelectItem>
+                          {roles.filter(r => r.group === 'cadre').map(role => (
+                            <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                          ))}
+                          <SelectItem disabled value="__parent_header" className="text-xs font-bold text-slate-400">--- Other ---</SelectItem>
+                          {roles.filter(r => r.group === 'parent').map(role => (
                             <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </td>
+                    {/* Unit / Position column - only for cadre */}
                     <td>
-                      <Select
-                        value={user.squadron || 'none'}
-                        onValueChange={(value) => handleSquadronChange(user.id, value)}
-                      >
-                        <SelectTrigger className="w-32 rounded-sm text-xs" data-testid={`squadron-select-${user.id}`}>
-                          <SelectValue placeholder="Not Assigned" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {squadrons.map(sq => (
-                            <SelectItem key={sq.value} value={sq.value}>{sq.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {['cadre', 'exec_cadre'].includes(user.role) ? (
+                        <div className="flex flex-col gap-1">
+                          <Select
+                            value={user.cadre_unit || ''}
+                            onValueChange={(value) => handleCadreUnitChange(user.id, value)}
+                          >
+                            <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`cadre-unit-${user.id}`}>
+                              <SelectValue placeholder="Unit..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cadreUnits.map(u => (
+                                <SelectItem key={u.value || 'none'} value={u.value || 'none'}>{u.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {user.cadre_unit === 'ops' && (
+                            <Select
+                              value={user.cadre_position || ''}
+                              onValueChange={(value) => handleCadrePositionChange(user.id, value)}
+                            >
+                              <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`cadre-position-${user.id}`}>
+                                <SelectValue placeholder="Position..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {opsPositions.map(p => (
+                                  <SelectItem key={p.value || 'none'} value={p.value || 'none'}>{p.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          {user.cadre_unit === 'support' && (
+                            <Select
+                              value={user.support_section || ''}
+                              onValueChange={(value) => handleCadreSectionChange(user.id, value)}
+                            >
+                              <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`cadre-section-${user.id}`}>
+                                <SelectValue placeholder="Section..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {supportSections.map(s => (
+                                  <SelectItem key={s.value || 'none'} value={s.value || 'none'}>{s.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
                     </td>
+                    {/* Assignment column - squadron/flight for ops cadre */}
                     <td>
-                      <Select
-                        value={user.flight || 'none'}
-                        onValueChange={(value) => handleFlightChange(user.id, value)}
-                        disabled={!unitRequiresFlight(user.squadron, user.role)}
-                      >
-                        <SelectTrigger 
-                          className="w-24 rounded-sm text-xs" 
-                          data-testid={`flight-select-${user.id}`}
-                          disabled={!unitRequiresFlight(user.squadron, user.role)}
-                        >
-                          <SelectValue placeholder="N/A" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {getFlightsForSquadron(user.squadron).map(fl => (
-                            <SelectItem key={fl.value} value={fl.value}>{fl.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td>
-                      {(user.role?.startsWith('support_') || user.role === 'squadron_commander') && (
+                      {['cadre', 'exec_cadre'].includes(user.role) && user.cadre_unit === 'ops' && ['squadron_commander', 'squadron_superintendent'].includes(user.cadre_position) && (
                         <Select
-                          value={user.support_section || 'none'}
-                          onValueChange={(value) => handleSupportSectionChange(user.id, value)}
+                          value={user.squadron || 'none'}
+                          onValueChange={(value) => handleSquadronChange(user.id, value)}
                         >
-                          <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`support-section-select-${user.id}`}>
-                            <SelectValue placeholder="Section" />
+                          <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`squadron-select-${user.id}`}>
+                            <SelectValue placeholder="Squadron" />
                           </SelectTrigger>
                           <SelectContent>
-                            {supportSections.map(s => (
-                              <SelectItem key={s.value || 'none'} value={s.value || 'none'}>{s.label}</SelectItem>
+                            {squadrons.map(sq => (
+                              <SelectItem key={sq.value} value={sq.value}>{sq.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                      )}
+                      {['cadre', 'exec_cadre'].includes(user.role) && user.cadre_unit === 'ops' && ['flight_commander', 'flight_sergeant'].includes(user.cadre_position) && (
+                        <Select
+                          value={user.flight || 'none'}
+                          onValueChange={(value) => handleFlightChange(user.id, value)}
+                        >
+                          <SelectTrigger className="w-28 rounded-sm text-xs" data-testid={`flight-select-${user.id}`}>
+                            <SelectValue placeholder="Flight" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {flights.map(fl => (
+                              <SelectItem key={fl.value} value={fl.value}>{fl.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {!(['cadre', 'exec_cadre'].includes(user.role) && user.cadre_unit === 'ops' && user.cadre_position) && (
+                        <span className="text-xs text-slate-400">-</span>
                       )}
                     </td>
                     <td>

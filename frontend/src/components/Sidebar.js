@@ -153,6 +153,11 @@ const Sidebar = ({ children }) => {
     navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
   }
 
+  // Parent Portal view - for senior staff with permission
+  if (canAccessPage('page_parent_portal', ['dcp', 'commander', 'executive_staff'])) {
+    navItems.push({ path: '/my-cadet', icon: User, label: 'Parent Portal' });
+  }
+
   } // end of non-parent nav items else block
 
   const NavItem = ({ item }) => {

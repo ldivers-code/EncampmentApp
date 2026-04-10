@@ -486,8 +486,8 @@ export const updateUserRole = async (userId, role) => {
   return response.data;
 };
 
-export const assignUserUnit = async (userId, squadron, flight, supportSection) => {
-  const response = await axios.put(`${API}/users/${userId}/unit`, { squadron, flight, support_section: supportSection }, { headers: getAuthHeaders() });
+export const assignUserUnit = async (userId, squadron, flight, supportSection, cadreUnit, cadrePosition) => {
+  const response = await axios.put(`${API}/users/${userId}/unit`, { squadron, flight, support_section: supportSection, cadre_unit: cadreUnit, cadre_position: cadrePosition }, { headers: getAuthHeaders() });
   return response.data;
 };
 

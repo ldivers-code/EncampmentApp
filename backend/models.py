@@ -58,6 +58,7 @@ class AccessPermissions(BaseModel):
     page_meal_plan: bool = False
     page_training: bool = False
     page_status_board: bool = False
+    page_parent_portal: bool = False
 
 
 DEFAULT_PERMISSIONS = {
@@ -69,7 +70,8 @@ DEFAULT_PERMISSIONS = {
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
+        check_in_view=True, check_in_edit=True,
+        page_parent_portal=True
     ),
     UserRole.COMMANDER: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
@@ -79,7 +81,8 @@ DEFAULT_PERMISSIONS = {
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
+        check_in_view=True, check_in_edit=True,
+        page_parent_portal=True
     ),
     UserRole.EXECUTIVE_STAFF: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=True,
@@ -89,7 +92,8 @@ DEFAULT_PERMISSIONS = {
         analytics=True, org_chart=True, handbooks=True,
         documents=True, admin_panel=True,
         health_view=True, health_full=True,
-        check_in_view=True, check_in_edit=True
+        check_in_view=True, check_in_edit=True,
+        page_parent_portal=True
     ),
     UserRole.FINANCE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
@@ -261,6 +265,8 @@ class UserUnitAssignment(BaseModel):
     squadron: Optional[str] = None
     flight: Optional[str] = None
     support_section: Optional[str] = None
+    cadre_unit: Optional[str] = None
+    cadre_position: Optional[str] = None
 
 class UserProfile(BaseModel):
     name: Optional[str] = None
@@ -327,6 +333,8 @@ class UserResponse(BaseModel):
     honor_agreement_signed: Optional[bool] = None
     honor_agreement_type: Optional[str] = None
     honor_agreement_signed_at: Optional[str] = None
+    cadre_unit: Optional[str] = None
+    cadre_position: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
