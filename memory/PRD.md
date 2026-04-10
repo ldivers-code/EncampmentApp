@@ -11,7 +11,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Health Services**: Medical roster tracking allergies, OTC approvals, Parent OTC Medication Permission Form, Parent email notifications for incidents
 - **Check-In & Barracks**: Multi-step in-processing, open-bay bunk assignments
 - **Granular RBAC**: Senior Staff roles (DCP, Commander, Exec Staff, Training Officer, Health Services, Finance, Dining Facility) separate from Cadre roles (Cadre, Exec Cadre). Cadre assign to Ops (positions: Squadron Cmdr, Sq Superintendent, Flight Cmdr, Flight Sgt → squadron/flight) or Support (sections: WORD, Logistics, PA, DFAC, Plans & Programs). Parent role with admin approval. Parent Portal page permission for senior staff.
-- **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission, photo upload
+- **Parent Portal**: "My Cadet" tab for parents. Admin preview mode for senior staff with widget editor (visibility toggle, size: 1/3/1/2/Full, reorder, save layout config). Cadet selector for previewing any cadet's portal view.
 - **Honor Agreement System**: Role-based digital honor agreements (Cadre Honor Agreement for cadre/exec_cadre, Senior Staff Honor Agreement for all staff roles). Blocking modal on login until signed. Scroll-to-unlock signature mechanism. Admin can send in-app reminders to unsigned members.
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR via GPT-4o), Income vs Expenses charts
 - **Meal Plan Schedule**: Period-based meal planning for Cadre & Staff Training Weekend (May 29-30, 2026) and Encampment (Jul 17-24, 2026)
