@@ -281,8 +281,8 @@ async def get_preview_participants(
         raise HTTPException(status_code=403, detail="Admin access only")
     
     participants = await db.participants.find(
-        {"is_removed": {"$ne": True}},
-        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1, "capid": 1}
+        {"is_removed": {"$ne": True}, "participant_type": {"$in": ["basic_student", "cadre"]}},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "flight": 1, "squadron": 1, "capid": 1, "participant_type": 1}
     ).to_list(500)
     return sorted(participants, key=lambda p: f"{p.get('last_name', '')} {p.get('first_name', '')}")
 
