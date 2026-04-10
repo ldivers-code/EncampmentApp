@@ -10,7 +10,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Org Chart**: Hierarchical org chart with rich text, auto-syncing roles, rank-sorted assignment dropdowns, print-friendly layout
 - **Health Services**: Medical roster tracking allergies, OTC approvals, Parent OTC Medication Permission Form, Parent email notifications for incidents
 - **Check-In & Barracks**: Multi-step in-processing, open-bay bunk assignments
-- **Granular RBAC**: Complex role-based permissions, dual-assignments, Parent role with admin approval, Exec Cadre delegated admin access (role assignment only)
+- **Granular RBAC**: Senior Staff roles (DCP, Commander, Exec Staff, Training Officer, Health Services, Finance, Dining Facility) separate from Cadre roles (Cadre, Exec Cadre). Cadre assign to Ops (positions: Squadron Cmdr, Sq Superintendent, Flight Cmdr, Flight Sgt → squadron/flight) or Support (sections: WORD, Logistics, PA, DFAC, Plans & Programs). Parent role with admin approval. Parent Portal page permission for senior staff.
 - **Parent Portal**: "My Cadet" tab with schedule, points/awards, meal plans, OTC form submission, photo upload
 - **Honor Agreement System**: Role-based digital honor agreements (Cadre Honor Agreement for cadre/exec_cadre, Senior Staff Honor Agreement for all staff roles). Blocking modal on login until signed. Scroll-to-unlock signature mechanism. Admin can send in-app reminders to unsigned members.
 - **Budget/Finance Tracker**: Daily payment report imports, smart receipt upload (OCR via GPT-4o), Income vs Expenses charts
