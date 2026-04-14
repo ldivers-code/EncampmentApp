@@ -529,6 +529,16 @@ export const changePassword = async (currentPassword, newPassword) => {
   return response.data;
 };
 
+export const getNavOrder = async () => {
+  const response = await axios.get(`${API}/profile/nav-order`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const saveNavOrder = async (navOrder) => {
+  const response = await axios.put(`${API}/profile/nav-order`, { nav_order: navOrder }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // User Approval
 export const getPendingUsers = async () => {
   const response = await axios.get(`${API}/users/pending`, { headers: getAuthHeaders() });

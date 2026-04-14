@@ -1,38 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getNotificationBadges } from '../services/api';
+import { getNotificationBadges, getNavOrder, saveNavOrder } from '../services/api';
 import NotificationBell from './NotificationBell';
 import HonorAgreementModal, { needsHonorAgreement } from './HonorAgreementModal';
 import { 
-  LayoutDashboard, 
-  Users, 
-  User,
-  Calendar, 
-  BookOpen, 
-  FileText, 
-  Settings, 
-  LogOut,
-  Menu,
-  X,
-  ChevronLeft,
-  Network,
-  Bell,
-  BarChart3,
-  UserCircle,
-  Trophy,
-  Shield,
-  Heart,
-  ClipboardCheck,
-  ClipboardList,
-  Package,
-  Monitor,
-  UtensilsCrossed,
-  DollarSign,
-  BedDouble,
-  UserCheck
+  LayoutDashboard, Users, User, Calendar, BookOpen, FileText, Settings, LogOut,
+  Menu, X, ChevronLeft, Network, BarChart3, Trophy, Shield, Heart,
+  ClipboardCheck, ClipboardList, Package, Monitor, UtensilsCrossed,
+  DollarSign, BedDouble, UserCheck, GripVertical, RotateCcw
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { toast } from 'sonner';
+
+const ICON_MAP = {
+  '/dashboard': LayoutDashboard,
+  '/my-flight': Shield,
+  '/roster': Users,
+  '/org-chart': Network,
+  '/schedule': Calendar,
+  '/points': Trophy,
+  '/meal-plan': UtensilsCrossed,
+  '/assignments': ClipboardList,
+  '/budget': DollarSign,
+  '/handbooks': BookOpen,
+  '/documents': FileText,
+  '/analytics': BarChart3,
+  '/health': Heart,
+  '/training': ClipboardCheck,
+  '/check-in': UserCheck,
+  '/barracks': BedDouble,
+  '/logistics': Package,
+  '/status-control': Monitor,
+  '/admin': Settings,
+  '/my-cadet': User,
+};
 
 const Sidebar = ({ children }) => {
   const { user, logout, canEdit, activeUsers, refreshUser } = useAuth();
@@ -40,6 +42,11 @@ const Sidebar = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [badges, setBadges] = useState({});
+  const [reorderMode, setReorderMode] = useState(false);
+  const [customOrder, setCustomOrder] = useState(null); // null = default
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const orderLoaded = useRef(false);
 
   // Fetch notification badges
   useEffect(() => {
@@ -51,120 +58,185 @@ const Sidebar = ({ children }) => {
         console.error('Failed to fetch notification badges:', error);
       }
     };
-
     if (user) {
       fetchBadges();
-      // Refresh badges every 30 seconds
       const interval = setInterval(fetchBadges, 30000);
       return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  // Load saved nav order once
+  useEffect(() => {
+    if (user && !orderLoaded.current) {
+      orderLoaded.current = true;
+      getNavOrder().then(res => {
+        if (res.nav_order && res.nav_order.length > 0) {
+          setCustomOrder(res.nav_order);
+        }
+      }).catch(() => {});
     }
   }, [user]);
 
   // Get badge key from path
   const getBadgeKey = (path) => {
     const keyMap = {
-      '/my-flight': 'my-flight',
-      '/admin': 'admin',
-      '/schedule': 'schedule',
-      '/budget': 'budget',
-      '/roster': 'roster'
+      '/my-flight': 'my-flight', '/admin': 'admin',
+      '/schedule': 'schedule', '/budget': 'budget', '/roster': 'roster'
     };
     return keyMap[path];
   };
 
-  const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/my-flight', icon: Shield, label: 'My Flight' },
-    { path: '/roster', icon: Users, label: 'Roster' },
-    { path: '/org-chart', icon: Network, label: 'Org Chart' },
-    { path: '/schedule', icon: Calendar, label: 'Schedule' },
-    { path: '/points', icon: Trophy, label: 'Point Tracking' },
-  ];
-
-  // Parent role only sees "My Cadet" tab
-  if (user?.role === 'parent') {
-    const parentNavItems = [
-      { path: '/my-cadet', icon: User, label: 'My Cadet' },
+  // Build the default navItems based on role
+  const buildNavItems = useCallback(() => {
+    const items = [
+      { path: '/dashboard', label: 'Dashboard' },
+      { path: '/my-flight', label: 'My Flight' },
+      { path: '/roster', label: 'Roster' },
+      { path: '/org-chart', label: 'Org Chart' },
+      { path: '/schedule', label: 'Schedule' },
+      { path: '/points', label: 'Point Tracking' },
     ];
 
-    // Skip the rest of the nav building for parents
-    // We'll use parentNavItems below
-    navItems.length = 0;
-    navItems.push(...parentNavItems);
-  } else {
-    // Meal Plan Schedule visible to all non-parent roles
-    navItems.push({ path: '/meal-plan', icon: UtensilsCrossed, label: 'Meal Plan' });
-    navItems.push({ path: '/assignments', icon: ClipboardList, label: 'Assignments' });
+    if (user?.role === 'parent') {
+      return [{ path: '/my-cadet', label: 'My Cadet' }];
+    }
 
-  // Financial Tracker visible to commander, executive_staff, finance
-  if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
-    navItems.push({ path: '/budget', icon: DollarSign, label: 'Financial Tracker' });
-  }
+    items.push({ path: '/meal-plan', label: 'Meal Plan' });
+    items.push({ path: '/assignments', label: 'Assignments' });
 
-  navItems.push(
-    { path: '/handbooks', icon: BookOpen, label: 'Handbooks' },
-    { path: '/documents', icon: FileText, label: 'Official Documents' },
-  );
+    if (['dcp', 'commander', 'executive_staff', 'finance'].includes(user?.role)) {
+      items.push({ path: '/budget', label: 'Financial Tracker' });
+    }
 
-  // Helper to check page access (role-based OR individual page visibility permission)
-  const canAccessPage = (pageKey, defaultRoles) => {
-    if (defaultRoles.includes(user?.role)) return true;
-    if (user?.role === 'squadron_commander') return true; // Squadron commanders get broad access
-    if (user?.permissions?.[pageKey]) return true;
-    return false;
+    items.push(
+      { path: '/handbooks', label: 'Handbooks' },
+      { path: '/documents', label: 'Official Documents' },
+    );
+
+    const canAccessPage = (pageKey, defaultRoles) => {
+      if (defaultRoles.includes(user?.role)) return true;
+      if (user?.role === 'squadron_commander') return true;
+      if (user?.permissions?.[pageKey]) return true;
+      return false;
+    };
+
+    if (canAccessPage('page_analytics', ['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa'])) {
+      items.push({ path: '/analytics', label: 'Analytics' });
+    }
+    if (canAccessPage('page_health', ['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health'])) {
+      items.push({ path: '/health', label: 'Health Services' });
+    }
+    if (canAccessPage('page_training', ['dcp', 'commander', 'executive_staff', 'training_officer', 'staff'])) {
+      items.push({ path: '/training', label: 'Training Officer' });
+    }
+    if (canAccessPage('page_check_in', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
+      items.push({ path: '/check-in', label: 'Check-In' });
+    }
+    if (canAccessPage('page_barracks', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
+      items.push({ path: '/barracks', label: 'Barracks' });
+    }
+    if (canAccessPage('page_logistics', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'support_logistics', 'squadron_commander'])) {
+      items.push({ path: '/logistics', label: 'Logistics' });
+    }
+    if (canAccessPage('page_status_board', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'dining_facility', 'squadron_commander',
+      'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health'])) {
+      items.push({ path: '/status-control', label: 'Status Board' });
+    }
+    if (['dcp', 'commander', 'executive_staff', 'exec_cadre'].includes(user?.role)) {
+      items.push({ path: '/admin', label: 'Administration' });
+    }
+    if (canAccessPage('page_parent_portal', ['dcp', 'commander', 'executive_staff'])) {
+      items.push({ path: '/my-cadet', label: 'Parent Portal' });
+    }
+
+    return items;
+  }, [user]);
+
+  const defaultItems = buildNavItems();
+
+  // Apply custom order: reorder defaultItems based on saved path order
+  const navItems = (() => {
+    if (!customOrder || customOrder.length === 0) return defaultItems;
+    const pathSet = new Set(defaultItems.map(i => i.path));
+    const ordered = [];
+    // Add items in saved order (only if they're still accessible)
+    customOrder.forEach(path => {
+      const item = defaultItems.find(i => i.path === path);
+      if (item) ordered.push(item);
+    });
+    // Append any new items not in saved order
+    defaultItems.forEach(item => {
+      if (!ordered.find(o => o.path === item.path)) ordered.push(item);
+    });
+    return ordered;
+  })();
+
+  // Drag handlers
+  const handleDragStart = (idx) => setDragIdx(idx);
+  const handleDragOver = (e, idx) => { e.preventDefault(); setDragOverIdx(idx); };
+  const handleDragEnd = () => { setDragIdx(null); setDragOverIdx(null); };
+  const handleDrop = (targetIdx) => {
+    if (dragIdx === null || dragIdx === targetIdx) return;
+    const items = [...navItems];
+    const [moved] = items.splice(dragIdx, 1);
+    items.splice(targetIdx, 0, moved);
+    setCustomOrder(items.map(i => i.path));
+    setDragIdx(null);
+    setDragOverIdx(null);
   };
 
-  // Analytics
-  if (canAccessPage('page_analytics', ['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa'])) {
-    navItems.push({ path: '/analytics', icon: BarChart3, label: 'Analytics' });
-  }
+  const handleSaveOrder = async () => {
+    try {
+      const order = navItems.map(i => i.path);
+      await saveNavOrder(order);
+      setCustomOrder(order);
+      setReorderMode(false);
+      toast.success('Navigation order saved');
+    } catch {
+      toast.error('Failed to save order');
+    }
+  };
 
-  // Health Services
-  if (canAccessPage('page_health', ['dcp', 'commander', 'executive_staff', 'health_services', 'staff', 'support_health'])) {
-    navItems.push({ path: '/health', icon: Heart, label: 'Health Services' });
-  }
+  const handleResetOrder = async () => {
+    try {
+      await saveNavOrder([]);
+      setCustomOrder(null);
+      setReorderMode(false);
+      toast.success('Reset to default order');
+    } catch {
+      toast.error('Failed to reset');
+    }
+  };
 
-  // Training Officer
-  if (canAccessPage('page_training', ['dcp', 'commander', 'executive_staff', 'training_officer', 'staff'])) {
-    navItems.push({ path: '/training', icon: ClipboardCheck, label: 'Training Officer' });
-  }
-
-  // Check-In & Barracks
-  if (canAccessPage('page_check_in', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
-    navItems.push({ path: '/check-in', icon: UserCheck, label: 'Check-In' });
-  }
-  if (canAccessPage('page_barracks', ['dcp', 'commander', 'executive_staff', 'plans_programs', 'logistics', 'support_logistics', 'squadron_commander'])) {
-    navItems.push({ path: '/barracks', icon: BedDouble, label: 'Barracks' });
-  }
-
-  // Logistics
-  if (canAccessPage('page_logistics', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'support_logistics', 'squadron_commander'])) {
-    navItems.push({ path: '/logistics', icon: Package, label: 'Logistics' });
-  }
-
-  // Status Board
-  if (canAccessPage('page_status_board', ['dcp', 'commander', 'executive_staff', 'logistics', 'staff', 'cadre', 'exec_cadre', 'training_officer', 'finance', 'plans_programs', 'health_services', 'dining_facility', 'squadron_commander',
-    'support_logistics', 'support_comms', 'support_pa', 'support_dining', 'support_health'])) {
-    navItems.push({ path: '/status-control', icon: Monitor, label: 'Status Board' });
-  }
-
-  // Admin - visible to command staff and exec cadre
-  if (['dcp', 'commander', 'executive_staff', 'exec_cadre'].includes(user?.role)) {
-    navItems.push({ path: '/admin', icon: Settings, label: 'Administration' });
-  }
-
-  // Parent Portal view - for senior staff with permission
-  if (canAccessPage('page_parent_portal', ['dcp', 'commander', 'executive_staff'])) {
-    navItems.push({ path: '/my-cadet', icon: User, label: 'Parent Portal' });
-  }
-
-  } // end of non-parent nav items else block
-
-  const NavItem = ({ item }) => {
+  const NavItem = ({ item, index }) => {
     const isActive = location.pathname === item.path;
     const badgeKey = getBadgeKey(item.path);
     const badge = badgeKey ? badges[badgeKey] : null;
-    
+    const Icon = ICON_MAP[item.path] || LayoutDashboard;
+    const isDragOver = dragOverIdx === index && dragIdx !== index;
+
+    if (reorderMode) {
+      return (
+        <div
+          draggable
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+          onDrop={() => handleDrop(index)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-sm cursor-grab active:cursor-grabbing transition-all
+            ${dragIdx === index ? 'opacity-40 scale-95' : ''}
+            ${isDragOver ? 'border-t-2 border-[#00205B]' : 'border-t-2 border-transparent'}
+            bg-white border border-slate-200 shadow-sm hover:shadow`}
+          data-testid={`reorder-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+        >
+          <GripVertical className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <Icon className="w-4 h-4 text-slate-600 flex-shrink-0" />
+          <span className="text-sm font-medium text-slate-700 flex-1">{item.label}</span>
+          <span className="text-[10px] text-slate-400 font-mono">{index + 1}</span>
+        </div>
+      );
+    }
+
     return (
       <NavLink
         to={item.path}
@@ -174,10 +246,10 @@ const Sidebar = ({ children }) => {
             : 'text-slate-700 hover:bg-slate-100'
         }`}
         onClick={() => setMobileOpen(false)}
-        data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
+        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
       >
         <div className="relative">
-          <item.icon className="w-5 h-5 flex-shrink-0" />
+          <Icon className="w-5 h-5 flex-shrink-0" />
           {badge && badge.count > 0 && (
             <span 
               className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full ${
@@ -215,23 +287,14 @@ const Sidebar = ({ children }) => {
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img 
-            src="/tnwg-patch.png" 
-            alt="Tennessee Wing" 
-            className="w-10 h-10 object-contain"
-          />
+          <img src="/tnwg-patch.png" alt="Tennessee Wing" className="w-10 h-10 object-contain" />
           <span className="font-bold text-[#00205B] uppercase text-sm" style={{ fontFamily: 'Chivo, sans-serif' }}>
             CAP Encampment
           </span>
         </div>
         <div className="flex items-center gap-1">
           <NotificationBell />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            data-testid="mobile-menu-toggle"
-          >
+          <Button variant="ghost" size="sm" onClick={() => setMobileOpen(!mobileOpen)} data-testid="mobile-menu-toggle">
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
         </div>
@@ -239,10 +302,7 @@ const Sidebar = ({ children }) => {
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-black/50 z-40" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* Sidebar */}
@@ -257,11 +317,7 @@ const Sidebar = ({ children }) => {
           {/* Logo */}
           <div className={`p-4 border-b border-slate-100 ${collapsed ? 'px-3' : ''}`}>
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-              <img 
-                src="/tnwg-patch.png" 
-                alt="Tennessee Wing CAP" 
-                className={`object-contain ${collapsed ? 'w-12 h-12' : 'w-14 h-14'}`}
-              />
+              <img src="/tnwg-patch.png" alt="Tennessee Wing CAP" className={`object-contain ${collapsed ? 'w-12 h-12' : 'w-14 h-14'}`} />
               {!collapsed && (
                 <div className="flex-1">
                   <h1 className="font-black text-[#00205B] uppercase text-sm leading-tight" style={{ fontFamily: 'Chivo, sans-serif' }}>
@@ -280,11 +336,7 @@ const Sidebar = ({ children }) => {
           {!collapsed && (
             <div className="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-[#00205B] to-[#003087]">
               <div className="flex items-center gap-2">
-                <img 
-                  src="/60th-ctg-patch.png" 
-                  alt="60th CTG" 
-                  className="w-8 h-8 object-contain"
-                />
+                <img src="/60th-ctg-patch.png" alt="60th CTG" className="w-8 h-8 object-contain" />
                 <div>
                   <p className="text-white font-bold text-xs uppercase">2026 Encampment</p>
                   <p className="text-blue-200 text-[10px]">VTS Catoosa, GA</p>
@@ -315,12 +367,44 @@ const Sidebar = ({ children }) => {
             </div>
           )}
 
+          {/* Reorder controls */}
+          {reorderMode && !collapsed && (
+            <div className="px-3 py-2 border-b border-amber-200 bg-amber-50">
+              <p className="text-[10px] uppercase font-bold text-amber-700 mb-1.5">Drag to reorder</p>
+              <div className="flex gap-1.5">
+                <Button size="sm" className="h-7 text-xs bg-[#00205B] rounded-sm flex-1" onClick={handleSaveOrder} data-testid="save-nav-order-btn">
+                  Save Order
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs rounded-sm" onClick={handleResetOrder} title="Reset to default" data-testid="reset-nav-order-btn">
+                  <RotateCcw className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs rounded-sm" onClick={() => setReorderMode(false)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Navigation */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
-              <NavItem key={item.path} item={item} />
+            {navItems.map((item, idx) => (
+              <NavItem key={item.path} item={item} index={idx} />
             ))}
           </nav>
+
+          {/* Reorder toggle button */}
+          {!collapsed && !reorderMode && user?.role !== 'parent' && (
+            <div className="px-3 pb-1">
+              <button
+                onClick={() => setReorderMode(true)}
+                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-sm transition-colors"
+                data-testid="reorder-nav-btn"
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+                Customize Order
+              </button>
+            </div>
+          )}
 
           {/* User info & logout */}
           <div className="border-t border-slate-100 p-3">

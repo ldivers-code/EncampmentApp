@@ -562,3 +562,22 @@ async def change_password(
     )
     
     return {"message": "Password changed successfully"}
+
+
+
+@api_router.get("/profile/nav-order")
+async def get_nav_order(user: dict = Depends(get_current_user)):
+    """Get the user's custom sidebar nav order"""
+    doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "nav_order": 1})
+    return {"nav_order": doc.get("nav_order") if doc else None}
+
+
+@api_router.put("/profile/nav-order")
+async def save_nav_order(data: dict, user: dict = Depends(get_current_user)):
+    """Save custom sidebar nav order for this user"""
+    nav_order = data.get("nav_order", [])
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"nav_order": nav_order}}
+    )
+    return {"nav_order": nav_order}
