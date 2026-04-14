@@ -19,7 +19,7 @@ from models import (
     UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
 from permissions import get_current_user, require_role
-from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget
+from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget, find_existing_participant, link_to_user_account, determine_participant_type
 
 # ================= PARTICIPANT ROUTES =================
 
@@ -1144,6 +1144,7 @@ async def import_participants(
         column_map = {
             'RegistrantsCAPID': 'capid',
             'CAPID': 'capid',
+            'EventName': 'event_name',
             'Rank': 'rank',
             'NameLast': 'last_name',
             'NameFirst': 'first_name',
@@ -1273,22 +1274,20 @@ async def import_participants(
                 except (ValueError, TypeError):
                     return default
             
-            # Determine participant type based on member type and staff status
+            # Determine participant type using sub-event context
             member_type = get_str('member_type', '').upper()
             is_staff = get_bool('staff_member')
+            event_name = get_str('event_name', '')
+            participant_type = determine_participant_type(event_name, member_type, is_staff)
             
-            if member_type == 'SENIOR':
-                participant_type = 'staff' if is_staff else 'senior_member'
+            if member_type == 'SENIOR' or member_type == 'CADET SPONSOR':
                 stats['seniors'] += 1
-                if is_staff:
+                if participant_type == 'staff':
                     stats['staff'] += 1
             elif member_type == 'CADET':
-                participant_type = 'cadre' if is_staff else 'basic_student'
                 stats['cadets'] += 1
-                if is_staff:
+                if participant_type == 'cadre':
                     stats['cadre'] += 1
-            else:
-                participant_type = 'basic_student'
             
             # Payment tracking
             paid_in_full = get_bool('paid_in_full')
@@ -1352,19 +1351,33 @@ async def import_participants(
                 "updated_at": now
             }
             
-            # Upsert by CAPID
-            existing = await db.participants.find_one({"capid": capid})
+            # Cascading match: CAPID → email → first+last name
+            email_val = doc.get("email")
+            first_name_val = doc.get("first_name", "")
+            last_name_val = doc.get("last_name", "")
+            existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
+
             if existing:
+                # Don't downgrade participant_type (cadre→student, staff→student)
+                ex_type = existing.get("participant_type", "")
+                if ex_type in ("staff", "senior_member", "cadre") and participant_type == "basic_student":
+                    doc["participant_type"] = ex_type
+
                 await db.participants.update_one(
-                    {"capid": capid},
+                    {"id": existing["id"]},
                     {"$set": doc}
                 )
                 updated_count += 1
+                pid = existing["id"]
             else:
-                doc["id"] = str(uuid.uuid4())
+                pid = str(uuid.uuid4())
+                doc["id"] = pid
                 doc["created_at"] = now
                 await db.participants.insert_one(doc)
                 imported_count += 1
+
+            # Link to existing user account
+            await link_to_user_account(pid, capid, email_val)
         
         # Get the final total participant count
         total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})

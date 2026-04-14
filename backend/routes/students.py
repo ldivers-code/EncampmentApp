@@ -5,11 +5,97 @@ from datetime import datetime, timezone
 from io import BytesIO
 import uuid
 import logging
+import re
 import pandas as pd
 
 from database import db, api_router
 from models import UserRole
 from permissions import get_current_user, require_role
+
+logger = logging.getLogger(__name__)
+
+
+# ================= SHARED IMPORT HELPERS =================
+
+async def find_existing_participant(capid, email, first_name, last_name):
+    """Cascading match: CAPID → email → first+last name.
+    Returns the existing participant doc or None."""
+    # 1. Match by CAPID
+    if capid and capid not in ('', 'nan'):
+        existing = await db.participants.find_one(
+            {"capid": str(capid), "is_removed": {"$ne": True}}, {"_id": 0}
+        )
+        if existing:
+            return existing
+
+    # 2. Match by email (case-insensitive)
+    if email and email not in ('', 'nan'):
+        existing = await db.participants.find_one(
+            {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"},
+             "is_removed": {"$ne": True}}, {"_id": 0}
+        )
+        if existing:
+            return existing
+
+    # 3. Match by first + last name (case-insensitive)
+    if first_name and last_name:
+        existing = await db.participants.find_one(
+            {"first_name": {"$regex": f"^{re.escape(first_name)}$", "$options": "i"},
+             "last_name": {"$regex": f"^{re.escape(last_name)}$", "$options": "i"},
+             "is_removed": {"$ne": True}}, {"_id": 0}
+        )
+        if existing:
+            return existing
+
+    return None
+
+
+async def link_to_user_account(participant_id, capid, email):
+    """If a user account exists for this person, link them.
+    Sets linked_participant_id on the user doc."""
+    user = None
+    if capid and capid not in ('', 'nan'):
+        user = await db.users.find_one({"capid": str(capid)})
+    if not user and email and email not in ('', 'nan'):
+        user = await db.users.find_one(
+            {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}
+        )
+    if user and user.get("linked_participant_id") != participant_id:
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"linked_participant_id": participant_id,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return True
+    return False
+
+
+def determine_participant_type(event_name, member_type, is_staff):
+    """Determine participant_type from sub-event context and member data.
+    Respects the sub-event: cadre sub-event → cadre, not student."""
+    event_lower = (event_name or '').lower()
+    member_upper = (member_type or '').upper()
+
+    # Sub-event says Staff/Cadre → never default to student
+    if 'staff' in event_lower or 'cadre' in event_lower:
+        if member_upper == 'SENIOR' or member_upper == 'CADET SPONSOR':
+            return 'staff' if is_staff else 'senior_member'
+        elif member_upper == 'CADET':
+            # Cadets in the cadre sub-event are CADRE regardless of StaffMember flag
+            return 'cadre'
+        else:
+            return 'staff'
+
+    # Sub-event says Student → basic_student
+    if 'student' in event_lower:
+        return 'basic_student'
+
+    # No EventName context — fall back to MbrType + StaffMember
+    if member_upper == 'SENIOR' or member_upper == 'CADET SPONSOR':
+        return 'staff' if is_staff else 'senior_member'
+    elif member_upper == 'CADET':
+        return 'cadre' if is_staff else 'basic_student'
+    return 'basic_student'
 
 # ================= STUDENT UPLOAD WITH AUTO-ASSIGNMENT =================
 
@@ -359,6 +445,7 @@ async def upload_students(
         column_map = {
             'RegistrantsCAPID': 'capid',
             'CAPID': 'capid',
+            'EventName': 'event_name',
             'Rank': 'rank',
             'NameLast': 'last_name',
             'NameFirst': 'first_name',
@@ -370,6 +457,8 @@ async def upload_students(
             'Age': 'age',
             'AgeAtEventStart': 'age_at_event',
             'Email': 'email',
+            'MbrType': 'member_type',
+            'StaffMember': 'staff_member',
             'ShirtSize': 'shirt_size',
             'RegistrationStatus': 'registration_status',
             'Addr1': 'address',
@@ -424,6 +513,15 @@ async def upload_students(
             if not capid or capid == 'nan':
                 continue  # Skip rows without CAPID
             
+            # Determine participant type from sub-event context
+            event_name = get_str(row_dict, 'event_name')
+            member_type_val = get_str(row_dict, 'member_type')
+            staff_flag = get_str(row_dict, 'staff_member', 'No').lower() in ('yes', 'true', '1')
+            p_type = determine_participant_type(event_name, member_type_val, staff_flag)
+
+            # member_type: use spreadsheet value or default to CADET for student sub-event
+            m_type = member_type_val.upper() if member_type_val else 'CADET'
+
             students_to_process.append({
                 "capid": capid,
                 "rank": get_str(row_dict, 'rank'),
@@ -456,10 +554,10 @@ async def upload_students(
                 "conflicts": get_str(row_dict, 'conflicts') or None,
                 "last_encampment": get_str(row_dict, 'last_encampment') or None,
                 "highest_oride": get_str(row_dict, 'highest_oride') or None,
-                # Fixed values for student upload
-                "participant_type": "basic_student",
-                "student_type": "First-Time Student",
-                "member_type": "CADET",
+                "participant_type": p_type,
+                "student_type": "First-Time Student" if p_type == 'basic_student' else None,
+                "member_type": m_type,
+                "staff_member": staff_flag,
             })
         
         # Auto-assign flights if enabled
@@ -468,22 +566,26 @@ async def upload_students(
             result = await auto_assign_flights(students_to_process)
             flight_assignments = result["assignments"]
         
-        # Insert/update students
+        # Insert/update students with cascading match + user linking
         imported_count = 0
         updated_count = 0
+        linked_count = 0
         
         for student in students_to_process:
             capid = student["capid"]
+            email = student.get("email")
+            first_name = student.get("first_name", "")
+            last_name = student.get("last_name", "")
             
-            # Apply flight assignment if available
-            if capid in flight_assignments:
+            # Apply flight assignment if available (only for students)
+            if student["participant_type"] == "basic_student" and capid in flight_assignments:
                 student["flight"] = flight_assignments[capid]["flight"]
                 student["squadron"] = flight_assignments[capid]["squadron"]
             
             student["updated_at"] = now
             
-            # Check if student already exists
-            existing = await db.participants.find_one({"capid": capid})
+            # Cascading match: CAPID → email → first+last name
+            existing = await find_existing_participant(capid, email, first_name, last_name)
             
             if existing:
                 # Don't override manual squadron/flight assignments
@@ -491,16 +593,28 @@ async def upload_students(
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
                 
+                # Don't downgrade participant_type (cadre→student)
+                ex_type = existing.get("participant_type", "")
+                if ex_type in ("staff", "senior_member", "cadre") and student["participant_type"] == "basic_student":
+                    student["participant_type"] = ex_type
+                    student["student_type"] = None
+                
                 await db.participants.update_one(
-                    {"capid": capid},
+                    {"id": existing["id"]},
                     {"$set": student}
                 )
                 updated_count += 1
+                pid = existing["id"]
             else:
-                student["id"] = str(uuid.uuid4())
+                pid = str(uuid.uuid4())
+                student["id"] = pid
                 student["created_at"] = now
                 await db.participants.insert_one(student)
                 imported_count += 1
+            
+            # Link to existing user account if one exists
+            if await link_to_user_account(pid, capid, email):
+                linked_count += 1
         
         # Get final counts
         total_students = await db.participants.count_documents({"participant_type": "basic_student", "is_removed": {"$ne": True}})
@@ -516,9 +630,10 @@ async def upload_students(
             flight_distribution[flight] = count
         
         return {
-            "message": f"Student upload complete: {imported_count} new, {updated_count} updated",
+            "message": f"Student upload complete: {imported_count} new, {updated_count} updated, {linked_count} linked to accounts",
             "imported": imported_count,
             "updated": updated_count,
+            "linked": linked_count,
             "total_students": total_students,
             "auto_assigned": len(flight_assignments),
             "flight_distribution": flight_distribution
