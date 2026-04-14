@@ -19,10 +19,10 @@ import {
 
 /* ── Category palette ─────────────────────────── */
 const CAT = {
-  command:        { bg: '#00205B', text: '#fff', border: '#001540', label: 'Command' },
-  cadet_training: { bg: '#9B2335', text: '#fff', border: '#7a1c2a', label: 'Cadet Training' },
-  squadron:       { bg: '#D4A017', text: '#fff', border: '#b08812', label: 'Squadron' },
-  support:        { bg: '#008651', text: '#fff', border: '#006b41', label: 'Support' },
+  staff:          { bg: '#008651', text: '#fff', border: '#006b41', label: 'Staff / Executive' },
+  '6th_cts':      { bg: '#00205B', text: '#fff', border: '#001540', label: '6th CTS' },
+  '21st_cts':     { bg: '#D4A017', text: '#fff', border: '#b08812', label: '21st CTS' },
+  '22nd_cts':     { bg: '#9B2335', text: '#fff', border: '#7a1c2a', label: '22nd CTS' },
   cadet_support:  { bg: '#8C9298', text: '#fff', border: '#6e767c', label: 'Cadet Support' },
 };
 const catStyle = (c) => CAT[c] || { bg: '#64748b', text: '#fff', border: '#475569', label: c || '' };
