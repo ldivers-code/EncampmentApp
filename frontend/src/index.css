@@ -94,6 +94,15 @@
     @apply bg-slate-400;
 }
 
+/* Hide scrollbar for horizontal tab bars on mobile */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
 /* Button hover animations */
 .btn-cap {
     @apply transition-colors duration-150;

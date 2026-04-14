@@ -1070,7 +1070,7 @@ const RosterPage = () => {
       )}
 
       {/* Category Tabs: Staff | Cadre | Students */}
-      <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
+      <div className="flex items-center gap-1 mb-4 border-b border-slate-200 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => { setCategoryTab('students'); setCurrentPage(1); }}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${

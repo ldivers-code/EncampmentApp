@@ -77,6 +77,8 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Apr 7**: Assignments System (CRUD, rubric grading, submissions, reminders)
 - **Apr 9**: Admin RBAC, Meal Plan periods, Honor Agreement System, Squadron Schedule View
 - **Apr 10**: Google Classroom-style Assignments overhaul (squadron/flight targeting, Q&A questions, instructor/mentor roles, material uploads, full-page detail view with tabs). 100% test pass rate.
+- **Apr 11**: SendGrid API key integration (live emails). Lillian Yoder account synced to preview.
+- **Apr 14**: Mobile responsiveness audit & fixes across all pages — Notification panel (fixed positioning on mobile), Assignment cards (stacked layout), Org Chart (auto-center scroll + swipe hint), Budget/Roster tab bars (horizontal scroll), main content overflow prevention. Tested on iPhone SE (375px), Samsung Galaxy (360px), Pixel 7 (412px).
 
 ## Remaining Backlog
 - SendGrid API key integration (currently mocked for emails/reminders)

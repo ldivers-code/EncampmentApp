@@ -743,10 +743,10 @@ const BudgetPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto scrollbar-hide -mx-4 sm:mx-0 px-4 sm:px-0">
         <button
           onClick={() => setActiveTab('budget')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'budget'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -758,7 +758,7 @@ const BudgetPage = () => {
         </button>
         <button
           onClick={() => setActiveTab('receipts')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'receipts'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -773,7 +773,7 @@ const BudgetPage = () => {
         </button>
         <button
           onClick={() => { setActiveTab('payments'); if (!paymentSummary) loadPaymentData(); }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'payments'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -785,7 +785,7 @@ const BudgetPage = () => {
         </button>
         <button
           onClick={() => { setActiveTab('smart-receipts'); if (receiptHistory.length === 0) loadReceiptHistory(); }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'smart-receipts'
               ? 'border-[#00205B] text-[#00205B]'
               : 'border-transparent text-slate-500 hover:text-slate-700'

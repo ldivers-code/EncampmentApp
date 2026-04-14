@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   getOrgChartRoles, 
   getOrgChartRole, 
@@ -161,6 +161,7 @@ const OrgChartPage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({});
+  const orgChartScrollRef = useRef(null);
   const [newRoleData, setNewRoleData] = useState({
     role_id: '',
     title: '',
@@ -170,6 +171,17 @@ const OrgChartPage = () => {
     level: 0,
     order: 0
   });
+
+  // Auto-scroll org chart to center on mobile
+  useEffect(() => {
+    if (!loading && roles.length > 0 && orgChartScrollRef.current) {
+      const scrollEl = orgChartScrollRef.current.querySelector('.org-chart-visual');
+      if (scrollEl && window.innerWidth < 1024) {
+        const scrollTarget = (scrollEl.scrollWidth - scrollEl.clientWidth) / 2;
+        scrollEl.scrollLeft = scrollTarget;
+      }
+    }
+  }, [loading, roles]);
 
   useEffect(() => {
     loadData();
@@ -709,7 +721,14 @@ const OrgChartPage = () => {
               Encampment 2026 Encampment Structure
             </h2>
           </div>
-          {renderOrgChart()}
+          {/* Mobile scroll hint */}
+          <div className="lg:hidden bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center justify-center gap-2 text-xs text-blue-600">
+            <svg className="w-4 h-4 animate-bounce-x" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+            Swipe to scroll through the org chart
+          </div>
+          <div ref={orgChartScrollRef}>
+            {renderOrgChart()}
+          </div>
         </div>
       )}
 
