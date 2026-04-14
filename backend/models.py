@@ -616,32 +616,34 @@ class DocumentResponse(DocumentBase):
 
 class OrgChartRoleBase(BaseModel):
     role_id: str
-    title: str
-    summary: Optional[str] = None
-    responsibilities: Optional[str] = None
+    position_title: str
+    assigned_name: Optional[str] = ""
     reports_to: Optional[str] = None
-    level: int = 0
+    role_category: Optional[str] = ""
     order: int = 0
-    assigned_participant_id: Optional[str] = None
+    display_label: Optional[str] = ""
+    job_description: Optional[str] = ""
+    responsible_for: Optional[str] = ""
+    supervises: Optional[str] = ""
 
 class OrgChartRoleCreate(OrgChartRoleBase):
     pass
 
 class OrgChartRoleUpdate(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    responsibilities: Optional[str] = None
+    position_title: Optional[str] = None
+    assigned_name: Optional[str] = None
     reports_to: Optional[str] = None
-    level: Optional[int] = None
+    role_category: Optional[str] = None
     order: Optional[int] = None
-    assigned_participant_id: Optional[str] = None
+    display_label: Optional[str] = None
+    job_description: Optional[str] = None
+    responsible_for: Optional[str] = None
+    supervises: Optional[str] = None
 
 class OrgChartRoleResponse(OrgChartRoleBase):
     model_config = ConfigDict(extra="ignore")
     id: str
-    assigned_member_name: Optional[str] = None
-    assigned_member_rank: Optional[str] = None
-    direct_subordinates: List[str] = []
+    children: List[str] = []
     created_at: str
     updated_at: str
 

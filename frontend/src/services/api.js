@@ -756,12 +756,8 @@ export const updateOrgChartRole = async (roleId, data) => {
   return response.data;
 };
 
-export const assignOrgChartRole = async (roleId, participantId) => {
-  const response = await axios.put(
-    `${API}/org-chart/roles/${roleId}/assign${participantId ? `?participant_id=${participantId}` : ''}`, 
-    {}, 
-    { headers: getAuthHeaders() }
-  );
+export const seedOrgChart = async () => {
+  const response = await axios.post(`${API}/org-chart/seed`, {}, { headers: getAuthHeaders() });
   return response.data;
 };
 
