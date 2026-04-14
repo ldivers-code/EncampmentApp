@@ -20,9 +20,10 @@ import {
 /* ── Category palette ─────────────────────────── */
 const CAT = {
   command:        { bg: '#00205B', text: '#fff', border: '#001540', label: 'Command' },
-  cadet_training: { bg: '#0E7C5F', text: '#fff', border: '#0a6048', label: 'Cadet Training' },
-  support:        { bg: '#D4880F', text: '#fff', border: '#b07310', label: 'Support' },
-  cadet_support:  { bg: '#7C3AED', text: '#fff', border: '#6228c4', label: 'Cadet Support' },
+  cadet_training: { bg: '#9B2335', text: '#fff', border: '#7a1c2a', label: 'Cadet Training' },
+  squadron:       { bg: '#D4A017', text: '#fff', border: '#b08812', label: 'Squadron' },
+  support:        { bg: '#008651', text: '#fff', border: '#006b41', label: 'Support' },
+  cadet_support:  { bg: '#8C9298', text: '#fff', border: '#6e767c', label: 'Cadet Support' },
 };
 const catStyle = (c) => CAT[c] || { bg: '#64748b', text: '#fff', border: '#475569', label: c || '' };
 
@@ -95,7 +96,7 @@ function Connectors({ positions, roles, childMap, collapsed }) {
         <path key={`p${i}`} d={d} fill="none" stroke="#94a3b8" strokeWidth="1.5" />
       ))}
       {dashed.map((d, i) => (
-        <path key={`d${i}`} d={d} fill="none" stroke="#7C3AED" strokeWidth="1.5"
+        <path key={`d${i}`} d={d} fill="none" stroke="#9B2335" strokeWidth="1.5"
               strokeDasharray="6 4" opacity={0.7} />
       ))}
     </>
@@ -166,7 +167,7 @@ function Legend() {
         </div>
       ))}
       <div className="flex items-center gap-1.5 ml-2">
-        <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+        <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#9B2335" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
         <span className="text-[11px] text-slate-600 font-medium">Secondary Report</span>
       </div>
     </div>
@@ -533,9 +534,9 @@ const OrgChartPage = () => {
                   ) : <span className="text-slate-500 text-sm">Top Level</span>}
                 </div>
                 {selected.secondary_reports_to && (
-                  <div className="mt-1 p-2 bg-purple-50 rounded-sm border border-purple-200 flex items-center gap-2">
-                    <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
-                    <span className="text-xs text-purple-700">Secondary: {parentTitle(selected.secondary_reports_to)}</span>
+                  <div className="mt-1 p-2 bg-red-50 rounded-sm border border-red-200 flex items-center gap-2">
+                    <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#9B2335" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+                    <span className="text-xs text-red-800">Secondary: {parentTitle(selected.secondary_reports_to)}</span>
                   </div>
                 )}
               </div>

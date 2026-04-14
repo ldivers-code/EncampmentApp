@@ -1,6 +1,7 @@
 """
 Strict 1:1 Org Chart Seed — TNWG ENC26 restructured hierarchy.
-Categories: command, cadet_training, support, cadet_support
+Categories: command, cadet_training, squadron, support, cadet_support
+Colors: Blue, Maroon, Yellow, Emerald Green, Silver
 Dual reporting via secondary_reports_to.
 """
 import asyncio
@@ -30,10 +31,11 @@ def n(role_id, title, name, parent, cat, order, label="", secondary=None):
     }
 
 
-CMD = "command"
-CTR = "cadet_training"
-SUP = "support"
-CSS = "cadet_support"
+CMD = "command"          # Blue
+CTR = "cadet_training"   # Maroon
+SQN = "squadron"         # Yellow/Gold
+SUP = "support"          # Emerald Green
+CSS = "cadet_support"    # Silver
 
 
 def build_orgchart():
@@ -66,9 +68,10 @@ def build_orgchart():
     nodes.append(n("ctg-ccea", "Chief Cadet Enlisted Advisor", "C/CMSgt Railey, A", "ctg-cc", CTR, 3, "CTG/CCEA"))
     nodes.append(n("css-cc", "Cadet Support Squadron Commander", "C/Capt. Posta, A", "ctg-cc", CSS, 4, "CSS/CC", secondary="ctg-df"))
     nodes.append(n("chief-training-officer", "Chief Training Officer", "", "ctg-cc", CTR, 5, "CTO"))
-    nodes.append(n("6th-sq-cmdr", "6th CTS Commander", "C/Capt Nhan, V", "ctg-cc", CTR, 6, "6th CTS"))
-    nodes.append(n("21st-sq-cmdr", "21st CTS Commander", "C/2nd Lt Nair, P", "ctg-cc", CTR, 7, "21st CTS"))
-    nodes.append(n("22nd-sq-cmdr", "22nd CTS Commander", "C/1st Lt Breslin, D", "ctg-cc", CTR, 8, "22nd CTS"))
+    # Squadron Commanders — secondary report to CTG/DF (Academics)
+    nodes.append(n("6th-sq-cmdr", "6th CTS Commander", "C/Capt Nhan, V", "ctg-cc", SQN, 6, "6th CTS", secondary="ctg-df"))
+    nodes.append(n("21st-sq-cmdr", "21st CTS Commander", "C/2nd Lt Nair, P", "ctg-cc", SQN, 7, "21st CTS", secondary="ctg-df"))
+    nodes.append(n("22nd-sq-cmdr", "22nd CTS Commander", "C/1st Lt Breslin, D", "ctg-cc", SQN, 8, "22nd CTS", secondary="ctg-df"))
 
     # ═══════════════════════════════════════════════
     # UNDER CTG/CCEA — Enlisted departments
@@ -105,14 +108,18 @@ def build_orgchart():
 
     # ═══════════════════════════════════════════════
     # UNDER CTO — Chief Training Officer
+    # Now includes ALL Squadron Training Officers
     # ═══════════════════════════════════════════════
-    nodes.append(n("pp-cadet", "Plans & Programs", "", "chief-training-officer", CTR, 1, "Cadet Level"))
-    nodes.append(n("media-publishing", "Media & Publishing", "", "chief-training-officer", CTR, 2))
-    nodes.append(n("cto-sm", "SM", "C/Capt Plucker, D", "chief-training-officer", CTR, 3))
-    nodes.append(n("cto-cadets-1", "Cadets", "C/SMSgt Breslin, T", "chief-training-officer", CTR, 4))
-    nodes.append(n("cto-cadets-2", "Cadets", "C/SrA Gould, J", "chief-training-officer", CTR, 5))
-    nodes.append(n("cto-cadets-3", "Cadets", "C/SrA Cranford, N", "chief-training-officer", CTR, 6))
-    nodes.append(n("cto-cadets-4", "Cadets", "C/CMSgt Mueller, L", "chief-training-officer", CTR, 7))
+    nodes.append(n("6th-sq-to", "Squadron Training Officer - 6th CTS", "Capt Brad Dozier", "chief-training-officer", SQN, 1, "6th CTS"))
+    nodes.append(n("21st-sq-to", "Squadron Training Officer - 21st CTS", "Capt Renee Cyr", "chief-training-officer", SQN, 2, "21st CTS"))
+    nodes.append(n("22nd-sq-to", "Squadron Training Officer - 22nd CTS", "1st Lt Max Hammond", "chief-training-officer", SQN, 3, "22nd CTS"))
+    nodes.append(n("pp-cadet", "Plans & Programs", "", "chief-training-officer", CTR, 4, "Cadet Level"))
+    nodes.append(n("media-publishing", "Media & Publishing", "", "chief-training-officer", CTR, 5))
+    nodes.append(n("cto-sm", "SM", "C/Capt Plucker, D", "chief-training-officer", CTR, 6))
+    nodes.append(n("cto-cadets-1", "Cadets", "C/SMSgt Breslin, T", "chief-training-officer", CTR, 7))
+    nodes.append(n("cto-cadets-2", "Cadets", "C/SrA Gould, J", "chief-training-officer", CTR, 8))
+    nodes.append(n("cto-cadets-3", "Cadets", "C/SrA Cranford, N", "chief-training-officer", CTR, 9))
+    nodes.append(n("cto-cadets-4", "Cadets", "C/CMSgt Mueller, L", "chief-training-officer", CTR, 10))
 
     # — PP Cadet members —
     nodes.append(n("pp-cadet-oic", "OIC", "Lt Col Brian Hughes", "pp-cadet", CTR, 1))
@@ -156,33 +163,32 @@ def build_orgchart():
 
     # ═══════════════════════════════════════════════
     # 6th CTS SQUADRON
+    # Training Officer now under CTO (above)
+    # All positions secondary report to CTG/DF (Academics)
     # ═══════════════════════════════════════════════
-    nodes.append(n("6th-sq-to", "Squadron Training Officer", "Capt Brad Dozier", "6th-sq-cmdr", CTR, 1))
-    nodes.append(n("6th-sq-1sgt", "First Sergeant", "C/SMSgt Thomasson, T", "6th-sq-cmdr", CTR, 2))
-    nodes.append(n("6th-flt-a-cmdr", "Flight Commander - A", "C/CMSgt Anand, R", "6th-sq-cmdr", CTR, 3))
-    nodes.append(n("6th-flt-a-sgt", "Flight Sergeant - A", "C/SSgt Mellott, P", "6th-flt-a-cmdr", CTR, 1))
-    nodes.append(n("6th-flt-b-cmdr", "Flight Commander - B", "", "6th-sq-cmdr", CTR, 4))
-    nodes.append(n("6th-flt-b-sgt", "Flight Sergeant - B", "C/MSgt DeJesus, R", "6th-flt-b-cmdr", CTR, 1))
+    nodes.append(n("6th-sq-1sgt", "First Sergeant", "C/SMSgt Thomasson, T", "6th-sq-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("6th-flt-a-cmdr", "Flight Commander - A", "C/CMSgt Anand, R", "6th-sq-cmdr", SQN, 2, "", secondary="ctg-df"))
+    nodes.append(n("6th-flt-a-sgt", "Flight Sergeant - A", "C/SSgt Mellott, P", "6th-flt-a-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("6th-flt-b-cmdr", "Flight Commander - B", "", "6th-sq-cmdr", SQN, 3, "", secondary="ctg-df"))
+    nodes.append(n("6th-flt-b-sgt", "Flight Sergeant - B", "C/MSgt DeJesus, R", "6th-flt-b-cmdr", SQN, 1, "", secondary="ctg-df"))
 
     # ═══════════════════════════════════════════════
     # 21st CTS SQUADRON
     # ═══════════════════════════════════════════════
-    nodes.append(n("21st-sq-to", "Squadron Training Officer", "Capt Renee Cyr", "21st-sq-cmdr", CTR, 1))
-    nodes.append(n("21st-sq-1sgt", "First Sergeant", "C/CMSgt Jackson, L", "21st-sq-cmdr", CTR, 2))
-    nodes.append(n("21st-flt-c-cmdr", "Flight Commander - C", "C/1st Lt Madera, G", "21st-sq-cmdr", CTR, 3))
-    nodes.append(n("21st-flt-c-sgt", "Flight Sergeant - C", "C/SMSgt Wilson, T", "21st-flt-c-cmdr", CTR, 1))
-    nodes.append(n("21st-flt-d-cmdr", "Flight Commander - D", "C/MSgt Calvez, T", "21st-sq-cmdr", CTR, 4))
-    nodes.append(n("21st-flt-d-sgt", "Flight Sergeant - D", "C/SrA Garcia, B", "21st-flt-d-cmdr", CTR, 1))
+    nodes.append(n("21st-sq-1sgt", "First Sergeant", "C/CMSgt Jackson, L", "21st-sq-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("21st-flt-c-cmdr", "Flight Commander - C", "C/1st Lt Madera, G", "21st-sq-cmdr", SQN, 2, "", secondary="ctg-df"))
+    nodes.append(n("21st-flt-c-sgt", "Flight Sergeant - C", "C/SMSgt Wilson, T", "21st-flt-c-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("21st-flt-d-cmdr", "Flight Commander - D", "C/MSgt Calvez, T", "21st-sq-cmdr", SQN, 3, "", secondary="ctg-df"))
+    nodes.append(n("21st-flt-d-sgt", "Flight Sergeant - D", "C/SrA Garcia, B", "21st-flt-d-cmdr", SQN, 1, "", secondary="ctg-df"))
 
     # ═══════════════════════════════════════════════
     # 22nd CTS SQUADRON
     # ═══════════════════════════════════════════════
-    nodes.append(n("22nd-sq-to", "Squadron Training Officer", "1st Lt Max Hammond", "22nd-sq-cmdr", CTR, 1))
-    nodes.append(n("22nd-sq-1sgt", "First Sergeant", "C/SMSgt Wainman, A", "22nd-sq-cmdr", CTR, 2))
-    nodes.append(n("22nd-flt-e-cmdr", "Flight Commander - E", "C/2nd Lt Rizzo, H", "22nd-sq-cmdr", CTR, 3))
-    nodes.append(n("22nd-flt-e-sgt", "Flight Sergeant - E", "C/MSgt Ambelis, I", "22nd-flt-e-cmdr", CTR, 1))
-    nodes.append(n("22nd-flt-f-cmdr", "Flight Commander - F", "C/2nd Lt Terbizan, S", "22nd-sq-cmdr", CTR, 4))
-    nodes.append(n("22nd-flt-f-sgt", "Flight Sergeant - F", "C/MSgt Kyle, E", "22nd-flt-f-cmdr", CTR, 1))
+    nodes.append(n("22nd-sq-1sgt", "First Sergeant", "C/SMSgt Wainman, A", "22nd-sq-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("22nd-flt-e-cmdr", "Flight Commander - E", "C/2nd Lt Rizzo, H", "22nd-sq-cmdr", SQN, 2, "", secondary="ctg-df"))
+    nodes.append(n("22nd-flt-e-sgt", "Flight Sergeant - E", "C/MSgt Ambelis, I", "22nd-flt-e-cmdr", SQN, 1, "", secondary="ctg-df"))
+    nodes.append(n("22nd-flt-f-cmdr", "Flight Commander - F", "C/2nd Lt Terbizan, S", "22nd-sq-cmdr", SQN, 3, "", secondary="ctg-df"))
+    nodes.append(n("22nd-flt-f-sgt", "Flight Sergeant - F", "C/MSgt Kyle, E", "22nd-flt-f-cmdr", SQN, 1, "", secondary="ctg-df"))
 
     return nodes
 
