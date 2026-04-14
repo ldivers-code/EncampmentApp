@@ -619,6 +619,7 @@ class OrgChartRoleBase(BaseModel):
     position_title: str
     assigned_name: Optional[str] = ""
     reports_to: Optional[str] = None
+    secondary_reports_to: Optional[str] = None
     role_category: Optional[str] = ""
     order: int = 0
     display_label: Optional[str] = ""
@@ -633,6 +634,7 @@ class OrgChartRoleUpdate(BaseModel):
     position_title: Optional[str] = None
     assigned_name: Optional[str] = None
     reports_to: Optional[str] = None
+    secondary_reports_to: Optional[str] = None
     role_category: Optional[str] = None
     order: Optional[int] = None
     display_label: Optional[str] = None

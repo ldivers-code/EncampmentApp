@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   getOrgChartRoles,
   getOrgChartRole,
   updateOrgChartRole,
-  createOrgChartRole,
-  deleteOrgChartRole,
-  seedDefaultOrgChart,
   seedOrgChart,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -14,143 +11,181 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import {
-  Network,
-  ChevronRight,
-  ChevronDown,
-  User,
-  Users,
-  Layers,
-  X,
-  Edit2,
-  Trash2,
-  Plus,
-  RefreshCw,
+  Network, User, Users, Search, X, Edit2,
+  ChevronDown, ChevronRight, RefreshCw, Maximize2, Minimize2,
 } from 'lucide-react';
 
-// Category color map matching the spreadsheet color key
-const CATEGORY_COLORS = {
-  senior_member:   { bg: '#1a1a1a', text: '#fff', border: '#333', label: 'Senior Member' },
-  executive_cadre: { bg: '#b0b0b0', text: '#1a1a1a', border: '#999', label: 'Executive Cadre' },
-  training_cadre:  { bg: '#c27ba0', text: '#fff', border: '#a85d88', label: 'Training Cadre' },
-  support_cadre:   { bg: '#f6b26b', text: '#1a1a1a', border: '#e09550', label: 'Support Cadre' },
-  operations_cadre:{ bg: '#b6d7a8', text: '#1a1a1a', border: '#8fbc7a', label: 'Operations Cadre' },
-  female_cadre:    { bg: '#c9daf8', text: '#1a1a1a', border: '#a4bde8', label: 'Female Cadre' },
-  out_of_tnwg:     { bg: '#fff2cc', text: '#1a1a1a', border: '#e6d9a0', label: 'Out of TNWG Cadre' },
+/* ── Category palette ─────────────────────────── */
+const CAT = {
+  command:        { bg: '#00205B', text: '#fff', border: '#001540', label: 'Command' },
+  cadet_training: { bg: '#0E7C5F', text: '#fff', border: '#0a6048', label: 'Cadet Training' },
+  support:        { bg: '#D4880F', text: '#fff', border: '#b07310', label: 'Support' },
+  cadet_support:  { bg: '#7C3AED', text: '#fff', border: '#6228c4', label: 'Cadet Support' },
 };
+const catStyle = (c) => CAT[c] || { bg: '#64748b', text: '#fff', border: '#475569', label: c || '' };
 
-const getCatStyle = (cat) => CATEGORY_COLORS[cat] || { bg: '#e2e8f0', text: '#334155', border: '#cbd5e1', label: cat || 'Unknown' };
+/* ── Layout constants ─────────────────────────── */
+const NODE_W = 172;
+const NODE_H = 54;
+const H_GAP = 14;
+const V_GAP = 56;
 
-// ─── Tree Node Component ───────────────────────────
-const TreeNode = ({ nodeData, childrenMap, depth, onSelect, selectedId, expandedSet, toggleExpand }) => {
-  const children = childrenMap[nodeData.role_id] || [];
-  const hasChildren = children.length > 0;
-  const isExpanded = expandedSet.has(nodeData.role_id);
-  const isSelected = selectedId === nodeData.role_id;
-  const cat = getCatStyle(nodeData.role_category);
-  const isVacant = !nodeData.assigned_name;
+/* ── Recursive layout engine ──────────────────── */
+function measureTree(id, childMap, collapsed) {
+  const kids = collapsed.has(id) ? [] : (childMap[id] || []);
+  if (kids.length === 0) return { id, w: NODE_W, kids: [] };
+  const mKids = kids.map(k => measureTree(k.role_id, childMap, collapsed));
+  const totalW = mKids.reduce((s, k) => s + k.w, 0) + (mKids.length - 1) * H_GAP;
+  return { id, w: Math.max(NODE_W, totalW), kids: mKids };
+}
+
+function positionTree(m, cx, cy, out) {
+  out[m.id] = { x: cx, y: cy };
+  if (m.kids.length === 0) return;
+  const totalW = m.kids.reduce((s, k) => s + k.w, 0) + (m.kids.length - 1) * H_GAP;
+  let startX = cx - totalW / 2;
+  const childY = cy + NODE_H + V_GAP;
+  m.kids.forEach(k => {
+    const kcx = startX + k.w / 2;
+    positionTree(k, kcx, childY, out);
+    startX += k.w + H_GAP;
+  });
+}
+
+/* ── SVG Connector drawing ────────────────────── */
+function Connectors({ positions, roles, childMap, collapsed }) {
+  const paths = [];
+  const dashed = [];
+
+  roles.forEach(r => {
+    if (!r.reports_to || !positions[r.role_id] || !positions[r.reports_to]) return;
+    if (collapsed.has(r.reports_to)) return;
+    const p = positions[r.reports_to];
+    const c = positions[r.role_id];
+    const midY = p.y + NODE_H + V_GAP * 0.4;
+    paths.push(
+      `M${p.x},${p.y + NODE_H} L${p.x},${midY} L${c.x},${midY} L${c.x},${c.y}`
+    );
+  });
+
+  // Secondary (dashed) reporting lines
+  roles.forEach(r => {
+    if (!r.secondary_reports_to || !positions[r.role_id] || !positions[r.secondary_reports_to]) return;
+    const s = positions[r.secondary_reports_to];
+    const c = positions[r.role_id];
+    // Same level (siblings) — draw a curved arc below the nodes
+    if (Math.abs(s.y - c.y) < 10) {
+      const arcY = s.y + NODE_H + 18;
+      dashed.push(
+        `M${s.x},${s.y + NODE_H} Q${s.x},${arcY} ${(s.x + c.x) / 2},${arcY} Q${c.x},${arcY} ${c.x},${c.y + NODE_H}`
+      );
+    } else {
+      const midY = Math.min(s.y + NODE_H, c.y) + (V_GAP * 0.25);
+      dashed.push(
+        `M${s.x},${s.y + NODE_H} L${s.x},${midY} L${c.x},${midY} L${c.x},${c.y}`
+      );
+    }
+  });
 
   return (
-    <div className="tree-node" data-testid={`org-node-${nodeData.role_id}`}>
+    <>
+      {paths.map((d, i) => (
+        <path key={`p${i}`} d={d} fill="none" stroke="#94a3b8" strokeWidth="1.5" />
+      ))}
+      {dashed.map((d, i) => (
+        <path key={`d${i}`} d={d} fill="none" stroke="#7C3AED" strokeWidth="1.5"
+              strokeDasharray="6 4" opacity={0.7} />
+      ))}
+    </>
+  );
+}
+
+/* ── Single Node card ─────────────────────────── */
+function NodeCard({ role, pos, isSelected, onClick, hasChildren, isCollapsed, onToggle }) {
+  const st = catStyle(role.role_category);
+  const vacant = !role.assigned_name;
+  const x = pos.x - NODE_W / 2;
+  const y = pos.y;
+
+  return (
+    <div
+      className="absolute select-none"
+      style={{ left: x, top: y, width: NODE_W, height: NODE_H }}
+      data-testid={`org-node-${role.role_id}`}
+    >
       <div
+        onClick={() => onClick(role)}
         className={`
-          flex items-center gap-1.5 rounded-md cursor-pointer select-none
-          transition-all duration-150 group
-          ${isSelected ? 'ring-2 ring-[#00205B] ring-offset-1' : ''}
+          w-full h-full rounded-lg border-2 cursor-pointer
+          flex flex-col items-center justify-center px-2 text-center
+          transition-all duration-150 hover:shadow-lg hover:scale-[1.04]
+          ${isSelected ? 'ring-2 ring-offset-2 ring-yellow-400' : ''}
         `}
-        style={{
-          marginLeft: depth > 0 ? `${Math.min(depth, 6) * 20}px` : '0',
-        }}
+        style={{ backgroundColor: st.bg, color: st.text, borderColor: st.border }}
       >
-        {/* Expand/collapse toggle */}
-        <button
-          onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(nodeData.role_id); }}
-          className={`w-5 h-5 flex items-center justify-center flex-shrink-0 rounded
-            ${hasChildren ? 'text-slate-500 hover:bg-slate-200' : 'text-transparent'}`}
-          data-testid={`toggle-${nodeData.role_id}`}
-        >
-          {hasChildren && (isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />)}
-        </button>
-
-        {/* Node chip */}
-        <div
-          onClick={() => onSelect(nodeData)}
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border transition-shadow hover:shadow-md flex-1 min-w-0"
-          style={{ backgroundColor: cat.bg, color: cat.text, borderColor: cat.border }}
-        >
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-xs font-bold leading-tight truncate">
-              {nodeData.position_title}
-            </span>
-            <span className={`text-[10px] leading-tight truncate ${isVacant ? 'italic opacity-60' : 'opacity-90'}`}>
-              {nodeData.assigned_name || 'Vacant'}
-            </span>
-          </div>
-          {nodeData.display_label && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/10 whitespace-nowrap flex-shrink-0">
-              {nodeData.display_label}
-            </span>
+        <div className="flex items-center gap-1 w-full justify-center">
+          {role.display_label && (
+            <span className="text-[9px] font-mono bg-white/20 px-1 rounded">{role.display_label}</span>
           )}
-          {hasChildren && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-black/10 flex-shrink-0 font-mono">
-              {children.length}
-            </span>
-          )}
+          <span className="text-[11px] font-bold leading-tight truncate max-w-[140px]">
+            {role.position_title}
+          </span>
         </div>
+        <span className={`text-[10px] leading-tight truncate max-w-[150px] ${vacant ? 'italic opacity-60' : 'opacity-90'}`}>
+          {role.assigned_name || 'Vacant'}
+        </span>
       </div>
-
-      {/* Children (rendered when expanded) */}
-      {hasChildren && isExpanded && (
-        <div className="mt-0.5">
-          {children.map(child => (
-            <TreeNode
-              key={child.role_id}
-              nodeData={child}
-              childrenMap={childrenMap}
-              depth={depth + 1}
-              onSelect={onSelect}
-              selectedId={selectedId}
-              expandedSet={expandedSet}
-              toggleExpand={toggleExpand}
-            />
-          ))}
-        </div>
+      {hasChildren && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(role.role_id); }}
+          className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full
+                     bg-white border border-slate-300 shadow-sm flex items-center justify-center
+                     hover:bg-slate-100 z-10 transition-colors"
+          data-testid={`toggle-${role.role_id}`}
+        >
+          {isCollapsed
+            ? <ChevronRight className="w-3 h-3 text-slate-600" />
+            : <ChevronDown className="w-3 h-3 text-slate-600" />
+          }
+        </button>
       )}
     </div>
   );
-};
+}
 
-// ─── Color Key Legend ───────────────────────────────
-const ColorKeyLegend = () => (
-  <div className="flex flex-wrap gap-2 px-4 py-3 bg-slate-50 border-b border-slate-200">
-    {Object.entries(CATEGORY_COLORS).map(([key, val]) => (
-      <div key={key} className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-sm border" style={{ backgroundColor: val.bg, borderColor: val.border }} />
-        <span className="text-[10px] text-slate-600">{val.label}</span>
+/* ── Legend ────────────────────────────────────── */
+function Legend() {
+  return (
+    <div className="flex flex-wrap gap-3 items-center">
+      {Object.entries(CAT).map(([k, v]) => (
+        <div key={k} className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: v.bg }} />
+          <span className="text-[11px] text-slate-600 font-medium">{v.label}</span>
+        </div>
+      ))}
+      <div className="flex items-center gap-1.5 ml-2">
+        <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+        <span className="text-[11px] text-slate-600 font-medium">Secondary Report</span>
       </div>
-    ))}
-  </div>
-);
+    </div>
+  );
+}
 
-// ─── Main Page ─────────────────────────────────────
+/* ── Main component ───────────────────────────── */
 const OrgChartPage = () => {
-  const { canEdit, user } = useAuth();
+  const { canEdit } = useAuth();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [selected, setSelected] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
-  const [expandedSet, setExpandedSet] = useState(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [newRole, setNewRole] = useState({
-    role_id: '', position_title: '', assigned_name: '', reports_to: '',
-    role_category: '', order: 0, display_label: '',
-  });
+  const [collapsed, setCollapsed] = useState(new Set());
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('all');
+  const containerRef = useRef(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -158,11 +193,21 @@ const OrgChartPage = () => {
     try {
       const data = await getOrgChartRoles();
       setRoles(data);
-      // Auto-expand root + level 1
+      // Start with deeper levels collapsed for minimal scroll
       const root = data.find(r => !r.reports_to);
       if (root) {
-        const level1Ids = data.filter(r => r.reports_to === root.role_id).map(r => r.role_id);
-        setExpandedSet(new Set([root.role_id, ...level1Ids]));
+        const l1 = data.filter(r => r.reports_to === root.role_id).map(r => r.role_id);
+        const l2 = data.filter(r => l1.includes(r.reports_to)).map(r => r.role_id);
+        const l3 = data.filter(r => l2.includes(r.reports_to)).map(r => r.role_id);
+        // Collapse everything below level 3
+        const collapseSet = new Set();
+        data.forEach(r => {
+          const kids = data.filter(k => k.reports_to === r.role_id);
+          if (kids.length > 0 && !l1.includes(r.role_id) && !l2.includes(r.role_id) && ![root.role_id, ...l1].includes(r.role_id)) {
+            if (l3.includes(r.role_id)) collapseSet.add(r.role_id);
+          }
+        });
+        setCollapsed(collapseSet);
       }
     } catch (err) {
       console.error('Failed to load org chart:', err);
@@ -171,79 +216,90 @@ const OrgChartPage = () => {
     }
   };
 
-  // Build children map
-  const childrenMap = useMemo(() => {
-    const map = {};
+  /* Build maps */
+  const { nodeMap, childMap, rootId } = useMemo(() => {
+    const nm = {};
+    const cm = {};
+    let rid = null;
     roles.forEach(r => {
-      const parent = r.reports_to || '__root__';
-      if (!map[parent]) map[parent] = [];
-      map[parent].push(r);
+      nm[r.role_id] = r;
+      const p = r.reports_to || '__root__';
+      if (!cm[p]) cm[p] = [];
+      cm[p].push(r);
+      if (!r.reports_to) rid = r.role_id;
     });
-    // Sort each group by order
-    Object.values(map).forEach(arr => arr.sort((a, b) => (a.order || 0) - (b.order || 0)));
-    return map;
+    Object.values(cm).forEach(arr => arr.sort((a, b) => (a.order || 0) - (b.order || 0)));
+    return { nodeMap: nm, childMap: cm, rootId: rid };
   }, [roles]);
 
-  const rootNodes = childrenMap['__root__'] || [];
+  /* Compute positions */
+  const positions = useMemo(() => {
+    if (!rootId) return {};
+    const measure = measureTree(rootId, childMap, collapsed);
+    const pos = {};
+    positionTree(measure, measure.w / 2, 20, pos);
+    return pos;
+  }, [rootId, childMap, collapsed]);
 
-  // Filter roles by search
-  const matchesSearch = useCallback((node) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      (node.position_title || '').toLowerCase().includes(term) ||
-      (node.assigned_name || '').toLowerCase().includes(term) ||
-      (node.role_category || '').toLowerCase().includes(term)
+  /* Canvas size */
+  const canvasSize = useMemo(() => {
+    let maxX = 0, maxY = 0;
+    Object.values(positions).forEach(p => {
+      if (p.x + NODE_W / 2 > maxX) maxX = p.x + NODE_W / 2;
+      if (p.y + NODE_H > maxY) maxY = p.y + NODE_H;
+    });
+    return { w: maxX + 40, h: maxY + 60 };
+  }, [positions]);
+
+  /* Search highlight */
+  const matchIds = useMemo(() => {
+    if (!search) return null;
+    const term = search.toLowerCase();
+    return new Set(
+      roles
+        .filter(r =>
+          (r.position_title || '').toLowerCase().includes(term) ||
+          (r.assigned_name || '').toLowerCase().includes(term) ||
+          (r.display_label || '').toLowerCase().includes(term)
+        )
+        .map(r => r.role_id)
     );
-  }, [searchTerm]);
+  }, [search, roles]);
 
-  // Get all ancestor IDs for a given node
-  const getAncestors = useCallback((roleId) => {
-    const ancestors = [];
-    const roleMap = {};
-    roles.forEach(r => { roleMap[r.role_id] = r; });
-    let current = roleMap[roleId];
-    while (current && current.reports_to) {
-      ancestors.push(current.reports_to);
-      current = roleMap[current.reports_to];
-    }
-    return ancestors;
-  }, [roles]);
+  /* Filter by category */
+  const visibleRoles = useMemo(() => {
+    if (catFilter === 'all') return roles;
+    return roles.filter(r => r.role_category === catFilter);
+  }, [roles, catFilter]);
 
-  // Filtered + expanded for search
-  const filteredExpandedSet = useMemo(() => {
-    if (!searchTerm) return expandedSet;
-    const set = new Set(expandedSet);
-    roles.forEach(r => {
-      if (matchesSearch(r)) {
-        getAncestors(r.role_id).forEach(a => set.add(a));
-      }
-    });
-    return set;
-  }, [searchTerm, expandedSet, roles, matchesSearch, getAncestors]);
-
-  const toggleExpand = useCallback((roleId) => {
-    setExpandedSet(prev => {
+  const toggle = useCallback((id) => {
+    setCollapsed(prev => {
       const next = new Set(prev);
-      if (next.has(roleId)) next.delete(roleId);
-      else next.add(roleId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
 
-  const expandAll = () => {
-    setExpandedSet(new Set(roles.map(r => r.role_id)));
+  const expandAll = () => setCollapsed(new Set());
+  const collapseBelow2 = () => {
+    if (!rootId) return;
+    const l1 = (childMap[rootId] || []).map(r => r.role_id);
+    const l2 = roles.filter(r => l1.includes(r.reports_to)).map(r => r.role_id);
+    const newC = new Set();
+    roles.forEach(r => {
+      const kids = childMap[r.role_id] || [];
+      if (kids.length > 0 && ![rootId, ...l1, ...l2].includes(r.role_id)) {
+        newC.add(r.role_id);
+      }
+    });
+    setCollapsed(newC);
   };
 
-  const collapseAll = () => {
-    const root = roles.find(r => !r.reports_to);
-    setExpandedSet(root ? new Set([root.role_id]) : new Set());
-  };
-
-  const handleSelect = useCallback(async (node) => {
+  const handleSelect = useCallback(async (role) => {
     try {
-      const full = await getOrgChartRole(node.role_id);
-      setSelectedRole(full);
+      const full = await getOrgChartRole(role.role_id);
+      setSelected(full);
       setEditForm({
         position_title: full.position_title || '',
         assigned_name: full.assigned_name || '',
@@ -251,247 +307,172 @@ const OrgChartPage = () => {
         responsible_for: full.responsible_for || '',
         supervises: full.supervises || '',
         display_label: full.display_label || '',
-        role_category: full.role_category || '',
       });
       setSheetOpen(true);
       setEditing(false);
     } catch {
-      toast.error('Failed to load position details');
+      toast.error('Failed to load details');
     }
   }, []);
 
   const handleSave = async () => {
-    if (!selectedRole) return;
+    if (!selected) return;
     try {
-      await updateOrgChartRole(selectedRole.role_id, editForm);
-      toast.success('Position updated');
+      await updateOrgChartRole(selected.role_id, editForm);
+      toast.success('Saved');
       setEditing(false);
       loadData();
-      const updated = await getOrgChartRole(selectedRole.role_id);
-      setSelectedRole(updated);
+      const updated = await getOrgChartRole(selected.role_id);
+      setSelected(updated);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update');
-    }
-  };
-
-  const handleDelete = async (roleId) => {
-    if (!window.confirm('Delete this position?')) return;
-    try {
-      await deleteOrgChartRole(roleId);
-      toast.success('Position deleted');
-      setSheetOpen(false);
-      setSelectedRole(null);
-      loadData();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete');
-    }
-  };
-
-  const handleCreate = async () => {
-    try {
-      await createOrgChartRole(newRole);
-      toast.success('Position created');
-      setAddModalOpen(false);
-      setNewRole({ role_id: '', position_title: '', assigned_name: '', reports_to: '', role_category: '', order: 0, display_label: '' });
-      loadData();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to create');
+      toast.error(err.response?.data?.detail || 'Save failed');
     }
   };
 
   const handleReseed = async () => {
-    if (!window.confirm('This will wipe and reseed the entire org chart from the spreadsheet data. Continue?')) return;
+    if (!window.confirm('Wipe and reseed the entire org chart?')) return;
     try {
       await seedOrgChart();
-      toast.success('Org chart reseeded from spreadsheet');
+      toast.success('Reseeded');
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to reseed');
+      toast.error(err.response?.data?.detail || 'Reseed failed');
     }
   };
 
-  const handleSeedDefaults = async () => {
-    try {
-      await seedDefaultOrgChart();
-      toast.success('Org chart seeded');
-      loadData();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to seed');
+  /* Center scroll on mount */
+  useEffect(() => {
+    if (!loading && containerRef.current && canvasSize.w > 0) {
+      const el = containerRef.current;
+      const scrollX = (canvasSize.w - el.clientWidth) / 2;
+      if (scrollX > 0) el.scrollLeft = scrollX;
     }
-  };
+  }, [loading, canvasSize]);
 
   if (loading) {
     return (
-      <div className="p-6 lg:p-8 animate-fade-in">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-400">Loading org chart...</div>
-        </div>
+      <div className="p-6 flex items-center justify-center h-64">
+        <div className="text-slate-400">Loading org chart...</div>
       </div>
     );
   }
 
-  // Get parent title for detail panel
-  const getParentTitle = (parentId) => {
-    const parent = roles.find(r => r.role_id === parentId);
-    return parent ? parent.position_title : null;
-  };
+  const parentTitle = (pid) => nodeMap[pid]?.position_title || pid;
 
   return (
-    <div className="p-4 lg:p-8 animate-fade-in" data-testid="org-chart-page">
+    <div className="p-3 lg:p-6 animate-fade-in" data-testid="org-chart-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <Network className="w-7 h-7 text-[#00205B]" />
-            <h1 className="text-xl lg:text-2xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              Encampment 2026 Org Chart
-            </h1>
-          </div>
-          <p className="text-slate-500 text-sm mt-1">
-            {roles.length} positions &middot; Click any node to view details
-          </p>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <Network className="w-6 h-6 text-[#00205B]" />
+          <h1 className="text-lg lg:text-xl font-black uppercase tracking-tight text-[#00205B]" style={{ fontFamily: 'Chivo, sans-serif' }}>
+            Encampment 2026 Command Map
+          </h1>
+          <span className="text-xs text-slate-400">{roles.length} positions</span>
         </div>
         {canEdit() && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {roles.length === 0 && (
-              <Button variant="outline" className="rounded-sm border-[#00205B] text-[#00205B]" onClick={handleSeedDefaults} data-testid="seed-org-chart-btn">
-                <Layers className="w-4 h-4 mr-2" /> Load Structure
-              </Button>
-            )}
-            {roles.length > 0 && ['commander', 'executive_staff', 'dcp'].includes(user?.role) && (
-              <Button variant="outline" className="rounded-sm border-slate-300 text-slate-600" onClick={handleReseed} data-testid="reseed-orgchart-btn">
-                <RefreshCw className="w-4 h-4 mr-2" /> Reseed
-              </Button>
-            )}
-            <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="add-role-btn">
-                  <Plus className="w-4 h-4 mr-2" /> Add Position
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle className="text-[#00205B] uppercase font-bold" style={{ fontFamily: 'Chivo, sans-serif' }}>Add New Position</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3 mt-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs uppercase text-slate-600">Role ID *</Label>
-                      <Input value={newRole.role_id} onChange={(e) => setNewRole({ ...newRole, role_id: e.target.value.toLowerCase().replace(/\s+/g, '-') })} placeholder="my-position-id" className="mt-1 rounded-sm font-mono text-sm" />
-                    </div>
-                    <div>
-                      <Label className="text-xs uppercase text-slate-600">Position Title *</Label>
-                      <Input value={newRole.position_title} onChange={(e) => setNewRole({ ...newRole, position_title: e.target.value })} placeholder="Flight Commander" className="mt-1 rounded-sm" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs uppercase text-slate-600">Assigned Name</Label>
-                      <Input value={newRole.assigned_name} onChange={(e) => setNewRole({ ...newRole, assigned_name: e.target.value })} placeholder="C/SSgt Smith, J" className="mt-1 rounded-sm" />
-                    </div>
-                    <div>
-                      <Label className="text-xs uppercase text-slate-600">Category</Label>
-                      <Select value={newRole.role_category || 'none'} onValueChange={(v) => setNewRole({ ...newRole, role_category: v === 'none' ? '' : v })}>
-                        <SelectTrigger className="mt-1 rounded-sm"><SelectValue placeholder="Category" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {Object.entries(CATEGORY_COLORS).map(([k, v]) => (
-                            <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs uppercase text-slate-600">Reports To</Label>
-                    <Select value={newRole.reports_to || 'none'} onValueChange={(v) => setNewRole({ ...newRole, reports_to: v === 'none' ? '' : v })}>
-                      <SelectTrigger className="mt-1 rounded-sm"><SelectValue placeholder="Parent" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None (Root)</SelectItem>
-                        {roles.map(r => (<SelectItem key={r.role_id} value={r.role_id}>{r.position_title} {r.assigned_name ? `(${r.assigned_name})` : ''}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-3">
-                    <Button variant="outline" onClick={() => setAddModalOpen(false)} className="rounded-sm">Cancel</Button>
-                    <Button onClick={handleCreate} className="bg-[#00205B] hover:bg-[#001540] rounded-sm" disabled={!newRole.role_id || !newRole.position_title}>Create</Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <Button variant="outline" size="sm" className="rounded-sm border-slate-300 text-slate-600 w-fit"
+                  onClick={handleReseed} data-testid="reseed-orgchart-btn">
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reseed
+          </Button>
         )}
       </div>
 
-      {/* Empty State */}
-      {roles.length === 0 && (
-        <div className="bg-white border border-slate-200 rounded-sm p-12 text-center">
-          <Network className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">No Org Chart</h3>
-          <p className="text-slate-500 mb-4">The org chart has not been loaded yet.</p>
-          {canEdit() && (
-            <Button onClick={handleSeedDefaults} className="bg-[#00205B] hover:bg-[#001540] rounded-sm">
-              <Layers className="w-4 h-4 mr-2" /> Load Encampment Structure
-            </Button>
+      {/* Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-t-lg px-4 py-2.5 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search positions..."
+            className="pl-8 h-8 text-sm rounded-md"
+            data-testid="org-chart-search"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
-      )}
 
-      {/* Org Chart Tree */}
-      {roles.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
-          {/* Title bar */}
-          <div className="bg-[#00205B] text-white px-4 py-3 flex items-center justify-between">
-            <h2 className="text-base font-bold uppercase tracking-wide" style={{ fontFamily: 'Chivo, sans-serif' }}>
-              TNWG Encampment 2026 Structure
-            </h2>
-            <span className="text-xs opacity-70">{roles.length} positions</span>
-          </div>
+        {/* Category filters */}
+        <div className="flex gap-1">
+          <button onClick={() => setCatFilter('all')}
+            className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors
+              ${catFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            data-testid="filter-all"
+          >All</button>
+          {Object.entries(CAT).map(([k, v]) => (
+            <button key={k} onClick={() => setCatFilter(k)}
+              className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors
+                ${catFilter === k ? 'text-white' : 'text-slate-600 hover:opacity-80'}`}
+              style={catFilter === k ? { backgroundColor: v.bg, color: v.text } : { backgroundColor: v.bg + '18', color: v.bg }}
+              data-testid={`filter-${k}`}
+            >{v.label}</button>
+          ))}
+        </div>
 
-          {/* Color Key */}
-          <ColorKeyLegend />
+        <div className="ml-auto flex gap-1">
+          <Button variant="ghost" size="sm" onClick={expandAll} className="text-xs h-7 px-2" data-testid="expand-all-btn">
+            <Maximize2 className="w-3 h-3 mr-1" />Expand
+          </Button>
+          <Button variant="ghost" size="sm" onClick={collapseBelow2} className="text-xs h-7 px-2" data-testid="collapse-btn">
+            <Minimize2 className="w-3 h-3 mr-1" />Collapse
+          </Button>
+        </div>
+      </div>
 
-          {/* Controls bar */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 bg-white">
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search positions or names..."
-              className="rounded-sm h-8 text-sm max-w-xs"
-              data-testid="org-chart-search"
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            )}
-            <div className="ml-auto flex gap-1">
-              <Button variant="ghost" size="sm" onClick={expandAll} className="text-xs h-7 px-2" data-testid="expand-all-btn">Expand All</Button>
-              <Button variant="ghost" size="sm" onClick={collapseAll} className="text-xs h-7 px-2" data-testid="collapse-all-btn">Collapse</Button>
-            </div>
-          </div>
+      {/* Legend + Diagram */}
+      <div className="bg-white border-x border-b border-slate-200 rounded-b-lg overflow-hidden">
+        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50">
+          <Legend />
+        </div>
 
-          {/* Tree */}
-          <div className="p-4 overflow-x-auto" data-testid="org-chart-tree">
-            <div className="min-w-[320px] space-y-0.5">
-              {rootNodes.map(root => (
-                <TreeNode
-                  key={root.role_id}
-                  nodeData={root}
-                  childrenMap={childrenMap}
-                  depth={0}
-                  onSelect={handleSelect}
-                  selectedId={selectedRole?.role_id}
-                  expandedSet={filteredExpandedSet}
-                  toggleExpand={toggleExpand}
-                />
-              ))}
-            </div>
+        {/* Node-link diagram canvas */}
+        <div
+          ref={containerRef}
+          className="overflow-auto relative"
+          style={{ maxHeight: 'calc(100vh - 260px)' }}
+          data-testid="org-chart-canvas"
+        >
+          <div className="relative" style={{ width: canvasSize.w, height: canvasSize.h, minWidth: '100%' }}>
+            {/* SVG connector layer */}
+            <svg
+              className="absolute inset-0 pointer-events-none"
+              width={canvasSize.w}
+              height={canvasSize.h}
+            >
+              <Connectors positions={positions} roles={roles} childMap={childMap} collapsed={collapsed} />
+            </svg>
+
+            {/* Node layer */}
+            {roles.map(r => {
+              const pos = positions[r.role_id];
+              if (!pos) return null;
+              // search dimming
+              const dimmed = matchIds && !matchIds.has(r.role_id);
+              // category filter hiding
+              if (catFilter !== 'all' && r.role_category !== catFilter) return null;
+              const hasKids = (childMap[r.role_id] || []).length > 0;
+              return (
+                <div key={r.role_id} style={{ opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.2s' }}>
+                  <NodeCard
+                    role={r}
+                    pos={pos}
+                    isSelected={selected?.role_id === r.role_id}
+                    onClick={handleSelect}
+                    hasChildren={hasKids}
+                    isCollapsed={collapsed.has(r.role_id)}
+                    onToggle={toggle}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Detail Panel (Sheet) */}
+      {/* Detail Panel */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
@@ -500,133 +481,79 @@ const OrgChartPage = () => {
             </SheetTitle>
           </SheetHeader>
 
-          {selectedRole && (
-            <div className="mt-5 space-y-5">
-              {/* Category badge */}
-              {selectedRole.role_category && (
-                <div className="flex items-center gap-2">
-                  <div
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border"
-                    style={{
-                      backgroundColor: getCatStyle(selectedRole.role_category).bg,
-                      color: getCatStyle(selectedRole.role_category).text,
-                      borderColor: getCatStyle(selectedRole.role_category).border,
-                    }}
-                    data-testid="detail-category-badge"
-                  >
-                    {getCatStyle(selectedRole.role_category).label}
-                  </div>
-                  {selectedRole.display_label && (
-                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{selectedRole.display_label}</span>
-                  )}
-                </div>
-              )}
-
-              {/* Position Title */}
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Position Title</Label>
-                {editing ? (
-                  <Input value={editForm.position_title} onChange={(e) => setEditForm({ ...editForm, position_title: e.target.value })} className="mt-1 rounded-sm" />
-                ) : (
-                  <p className="text-lg font-bold text-[#00205B] mt-1" data-testid="detail-position-title">{selectedRole.position_title}</p>
+          {selected && (
+            <div className="mt-5 space-y-4">
+              {/* Category + label */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border"
+                  style={{ backgroundColor: catStyle(selected.role_category).bg, color: catStyle(selected.role_category).text, borderColor: catStyle(selected.role_category).border }}>
+                  {catStyle(selected.role_category).label}
+                </span>
+                {selected.display_label && (
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{selected.display_label}</span>
                 )}
               </div>
 
-              {/* Assigned Name */}
+              {/* Title */}
               <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Assigned Name</Label>
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400">Position Title</Label>
                 {editing ? (
-                  <Input value={editForm.assigned_name} onChange={(e) => setEditForm({ ...editForm, assigned_name: e.target.value })} className="mt-1 rounded-sm" placeholder="Name or leave blank for Vacant" />
+                  <Input value={editForm.position_title} onChange={e => setEditForm({ ...editForm, position_title: e.target.value })} className="mt-1 rounded-sm" />
                 ) : (
-                  <div className={`mt-1 p-3 rounded-sm border ${selectedRole.assigned_name ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
+                  <p className="text-lg font-bold text-[#00205B]" data-testid="detail-title">{selected.position_title}</p>
+                )}
+              </div>
+
+              {/* Name */}
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400">Assigned Name</Label>
+                {editing ? (
+                  <Input value={editForm.assigned_name} onChange={e => setEditForm({ ...editForm, assigned_name: e.target.value })} className="mt-1 rounded-sm" />
+                ) : (
+                  <div className={`mt-1 p-2.5 rounded-sm border ${selected.assigned_name ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
                     <div className="flex items-center gap-2">
-                      <User className={`w-4 h-4 ${selectedRole.assigned_name ? 'text-[#00205B]' : 'text-amber-600'}`} />
-                      <span className={selectedRole.assigned_name ? 'font-medium' : 'text-amber-600 italic'} data-testid="detail-assigned-name">
-                        {selectedRole.assigned_name || 'Vacant'}
+                      <User className={`w-4 h-4 ${selected.assigned_name ? 'text-[#00205B]' : 'text-amber-600'}`} />
+                      <span className={selected.assigned_name ? 'font-medium text-sm' : 'text-amber-600 italic text-sm'} data-testid="detail-name">
+                        {selected.assigned_name || 'Vacant'}
                       </span>
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Display Label */}
-              {editing && (
-                <div>
-                  <Label className="text-xs uppercase tracking-wide text-slate-500">Display Label</Label>
-                  <Input value={editForm.display_label} onChange={(e) => setEditForm({ ...editForm, display_label: e.target.value })} className="mt-1 rounded-sm" placeholder="e.g. SM Level" />
-                </div>
-              )}
-
-              {/* Job Description */}
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Job Description</Label>
-                {editing ? (
-                  <Textarea value={editForm.job_description} onChange={(e) => setEditForm({ ...editForm, job_description: e.target.value })} className="mt-1 rounded-sm" rows={3} placeholder="Describe the position..." />
-                ) : (
-                  <p className="mt-1 text-sm text-slate-700" data-testid="detail-job-description">
-                    {selectedRole.job_description || <span className="text-slate-400 italic">Not defined</span>}
-                  </p>
-                )}
-              </div>
-
-              {/* Responsible For */}
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Responsible For</Label>
-                {editing ? (
-                  <Textarea value={editForm.responsible_for} onChange={(e) => setEditForm({ ...editForm, responsible_for: e.target.value })} className="mt-1 rounded-sm" rows={2} />
-                ) : (
-                  <p className="mt-1 text-sm text-slate-700" data-testid="detail-responsible-for">
-                    {selectedRole.responsible_for || <span className="text-slate-400 italic">Not defined</span>}
-                  </p>
-                )}
-              </div>
-
-              {/* Supervises */}
-              <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Supervises</Label>
-                {editing ? (
-                  <Textarea value={editForm.supervises} onChange={(e) => setEditForm({ ...editForm, supervises: e.target.value })} className="mt-1 rounded-sm" rows={2} />
-                ) : (
-                  <p className="mt-1 text-sm text-slate-700" data-testid="detail-supervises">
-                    {selectedRole.supervises || <span className="text-slate-400 italic">Not defined</span>}
-                  </p>
                 )}
               </div>
 
               {/* Reports To */}
               <div>
-                <Label className="text-xs uppercase tracking-wide text-slate-500">Reports To</Label>
-                <div className="mt-1 p-3 bg-slate-50 rounded-sm border border-slate-200">
-                  {selectedRole.reports_to ? (
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400">Reports To</Label>
+                <div className="mt-1 p-2.5 bg-slate-50 rounded-sm border border-slate-200">
+                  {selected.reports_to ? (
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-[#00205B]" />
-                      <span className="font-medium text-sm" data-testid="detail-reports-to">
-                        {getParentTitle(selectedRole.reports_to) || selectedRole.reports_to}
-                      </span>
+                      <span className="font-medium text-sm">{parentTitle(selected.reports_to)}</span>
                     </div>
-                  ) : (
-                    <span className="text-slate-500 text-sm">Top Level Position</span>
-                  )}
+                  ) : <span className="text-slate-500 text-sm">Top Level</span>}
                 </div>
+                {selected.secondary_reports_to && (
+                  <div className="mt-1 p-2 bg-purple-50 rounded-sm border border-purple-200 flex items-center gap-2">
+                    <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+                    <span className="text-xs text-purple-700">Secondary: {parentTitle(selected.secondary_reports_to)}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Direct Reports */}
-              {selectedRole.children && selectedRole.children.length > 0 && (
+              {/* Supervises / Children */}
+              {selected.children && selected.children.length > 0 && (
                 <div>
-                  <Label className="text-xs uppercase tracking-wide text-slate-500">Direct Reports ({selectedRole.children.length})</Label>
-                  <div className="mt-1 space-y-1.5 max-h-48 overflow-y-auto">
-                    {selectedRole.children.map(childId => {
-                      const child = roles.find(r => r.role_id === childId);
+                  <Label className="text-[10px] uppercase tracking-widest text-slate-400">Supervises ({selected.children.length})</Label>
+                  <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+                    {selected.children.map(cid => {
+                      const child = nodeMap[cid];
                       if (!child) return null;
                       return (
-                        <div
-                          key={childId}
-                          className="p-2 bg-slate-50 rounded-sm border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
-                          onClick={() => handleSelect(child)}
-                        >
-                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getCatStyle(child.role_category).bg }} />
-                          <span className="text-xs font-medium">{child.position_title}</span>
-                          {child.assigned_name && <span className="text-[10px] text-slate-500">- {child.assigned_name}</span>}
+                        <div key={cid} className="p-1.5 bg-slate-50 rounded border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100"
+                             onClick={() => handleSelect(child)}>
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: catStyle(child.role_category).bg }} />
+                          <span className="text-xs font-medium truncate">{child.position_title}</span>
+                          {child.assigned_name && <span className="text-[10px] text-slate-500 truncate">- {child.assigned_name}</span>}
                         </div>
                       );
                     })}
@@ -634,36 +561,37 @@ const OrgChartPage = () => {
                 </div>
               )}
 
-              {/* Category (editing) */}
-              {editing && (
-                <div>
-                  <Label className="text-xs uppercase tracking-wide text-slate-500">Category</Label>
-                  <Select value={editForm.role_category || 'none'} onValueChange={(v) => setEditForm({ ...editForm, role_category: v === 'none' ? '' : v })}>
-                    <SelectTrigger className="mt-1 rounded-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {Object.entries(CATEGORY_COLORS).map(([k, v]) => (<SelectItem key={k} value={k}>{v.label}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Responsibilities */}
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400">Responsibilities</Label>
+                {editing ? (
+                  <Textarea value={editForm.responsible_for} onChange={e => setEditForm({ ...editForm, responsible_for: e.target.value })} className="mt-1 rounded-sm" rows={3} />
+                ) : (
+                  <p className="mt-1 text-sm text-slate-700">{selected.responsible_for || <span className="text-slate-400 italic">Not defined</span>}</p>
+                )}
+              </div>
+
+              {/* Job Description */}
+              <div>
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400">Job Description</Label>
+                {editing ? (
+                  <Textarea value={editForm.job_description} onChange={e => setEditForm({ ...editForm, job_description: e.target.value })} className="mt-1 rounded-sm" rows={3} />
+                ) : (
+                  <p className="mt-1 text-sm text-slate-700">{selected.job_description || <span className="text-slate-400 italic">Not defined</span>}</p>
+                )}
+              </div>
 
               {/* Actions */}
               {canEdit() && (
-                <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
+                <div className="pt-3 border-t border-slate-200 flex items-center gap-2">
                   {editing ? (
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setEditing(false)} className="rounded-sm">Cancel</Button>
-                      <Button onClick={handleSave} className="bg-[#00205B] hover:bg-[#001540] rounded-sm">Save</Button>
-                    </div>
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setEditing(false)} className="rounded-sm">Cancel</Button>
+                      <Button size="sm" onClick={handleSave} className="bg-[#00205B] hover:bg-[#001540] rounded-sm">Save</Button>
+                    </>
                   ) : (
-                    <Button onClick={() => setEditing(true)} className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="edit-position-btn">
-                      <Edit2 className="w-4 h-4 mr-2" /> Edit
-                    </Button>
-                  )}
-                  {!editing && (
-                    <Button variant="ghost" onClick={() => handleDelete(selectedRole.role_id)} className="text-[#BF0D3E] hover:text-[#BF0D3E] hover:bg-red-50" data-testid="delete-position-btn">
-                      <Trash2 className="w-4 h-4" />
+                    <Button size="sm" onClick={() => setEditing(true)} className="bg-[#00205B] hover:bg-[#001540] rounded-sm" data-testid="edit-btn">
+                      <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Edit
                     </Button>
                   )}
                 </div>
