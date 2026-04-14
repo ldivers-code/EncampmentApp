@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   getCheckInRoster, getCheckInSummary, checkInStep, undoCheckInStep,
-  checkInAll, undoAllCheckIn
+  checkInAll, undoAllCheckIn,
+  getParticipantContraband, addContraband, returnContraband, deleteContraband
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,7 +13,8 @@ import { toast } from 'sonner';
 import {
   UserCheck, Search, RefreshCw, CheckCircle, Circle, Users,
   ChevronRight, Undo2, CheckCheck, ClipboardList, Clock,
-  Filter, Plane, FileText, Home, Package, MessageSquare, X
+  Filter, Plane, FileText, Home, Package, MessageSquare, X,
+  AlertTriangle, Plus, Trash2, RotateCcw
 } from 'lucide-react';
 
 const STEPS = [
@@ -71,6 +73,97 @@ const StepPill = ({ step, stepInfo, onClick, onUndo, disabled }) => {
 };
 
 // Individual participant detail sheet
+// Contraband section inside check-in detail
+const ContrabandsSection = ({ participantId, canEdit }) => {
+  const [items, setItems] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newItem, setNewItem] = useState({ item_name: '', description: '', category: 'electronics', storage_location: '', notes: '' });
+
+  useEffect(() => { if (participantId) loadItems(); }, [participantId]);
+
+  const loadItems = async () => {
+    try { const data = await getParticipantContraband(participantId); setItems(data); }
+    catch { setItems([]); }
+  };
+
+  const handleAdd = async () => {
+    if (!newItem.item_name) return;
+    try {
+      await addContraband(participantId, newItem);
+      toast.success('Contraband logged');
+      setShowAdd(false);
+      setNewItem({ item_name: '', description: '', category: 'electronics', storage_location: '', notes: '' });
+      loadItems();
+    } catch { toast.error('Failed'); }
+  };
+
+  const handleReturn = async (itemId) => {
+    try { await returnContraband(itemId, { returned_to: 'Cadet' }); toast.success('Marked returned'); loadItems(); }
+    catch { toast.error('Failed'); }
+  };
+
+  const CATEGORIES = ['electronics', 'weapon', 'tobacco', 'alcohol', 'food', 'other'];
+
+  return (
+    <div className="pt-3 border-t border-slate-200" data-testid="contraband-section">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-bold text-[#00205B] flex items-center gap-1.5">
+          <AlertTriangle className="w-4 h-4" /> Contraband
+          {items.length > 0 && <span className="bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded-full ml-1">{items.length}</span>}
+        </h4>
+        {canEdit && (
+          <Button size="sm" variant="outline" className="h-6 text-xs rounded-sm" onClick={() => setShowAdd(!showAdd)} data-testid="add-contraband-btn">
+            <Plus className="w-3 h-3 mr-1" /> Log Item
+          </Button>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="bg-red-50 border border-red-200 rounded-sm p-3 mb-2 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={newItem.item_name} onChange={e => setNewItem({...newItem, item_name: e.target.value})}
+              placeholder="Item name *" className="h-8 text-xs border rounded-sm px-2" data-testid="contraband-item-name" />
+            <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}
+              className="h-8 text-xs border rounded-sm px-2">
+              {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+            </select>
+            <input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})}
+              placeholder="Description" className="h-8 text-xs border rounded-sm px-2" />
+            <input value={newItem.storage_location} onChange={e => setNewItem({...newItem, storage_location: e.target.value})}
+              placeholder="Storage location" className="h-8 text-xs border rounded-sm px-2" />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white h-7 text-xs rounded-sm" onClick={handleAdd} disabled={!newItem.item_name}>Save</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs rounded-sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="space-y-1.5">
+          {items.map(item => (
+            <div key={item.id} className={`flex items-center justify-between p-2 rounded-sm border text-xs ${item.returned ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-red-50 border-red-200'}`}
+                 data-testid={`contraband-${item.id}`}>
+              <div>
+                <span className="font-medium">{item.item_name}</span>
+                {item.description && <span className="text-slate-500 ml-1">({item.description})</span>}
+                <span className="ml-2 px-1.5 py-0.5 bg-slate-200 rounded text-[10px]">{item.category}</span>
+                {item.storage_location && <span className="ml-1 text-slate-400">@ {item.storage_location}</span>}
+                {item.returned && <span className="ml-2 text-green-600 font-bold">RETURNED</span>}
+              </div>
+              {canEdit && !item.returned && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs text-green-600 hover:bg-green-50" onClick={() => handleReturn(item.id)}>
+                  <RotateCcw className="w-3 h-3 mr-1" /> Return
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ParticipantDetailSheet = ({ participant, isOpen, onClose, onStepAction, canEdit }) => {
   const [noteText, setNoteText] = useState('');
   const [activeNoteStep, setActiveNoteStep] = useState(null);
@@ -257,6 +350,9 @@ const ParticipantDetailSheet = ({ participant, isOpen, onClose, onStepAction, ca
               )}
             </div>
           )}
+
+          {/* Contraband Section */}
+          <ContrabandsSection participantId={participant.participant_id} canEdit={canEdit} />
         </div>
       </SheetContent>
     </Sheet>

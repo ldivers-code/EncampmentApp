@@ -23,9 +23,10 @@ const DEFAULT_WIDGETS = {
   overview: { visible: true, size: 'full', order: 0, label: 'Cadet Overview' },
   schedule: { visible: true, size: 'full', order: 1, label: 'Schedule' },
   health: { visible: true, size: 'half', order: 2, label: 'Health Incidents' },
-  points: { visible: true, size: 'half', order: 3, label: 'Points & Awards' },
-  meals: { visible: true, size: 'full', order: 4, label: 'Meal Plans' },
-  otc_form: { visible: true, size: 'full', order: 5, label: 'OTC Permission Form' }
+  med_diary: { visible: true, size: 'half', order: 3, label: 'Medication Diary' },
+  points: { visible: true, size: 'half', order: 4, label: 'Points & Awards' },
+  meals: { visible: true, size: 'full', order: 5, label: 'Meal Plans' },
+  otc_form: { visible: true, size: 'full', order: 6, label: 'OTC Permission Form' }
 };
 
 const SIZE_OPTIONS = [
@@ -47,6 +48,7 @@ export default function MyCadetPage() {
   const [cadet, setCadet] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [health, setHealth] = useState(null);
+  const [medDiary, setMedDiary] = useState([]);
   const [points, setPoints] = useState(null);
   const [meals, setMeals] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,12 +112,13 @@ export default function MyCadetPage() {
     try {
       setLoading(true);
       setError(null);
-      const [cadetRes, schedRes, healthRes, pointsRes, mealsRes] = await Promise.all([
+      const [cadetRes, schedRes, healthRes, pointsRes, mealsRes, medDiaryRes] = await Promise.all([
         fetch(`${API}/api/parent/my-cadet`, fetchOpts),
         fetch(`${API}/api/parent/my-cadet/schedule`, fetchOpts),
         fetch(`${API}/api/parent/my-cadet/health-incidents`, fetchOpts),
         fetch(`${API}/api/parent/my-cadet/points`, fetchOpts),
         fetch(`${API}/api/parent/my-cadet/meals`, fetchOpts),
+        fetch(`${API}/api/parent/my-cadet/med-diary`, fetchOpts),
       ]);
       if (!cadetRes.ok) {
         const err = await cadetRes.json();
@@ -126,6 +129,7 @@ export default function MyCadetPage() {
       setHealth(await healthRes.json());
       setPoints(await pointsRes.json());
       setMeals(await mealsRes.json());
+      if (medDiaryRes.ok) setMedDiary(await medDiaryRes.json());
     } catch (e) {
       setError(e.message);
     } finally {
@@ -350,6 +354,33 @@ export default function MyCadetPage() {
     </div>
   );
 
+  const renderMedDiary = () => (
+    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+      {(!medDiary || medDiary.length === 0) ? (
+        <div className="text-center py-4">
+          <Pill className="w-6 h-6 mx-auto text-slate-300 mb-1" />
+          <p className="text-sm text-slate-400">No medication diary entries</p>
+        </div>
+      ) : medDiary.map((entry, i) => (
+        <div key={i} className="p-2 bg-blue-50 rounded-sm border border-blue-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Pill className="w-3 h-3 text-blue-500" />
+              <span className="font-medium text-sm text-blue-800">{entry.medication_name}</span>
+              {entry.dosage && <span className="text-xs text-blue-500">({entry.dosage})</span>}
+              {entry.refused && <span className="text-xs text-red-600 font-bold ml-1">REFUSED</span>}
+            </div>
+            <span className="text-xs text-blue-400">
+              {entry.administered_at ? new Date(entry.administered_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : entry.date}
+            </span>
+          </div>
+          <p className="text-xs text-blue-600 mt-0.5">Administered by: {entry.administered_by}</p>
+          {entry.notes && <p className="text-xs text-blue-500 mt-0.5">{entry.notes}</p>}
+        </div>
+      ))}
+    </div>
+  );
+
   const renderPoints = () => (
     <div className="space-y-2 max-h-[300px] overflow-y-auto">
       {(!points || points.length === 0) ? (
@@ -433,6 +464,7 @@ export default function MyCadetPage() {
     overview: renderOverview,
     schedule: renderSchedule,
     health: renderHealth,
+    med_diary: renderMedDiary,
     points: renderPoints,
     meals: renderMeals,
     otc_form: renderOtcForm

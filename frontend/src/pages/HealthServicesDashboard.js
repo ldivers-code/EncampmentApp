@@ -5,7 +5,10 @@ import {
   searchHealthCadets, getHealthReferenceLists, getHealthAuditLog, 
   getHealthSettings, updateHealthSettings, importMedicalData, getImportSummary,
   getMedicalRoster, getCadetFullHealthProfile,
-  addCadetAllergy, updateAllergy, deleteAllergy, updateCadetOtcApprovals
+  addCadetAllergy, updateAllergy, deleteAllergy, updateCadetOtcApprovals,
+  getAllMedDiary, addMedDiaryEntry, deleteMedDiaryEntry,
+  getCadetSupplements, addCadetSupplement, deleteSupplement,
+  getParticipants
 } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -20,7 +23,8 @@ import {
   CheckCircle, XCircle, AlertCircle, ChevronRight, RefreshCw,
   Thermometer, Filter, Save, Upload, FileSpreadsheet,
   Shield, Eye, Syringe, ClipboardList, ChevronDown, ChevronUp, 
-  Phone, Mail, User, BadgeAlert, Plus, Edit2, Trash2, X
+  Phone, Mail, User, BadgeAlert, Plus, Edit2, Trash2, X,
+  BookOpen, Leaf
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -828,6 +832,270 @@ const MedicalRosterTab = ({ hasFullAccess }) => {
 };
 
 // ==================== MAIN DASHBOARD ====================
+// ─── Med Diary Tab ───
+const MedDiaryTab = ({ hasFullAccess }) => {
+  const [entries, setEntries] = useState([]);
+  const [participants, setParticipants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [showAdd, setShowAdd] = useState(false);
+  const [newEntry, setNewEntry] = useState({ participant_id: '', medication_name: '', dosage: '', notes: '' });
+
+  useEffect(() => { loadData(); }, [selectedDate]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [diaryData, pData] = await Promise.all([
+        getAllMedDiary(selectedDate),
+        getParticipants()
+      ]);
+      setEntries(diaryData);
+      setParticipants(pData);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const handleAdd = async () => {
+    if (!newEntry.participant_id || !newEntry.medication_name) return;
+    try {
+      await addMedDiaryEntry(newEntry.participant_id, {
+        ...newEntry,
+        date: selectedDate,
+        administered_at: new Date().toISOString()
+      });
+      toast.success('Entry recorded');
+      setShowAdd(false);
+      setNewEntry({ participant_id: '', medication_name: '', dosage: '', notes: '' });
+      loadData();
+    } catch (e) { toast.error('Failed to add entry'); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this entry?')) return;
+    try { await deleteMedDiaryEntry(id); toast.success('Deleted'); loadData(); }
+    catch { toast.error('Failed'); }
+  };
+
+  const pMap = {};
+  participants.forEach(p => { pMap[p.id] = p; });
+
+  return (
+    <div className="space-y-4" data-testid="med-diary-tab">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-bold text-[#00205B]">Daily Medication Diary</h3>
+          <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+            className="w-40 h-8 text-sm rounded-sm" data-testid="diary-date-picker" />
+        </div>
+        {hasFullAccess && (
+          <Button size="sm" className="bg-[#00205B] rounded-sm" onClick={() => setShowAdd(true)} data-testid="add-diary-entry-btn">
+            <Plus className="w-3.5 h-3.5 mr-1" /> Log Medication
+          </Button>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="bg-blue-50 border border-blue-200 rounded-sm p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs uppercase text-slate-600">Cadet *</Label>
+              <select value={newEntry.participant_id} onChange={e => setNewEntry({ ...newEntry, participant_id: e.target.value })}
+                className="w-full mt-1 h-9 rounded-sm border border-slate-300 text-sm px-2" data-testid="diary-cadet-select">
+                <option value="">Select cadet...</option>
+                {participants.filter(p => ['basic_student','cadre'].includes(p.participant_type)).sort((a,b) => (a.last_name||'').localeCompare(b.last_name||'')).map(p => (
+                  <option key={p.id} value={p.id}>{p.rank} {p.last_name}, {p.first_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase text-slate-600">Medication *</Label>
+              <Input value={newEntry.medication_name} onChange={e => setNewEntry({ ...newEntry, medication_name: e.target.value })}
+                placeholder="e.g. Adderall, Insulin" className="mt-1 h-9 rounded-sm" data-testid="diary-med-name" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase text-slate-600">Dosage</Label>
+              <Input value={newEntry.dosage} onChange={e => setNewEntry({ ...newEntry, dosage: e.target.value })}
+                placeholder="e.g. 20mg" className="mt-1 h-9 rounded-sm" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase text-slate-600">Notes</Label>
+              <Input value={newEntry.notes} onChange={e => setNewEntry({ ...newEntry, notes: e.target.value })}
+                placeholder="Optional notes" className="mt-1 h-9 rounded-sm" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="bg-[#00205B] rounded-sm" onClick={handleAdd} disabled={!newEntry.participant_id || !newEntry.medication_name}>Save</Button>
+            <Button size="sm" variant="outline" className="rounded-sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {loading ? <p className="text-slate-400 text-sm py-4">Loading...</p> : entries.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-sm p-8 text-center">
+          <BookOpen className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+          <p className="text-slate-500 text-sm">No medication entries for {selectedDate}</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+          <table className="w-full text-sm" data-testid="med-diary-table">
+            <thead><tr className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <th className="px-3 py-2">Cadet</th><th className="px-3 py-2">Medication</th>
+              <th className="px-3 py-2">Dosage</th><th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Administered By</th><th className="px-3 py-2">Notes</th>
+              {hasFullAccess && <th className="px-3 py-2 w-12"></th>}
+            </tr></thead>
+            <tbody>
+              {entries.map(e => {
+                const p = pMap[e.participant_id];
+                return (
+                  <tr key={e.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium">{p ? `${p.rank || ''} ${p.last_name}, ${p.first_name}` : e.participant_id}</td>
+                    <td className="px-3 py-2">{e.medication_name}{e.refused && <span className="ml-1 text-red-600 text-xs font-bold">REFUSED</span>}</td>
+                    <td className="px-3 py-2 text-slate-600">{e.dosage}</td>
+                    <td className="px-3 py-2 text-slate-600">{e.administered_at ? new Date(e.administered_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                    <td className="px-3 py-2 text-slate-600">{e.administered_by}</td>
+                    <td className="px-3 py-2 text-slate-500 text-xs">{e.notes}</td>
+                    {hasFullAccess && <td className="px-3 py-2"><button onClick={() => handleDelete(e.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Supplements Tab ───
+const SupplementsTab = ({ hasFullAccess }) => {
+  const [participants, setParticipants] = useState([]);
+  const [selectedCadet, setSelectedCadet] = useState(null);
+  const [supplements, setSupplements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newSup, setNewSup] = useState({ name: '', dosage: '', frequency: '', notes: '' });
+
+  useEffect(() => { loadParticipants(); }, []);
+
+  const loadParticipants = async () => {
+    try {
+      const data = await getParticipants();
+      setParticipants(data.filter(p => ['basic_student','cadre'].includes(p.participant_type)));
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const selectCadet = async (cadet) => {
+    setSelectedCadet(cadet);
+    try {
+      const sups = await getCadetSupplements(cadet.id);
+      setSupplements(sups);
+    } catch { setSupplements([]); }
+  };
+
+  const handleAdd = async () => {
+    if (!selectedCadet || !newSup.name) return;
+    try {
+      await addCadetSupplement(selectedCadet.id, newSup);
+      toast.success('Supplement added');
+      setShowAdd(false);
+      setNewSup({ name: '', dosage: '', frequency: '', notes: '' });
+      selectCadet(selectedCadet);
+    } catch { toast.error('Failed'); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete?')) return;
+    try { await deleteSupplement(id); toast.success('Deleted'); selectCadet(selectedCadet); }
+    catch { toast.error('Failed'); }
+  };
+
+  return (
+    <div className="space-y-4" data-testid="supplements-tab">
+      <h3 className="text-lg font-bold text-[#00205B]">Cadet Supplements (Non-Prescription)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Cadet list */}
+        <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+          <div className="bg-slate-50 px-3 py-2 text-xs uppercase font-bold text-slate-500 border-b">Select Cadet</div>
+          <div className="max-h-[400px] overflow-y-auto">
+            {loading ? <p className="p-3 text-sm text-slate-400">Loading...</p> :
+              participants.sort((a,b) => (a.last_name||'').localeCompare(b.last_name||'')).map(p => (
+                <div key={p.id} onClick={() => selectCadet(p)}
+                  className={`px-3 py-2 text-sm cursor-pointer border-b border-slate-50 hover:bg-blue-50 transition-colors ${selectedCadet?.id === p.id ? 'bg-blue-50 font-medium' : ''}`}
+                  data-testid={`sup-cadet-${p.capid}`}>
+                  {p.rank} {p.last_name}, {p.first_name}
+                  <span className="text-xs text-slate-400 ml-1">({p.participant_type === 'cadre' ? 'Cadre' : 'Student'})</span>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+
+        {/* Supplement details */}
+        <div className="lg:col-span-2">
+          {!selectedCadet ? (
+            <div className="bg-white border border-slate-200 rounded-sm p-8 text-center">
+              <Leaf className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+              <p className="text-slate-500 text-sm">Select a cadet to view/manage supplements</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-sm">
+              <div className="bg-slate-50 px-4 py-2.5 border-b flex items-center justify-between">
+                <span className="text-sm font-bold text-[#00205B]">{selectedCadet.rank} {selectedCadet.last_name}, {selectedCadet.first_name}</span>
+                {hasFullAccess && (
+                  <Button size="sm" className="bg-[#00205B] rounded-sm h-7 text-xs" onClick={() => setShowAdd(true)} data-testid="add-supplement-btn">
+                    <Plus className="w-3 h-3 mr-1" /> Add
+                  </Button>
+                )}
+              </div>
+
+              {showAdd && (
+                <div className="p-3 bg-green-50 border-b border-green-200 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={newSup.name} onChange={e => setNewSup({...newSup, name: e.target.value})} placeholder="Supplement name *" className="h-8 text-sm rounded-sm" data-testid="sup-name-input" />
+                    <Input value={newSup.dosage} onChange={e => setNewSup({...newSup, dosage: e.target.value})} placeholder="Dosage" className="h-8 text-sm rounded-sm" />
+                    <Input value={newSup.frequency} onChange={e => setNewSup({...newSup, frequency: e.target.value})} placeholder="Frequency (e.g. daily)" className="h-8 text-sm rounded-sm" />
+                    <Input value={newSup.notes} onChange={e => setNewSup({...newSup, notes: e.target.value})} placeholder="Notes" className="h-8 text-sm rounded-sm" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-[#00205B] rounded-sm h-7 text-xs" onClick={handleAdd} disabled={!newSup.name}>Save</Button>
+                    <Button size="sm" variant="outline" className="rounded-sm h-7 text-xs" onClick={() => setShowAdd(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+
+              {supplements.length === 0 ? (
+                <p className="p-4 text-sm text-slate-400 text-center">No supplements on file</p>
+              ) : (
+                <table className="w-full text-sm" data-testid="supplements-table">
+                  <thead><tr className="text-left text-xs uppercase text-slate-500 bg-slate-50">
+                    <th className="px-3 py-2">Name</th><th className="px-3 py-2">Dosage</th>
+                    <th className="px-3 py-2">Frequency</th><th className="px-3 py-2">Notes</th>
+                    {hasFullAccess && <th className="px-3 py-2 w-10"></th>}
+                  </tr></thead>
+                  <tbody>
+                    {supplements.map(s => (
+                      <tr key={s.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-medium">{s.name}</td>
+                        <td className="px-3 py-2 text-slate-600">{s.dosage}</td>
+                        <td className="px-3 py-2 text-slate-600">{s.frequency}</td>
+                        <td className="px-3 py-2 text-slate-500 text-xs">{s.notes}</td>
+                        {hasFullAccess && <td className="px-3 py-2"><button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const HealthServicesDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1146,6 +1414,30 @@ const HealthServicesDashboard = () => {
           <Pill className="w-4 h-4 inline mr-1.5 -mt-0.5" />
           OTC Permissions
         </button>
+        <button
+          onClick={() => setActiveTab('med-diary')}
+          className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors border-b-2 -mb-px ${
+            activeTab === 'med-diary'
+              ? 'text-[#00205B] border-[#00205B]'
+              : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+          }`}
+          data-testid="tab-med-diary"
+        >
+          <BookOpen className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+          Med Diary
+        </button>
+        <button
+          onClick={() => setActiveTab('supplements')}
+          className={`px-4 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors border-b-2 -mb-px ${
+            activeTab === 'supplements'
+              ? 'text-[#00205B] border-[#00205B]'
+              : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+          }`}
+          data-testid="tab-supplements"
+        >
+          <Leaf className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+          Supplements
+        </button>
       </div>
 
       {/* OTC Permissions Tab */}
@@ -1289,6 +1581,16 @@ const HealthServicesDashboard = () => {
             </div>
           </>)}
         </div>
+      )}
+
+      {/* Med Diary Tab */}
+      {activeTab === 'med-diary' && (
+        <MedDiaryTab hasFullAccess={hasFullAccess()} />
+      )}
+
+      {/* Supplements Tab */}
+      {activeTab === 'supplements' && (
+        <SupplementsTab hasFullAccess={hasFullAccess()} />
       )}
 
       {/* Medical Roster Tab */}

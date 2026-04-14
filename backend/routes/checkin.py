@@ -268,3 +268,124 @@ async def undo_all_check_in(
         raise HTTPException(status_code=404, detail="No check-in record found")
     
     return {"status": "success", "all_undone": True}
+
+
+# ================= CONTRABAND =================
+# Connected to check-in flow (per-cadet), data stored in logistics collection
+
+import uuid
+
+@api_router.get("/check-in/{participant_id}/contraband")
+async def get_participant_contraband(
+    participant_id: str,
+    user: dict = Depends(require_check_in_access())
+):
+    """Get contraband items for a participant"""
+    items = await db.contraband.find(
+        {"participant_id": participant_id}, {"_id": 0}
+    ).sort("confiscated_at", -1).to_list(50)
+    return items
+
+
+@api_router.post("/check-in/{participant_id}/contraband")
+async def add_contraband(
+    participant_id: str,
+    item: dict,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Log a contraband item confiscated during in-processing"""
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "participant_id": participant_id,
+        "item_name": item.get("item_name", ""),
+        "description": item.get("description", ""),
+        "category": item.get("category", "other"),
+        "quantity": item.get("quantity", 1),
+        "storage_location": item.get("storage_location", ""),
+        "confiscated_at": item.get("confiscated_at", now),
+        "confiscated_by": user.get("name", user.get("id")),
+        "confiscated_by_id": user["id"],
+        "returned": False,
+        "returned_at": None,
+        "returned_to": None,
+        "notes": item.get("notes", ""),
+        "created_at": now,
+    }
+    await db.contraband.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/check-in/contraband/{item_id}")
+async def update_contraband(
+    item_id: str,
+    updates: dict,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Update a contraband record"""
+    allowed = {"item_name", "description", "category", "quantity", "storage_location", "notes"}
+    upd = {k: v for k, v in updates.items() if k in allowed}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.contraband.update_one({"id": item_id}, {"$set": upd})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    updated = await db.contraband.find_one({"id": item_id}, {"_id": 0})
+    return updated
+
+
+@api_router.put("/check-in/contraband/{item_id}/return")
+async def return_contraband(
+    item_id: str,
+    data: dict,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Mark contraband as returned"""
+    now = datetime.now(timezone.utc).isoformat()
+    upd = {
+        "returned": True,
+        "returned_at": now,
+        "returned_to": data.get("returned_to", ""),
+        "returned_by": user.get("name", user.get("id")),
+        "returned_by_id": user["id"],
+        "return_notes": data.get("notes", ""),
+    }
+    result = await db.contraband.update_one({"id": item_id}, {"$set": upd})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    updated = await db.contraband.find_one({"id": item_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/check-in/contraband/{item_id}")
+async def delete_contraband(
+    item_id: str,
+    user: dict = Depends(require_check_in_edit())
+):
+    """Delete a contraband record"""
+    result = await db.contraband.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"message": "Deleted"}
+
+
+@api_router.get("/logistics/contraband")
+async def get_all_contraband(
+    returned: bool = None,
+    user: dict = Depends(require_check_in_access())
+):
+    """Get all contraband items across all participants (logistics view)"""
+    query = {}
+    if returned is not None:
+        query["returned"] = returned
+    items = await db.contraband.find(query, {"_id": 0}).sort("confiscated_at", -1).to_list(500)
+    # Enrich with participant names
+    for item in items:
+        p = await db.participants.find_one(
+            {"id": item["participant_id"]},
+            {"_id": 0, "first_name": 1, "last_name": 1, "rank": 1, "flight": 1}
+        )
+        if p:
+            item["participant_name"] = f"{p.get('rank','')} {p.get('last_name','')}, {p.get('first_name','')}"
+            item["flight"] = p.get("flight")
+    return items

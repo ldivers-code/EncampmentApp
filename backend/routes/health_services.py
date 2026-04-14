@@ -853,3 +853,155 @@ async def get_import_summary(user: dict = Depends(require_health_view())):
 
 
 
+
+
+# ================= DAILY MED DIARY =================
+
+@api_router.get("/health/med-diary")
+async def get_med_diary_all(
+    date: str = None,
+    participant_id: str = None,
+    user: dict = Depends(require_health_full())
+):
+    """Get med diary entries, optionally filtered by date and/or participant"""
+    query = {}
+    if date:
+        query["date"] = date
+    if participant_id:
+        query["participant_id"] = participant_id
+    entries = await db.hs_med_diary.find(query, {"_id": 0}).sort("administered_at", -1).to_list(500)
+    return entries
+
+
+@api_router.get("/health/cadet/{cadet_id}/med-diary")
+async def get_cadet_med_diary(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get all med diary entries for a specific cadet"""
+    entries = await db.hs_med_diary.find(
+        {"participant_id": cadet_id}, {"_id": 0}
+    ).sort("administered_at", -1).to_list(200)
+    return entries
+
+
+@api_router.post("/health/cadet/{cadet_id}/med-diary")
+async def add_med_diary_entry(
+    cadet_id: str,
+    entry: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Log that a cadet took their medication at a specific time"""
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "participant_id": cadet_id,
+        "medication_name": entry.get("medication_name", ""),
+        "dosage": entry.get("dosage", ""),
+        "administered_at": entry.get("administered_at", now),
+        "date": entry.get("date", now[:10]),
+        "administered_by": user.get("name", user.get("id")),
+        "administered_by_id": user["id"],
+        "notes": entry.get("notes", ""),
+        "refused": entry.get("refused", False),
+        "created_at": now,
+    }
+    await db.hs_med_diary.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/health/med-diary/{entry_id}")
+async def update_med_diary_entry(
+    entry_id: str,
+    updates: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update a med diary entry"""
+    allowed = {"medication_name", "dosage", "administered_at", "date", "notes", "refused"}
+    upd = {k: v for k, v in updates.items() if k in allowed}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    upd["updated_by"] = user["id"]
+    result = await db.hs_med_diary.update_one({"id": entry_id}, {"$set": upd})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    updated = await db.hs_med_diary.find_one({"id": entry_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/health/med-diary/{entry_id}")
+async def delete_med_diary_entry(
+    entry_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Delete a med diary entry"""
+    result = await db.hs_med_diary.delete_one({"id": entry_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"message": "Deleted"}
+
+
+# ================= SUPPLEMENT LIST =================
+
+@api_router.get("/health/cadet/{cadet_id}/supplements")
+async def get_cadet_supplements(
+    cadet_id: str,
+    user: dict = Depends(require_health_view())
+):
+    """Get non-prescription supplements for a cadet"""
+    supplements = await db.hs_supplements.find(
+        {"participant_id": cadet_id}, {"_id": 0}
+    ).to_list(50)
+    return supplements
+
+
+@api_router.post("/health/cadet/{cadet_id}/supplements")
+async def add_cadet_supplement(
+    cadet_id: str,
+    supplement: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Add a supplement to a cadet's list"""
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "participant_id": cadet_id,
+        "name": supplement.get("name", ""),
+        "dosage": supplement.get("dosage", ""),
+        "frequency": supplement.get("frequency", ""),
+        "notes": supplement.get("notes", ""),
+        "created_by": user["id"],
+        "created_at": now,
+    }
+    await db.hs_supplements.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/health/supplements/{supplement_id}")
+async def update_supplement(
+    supplement_id: str,
+    updates: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Update a supplement record"""
+    allowed = {"name", "dosage", "frequency", "notes"}
+    upd = {k: v for k, v in updates.items() if k in allowed}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.hs_supplements.update_one({"id": supplement_id}, {"$set": upd})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Supplement not found")
+    updated = await db.hs_supplements.find_one({"id": supplement_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/health/supplements/{supplement_id}")
+async def delete_supplement(
+    supplement_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Delete a supplement record"""
+    result = await db.hs_supplements.delete_one({"id": supplement_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Supplement not found")
+    return {"message": "Deleted"}

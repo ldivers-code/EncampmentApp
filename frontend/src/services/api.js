@@ -1140,6 +1140,47 @@ export const updateCadetOtcApprovals = async (cadetId, otcData) => {
   return response.data;
 };
 
+// ============ Med Diary ============
+export const getCadetMedDiary = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/med-diary`, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const addMedDiaryEntry = async (cadetId, entry) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/med-diary`, entry, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const updateMedDiaryEntry = async (entryId, updates) => {
+  const response = await axios.put(`${API}/health/med-diary/${entryId}`, updates, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const deleteMedDiaryEntry = async (entryId) => {
+  const response = await axios.delete(`${API}/health/med-diary/${entryId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const getAllMedDiary = async (date = null) => {
+  const params = date ? `?date=${date}` : '';
+  const response = await axios.get(`${API}/health/med-diary${params}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// ============ Supplements ============
+export const getCadetSupplements = async (cadetId) => {
+  const response = await axios.get(`${API}/health/cadet/${cadetId}/supplements`, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const addCadetSupplement = async (cadetId, supplement) => {
+  const response = await axios.post(`${API}/health/cadet/${cadetId}/supplements`, supplement, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const updateSupplement = async (supplementId, updates) => {
+  const response = await axios.put(`${API}/health/supplements/${supplementId}`, updates, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const deleteSupplement = async (supplementId) => {
+  const response = await axios.delete(`${API}/health/supplements/${supplementId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // ============ Check-In System ============
 export const getCheckInRoster = async (category = 'all') => {
   const response = await axios.get(`${API}/check-in/roster?category=${category}`, { headers: getAuthHeaders() });
@@ -1168,6 +1209,33 @@ export const checkInAll = async (participantId) => {
 
 export const undoAllCheckIn = async (participantId) => {
   const response = await axios.delete(`${API}/check-in/${participantId}/undo-all`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+// ============ Contraband ============
+export const getParticipantContraband = async (participantId) => {
+  const response = await axios.get(`${API}/check-in/${participantId}/contraband`, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const addContraband = async (participantId, item) => {
+  const response = await axios.post(`${API}/check-in/${participantId}/contraband`, item, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const updateContraband = async (itemId, updates) => {
+  const response = await axios.put(`${API}/check-in/contraband/${itemId}`, updates, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const returnContraband = async (itemId, data) => {
+  const response = await axios.put(`${API}/check-in/contraband/${itemId}/return`, data, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const deleteContraband = async (itemId) => {
+  const response = await axios.delete(`${API}/check-in/contraband/${itemId}`, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const getAllContraband = async (returned = null) => {
+  const params = returned !== null ? `?returned=${returned}` : '';
+  const response = await axios.get(`${API}/logistics/contraband${params}`, { headers: getAuthHeaders() });
   return response.data;
 };
 

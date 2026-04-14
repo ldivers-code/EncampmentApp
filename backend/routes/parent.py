@@ -132,6 +132,17 @@ async def get_my_cadet_health_incidents(user: dict = Depends(get_current_user)):
     }
 
 
+@api_router.get("/parent/my-cadet/med-diary")
+async def get_my_cadet_med_diary(user: dict = Depends(get_current_user)):
+    """Get medication diary for parent's cadet — shows when meds were taken"""
+    cadet = await get_parent_and_cadet(user)
+    entries = await db.hs_med_diary.find(
+        {"participant_id": cadet["id"]}, {"_id": 0}
+    ).sort("administered_at", -1).to_list(200)
+    return entries
+
+
+
 @api_router.get("/parent/my-cadet/points")
 async def get_my_cadet_points(user: dict = Depends(get_current_user)):
     """Get points and awards for parent's cadet"""
