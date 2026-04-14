@@ -175,61 +175,63 @@ function AssignmentCard({ assignment: a, user, isCreator, onOpen, onDelete, onRe
       data-testid={`assignment-card-${a.id}`}
     >
       <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-              <ClipboardList className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate" data-testid={`assignment-title-${a.id}`}>
-                  {a.title}
-                </h3>
-                {myRole !== 'student' && myRole !== 'creator' && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase ${roleColor}`}>{myRole}</span>
-                )}
-                {myRole === 'student' && getStatusBadge()}
-              </div>
-              <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">{a.description || 'No description'}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 flex-wrap">
-                <span>Due <span className="text-slate-600 font-medium">{new Date(a.due_date + 'T00:00:00').toLocaleDateString()}</span></span>
-                <span className="hidden sm:inline">{a.created_by_name}</span>
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" />{targetLabel()}</span>
-                {a.questions?.length > 0 && <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />{a.questions.length} Q</span>}
-                {a.materials?.length > 0 && <span className="flex items-center gap-1"><Paperclip className="w-3 h-3" />{a.materials.length}</span>}
-              </div>
-              {/* Instructor / Mentor names */}
-              {(a.instructor_names?.length > 0 || a.mentor_names?.length > 0) && (
-                <div className="flex items-center gap-3 mt-1.5 text-xs flex-wrap">
-                  {a.instructor_names?.length > 0 && (
-                    <span className="text-purple-600"><GraduationCap className="w-3 h-3 inline mr-0.5" />{a.instructor_names.join(', ')}</span>
-                  )}
-                  {a.mentor_names?.length > 0 && (
-                    <span className="text-teal-600"><Shield className="w-3 h-3 inline mr-0.5" />{a.mentor_names.join(', ')}</span>
-                  )}
-                </div>
-              )}
-            </div>
+        {/* Title row */}
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+            <ClipboardList className="w-5 h-5 text-white" />
           </div>
-          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-            {(isCreator || myRole === 'instructor') && (
-              <>
-                <span className="text-[11px] text-slate-500 bg-slate-100 rounded-full px-2.5 py-1 whitespace-nowrap" data-testid={`submission-count-${a.id}`}>
-                  {a.submission_count || 0}/{(a.submission_count || 0) + (a.graded_count ? 0 : 0)} sub
-                </span>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={onRemind} title="Send reminders" data-testid={`remind-btn-${a.id}`}>
-                  <Bell className="w-4 h-4" />
-                </Button>
-              </>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-semibold text-slate-900 group-hover:text-blue-600 transition-colors" data-testid={`assignment-title-${a.id}`}>
+                {a.title}
+              </h3>
+              {myRole !== 'student' && myRole !== 'creator' && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase ${roleColor}`}>{myRole}</span>
+              )}
+              {myRole === 'student' && getStatusBadge()}
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5 line-clamp-2 sm:line-clamp-1">{a.description || 'No description'}</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 mt-2 hidden sm:block" />
+        </div>
+
+        {/* Meta row */}
+        <div className="flex items-center gap-x-3 gap-y-1 mt-3 ml-[52px] text-xs text-slate-400 flex-wrap">
+          <span>Due <span className="text-slate-600 font-medium">{new Date(a.due_date + 'T00:00:00').toLocaleDateString()}</span></span>
+          <span className="hidden sm:inline">{a.created_by_name}</span>
+          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{targetLabel()}</span>
+          {a.questions?.length > 0 && <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />{a.questions.length} Q</span>}
+          {a.materials?.length > 0 && <span className="flex items-center gap-1"><Paperclip className="w-3 h-3" />{a.materials.length}</span>}
+        </div>
+
+        {/* Instructor / Mentor names */}
+        {(a.instructor_names?.length > 0 || a.mentor_names?.length > 0) && (
+          <div className="flex items-center gap-3 mt-1.5 ml-[52px] text-xs flex-wrap">
+            {a.instructor_names?.length > 0 && (
+              <span className="text-purple-600"><GraduationCap className="w-3 h-3 inline mr-0.5" />{a.instructor_names.join(', ')}</span>
             )}
+            {a.mentor_names?.length > 0 && (
+              <span className="text-teal-600"><Shield className="w-3 h-3 inline mr-0.5" />{a.mentor_names.join(', ')}</span>
+            )}
+          </div>
+        )}
+
+        {/* Action row — separate from title for mobile */}
+        {(isCreator || myRole === 'instructor') && (
+          <div className="flex items-center gap-2 mt-3 ml-[52px]" onClick={e => e.stopPropagation()}>
+            <span className="text-[11px] text-slate-500 bg-slate-100 rounded-full px-2.5 py-1 whitespace-nowrap" data-testid={`submission-count-${a.id}`}>
+              {a.submission_count || 0} submitted
+            </span>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-600" onClick={onRemind} title="Send reminders" data-testid={`remind-btn-${a.id}`}>
+              <Bell className="w-3.5 h-3.5" />
+            </Button>
             {isCreator && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={onDelete} data-testid={`delete-btn-${a.id}`}>
-                <Trash2 className="w-4 h-4" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={onDelete} data-testid={`delete-btn-${a.id}`}>
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             )}
-            <ChevronRight className="w-4 h-4 text-slate-300 ml-1" />
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -391,8 +391,8 @@ const Sidebar = ({ children }) => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-h-screen lg:min-h-0 overflow-visible">
-        <div className="pt-14 lg:pt-0 overflow-visible">
+      <main className="flex-1 min-h-screen lg:min-h-0 overflow-x-hidden overflow-y-auto">
+        <div className="pt-14 lg:pt-0">
           {children}
         </div>
       </main>
