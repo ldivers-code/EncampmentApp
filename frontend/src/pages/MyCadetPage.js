@@ -92,7 +92,7 @@ export default function MyCadetPage() {
             });
           }
         }
-      } catch { /* ignore */ }
+      } catch (err) { console.error('Failed to load widget settings:', err); }
     })();
   }, []);
 
@@ -103,7 +103,7 @@ export default function MyCadetPage() {
       try {
         const res = await fetch(`${API}/api/parent/admin-preview/participants`, fetchOpts);
         if (res.ok) setParticipants(await res.json());
-      } catch { /* ignore */ }
+      } catch (err) { console.error('Failed to load participants:', err); }
     })();
   }, [isAdmin]);
 
@@ -195,7 +195,7 @@ export default function MyCadetPage() {
           });
         }
       }
-    } catch { /* ignore */ } finally { setOtcLoading(false); }
+    } catch (err) { console.error('Failed to load OTC form:', err); } finally { setOtcLoading(false); }
   }, [user, isAdmin]);
 
   const submitOtcForm = async () => {
@@ -307,7 +307,7 @@ export default function MyCadetPage() {
                 <AlertTriangle className="w-3 h-3 text-amber-500" />
                 <span className="text-xs text-amber-700 font-medium">Dietary:</span>
                 {cadet.dietary_restrictions.map((d, i) => (
-                  <Badge key={i} variant="outline" className="text-[10px] border-amber-200 text-amber-700">{d}</Badge>
+                  <Badge key={`diet-${d}-${i}`} variant="outline" className="text-[10px] border-amber-200 text-amber-700">{d}</Badge>
                 ))}
               </div>
             )}
@@ -322,7 +322,7 @@ export default function MyCadetPage() {
       {(!schedule || schedule.length === 0) ? (
         <p className="text-sm text-slate-400 text-center py-4">No schedule events</p>
       ) : schedule.slice(0, 20).map((evt, i) => (
-        <div key={i} className="flex items-start gap-2 p-2 bg-slate-50 rounded-sm border border-slate-100">
+        <div key={evt.id || `sched-${i}`} className="flex items-start gap-2 p-2 bg-slate-50 rounded-sm border border-slate-100">
           <Clock className="w-3.5 h-3.5 text-[#00205B] mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm">{evt.title}</div>
@@ -342,7 +342,7 @@ export default function MyCadetPage() {
           <p className="text-sm text-slate-400">No health incidents reported</p>
         </div>
       ) : health.map((inc, i) => (
-        <div key={i} className="p-2 bg-rose-50 rounded-sm border border-rose-100">
+        <div key={inc.id || `health-${i}`} className="p-2 bg-rose-50 rounded-sm border border-rose-100">
           <div className="flex items-center gap-1.5">
             <Heart className="w-3 h-3 text-rose-500" />
             <span className="font-medium text-sm text-rose-800">{inc.type || inc.incident_type || 'Incident'}</span>
@@ -362,7 +362,7 @@ export default function MyCadetPage() {
           <p className="text-sm text-slate-400">No medication diary entries</p>
         </div>
       ) : medDiary.map((entry, i) => (
-        <div key={i} className="p-2 bg-blue-50 rounded-sm border border-blue-100">
+        <div key={entry.id || `med-${i}`} className="p-2 bg-blue-50 rounded-sm border border-blue-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <Pill className="w-3 h-3 text-blue-500" />
@@ -389,7 +389,7 @@ export default function MyCadetPage() {
           <p className="text-sm text-slate-400">No points or awards yet</p>
         </div>
       ) : points.map((pt, i) => (
-        <div key={i} className="flex items-center gap-2 p-2 bg-amber-50 rounded-sm border border-amber-100">
+        <div key={pt.id || `pt-${i}`} className="flex items-center gap-2 p-2 bg-amber-50 rounded-sm border border-amber-100">
           <Award className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <span className="text-sm font-medium">{pt.reason || pt.description || 'Points'}</span>
@@ -406,7 +406,7 @@ export default function MyCadetPage() {
       {(!meals || meals.length === 0) ? (
         <p className="text-sm text-slate-400 text-center py-4">No meal plans available</p>
       ) : meals.map((meal, i) => (
-        <div key={i} className="flex items-start gap-2 p-2 bg-orange-50 rounded-sm border border-orange-100">
+        <div key={meal.id || `meal-${i}`} className="flex items-start gap-2 p-2 bg-orange-50 rounded-sm border border-orange-100">
           <Utensils className="w-3.5 h-3.5 text-orange-600 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium capitalize">{meal.meal_type} — {meal.date}</div>

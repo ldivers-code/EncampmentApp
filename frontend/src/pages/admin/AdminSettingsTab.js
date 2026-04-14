@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -321,8 +322,9 @@ const HonorAgreementTracker = () => {
     try {
       const result = await getHonorAgreementStatus();
       setData(result);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error('Failed to load honor agreement status:', err);
+      toast.error('Failed to load agreement data');
     } finally {
       setLoading(false);
     }

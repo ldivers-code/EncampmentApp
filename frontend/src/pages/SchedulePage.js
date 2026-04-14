@@ -95,6 +95,26 @@ const SchedulePage = () => {
     uniform: 'default'
   });
 
+  // Style helpers for change request status badges
+  const getRequestStatusStyle = (status) => {
+    if (status === 'pending') return 'border-amber-300 bg-amber-50';
+    if (status === 'approved') return 'border-emerald-200 bg-emerald-50';
+    return 'border-slate-200 bg-slate-50';
+  };
+
+  const getChangeTypeStyle = (type) => {
+    if (type === 'add') return 'bg-blue-100 text-blue-700';
+    if (type === 'remove') return 'bg-red-100 text-red-700';
+    if (type === 'reschedule') return 'bg-purple-100 text-purple-700';
+    return 'bg-slate-100 text-slate-600';
+  };
+
+  const getStatusBadgeStyle = (status) => {
+    if (status === 'pending') return 'bg-amber-100 text-amber-700';
+    if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
+    return 'bg-red-100 text-red-700';
+  };
+
   // Detect mobile viewport
   useEffect(() => {
     const checkMobile = () => {
@@ -1682,25 +1702,12 @@ const SchedulePage = () => {
               <p className="text-center text-sm text-slate-400 py-6">No change requests</p>
             ) : (
               changeRequests.map(req => (
-                <div key={req.id} className={`border rounded-sm p-3 ${
-                  req.status === 'pending' ? 'border-amber-300 bg-amber-50' :
-                  req.status === 'approved' ? 'border-emerald-200 bg-emerald-50' :
-                  'border-slate-200 bg-slate-50'
-                }`} data-testid={`change-request-${req.id}`}>
+                <div key={req.id} className={`border rounded-sm p-3 ${getRequestStatusStyle(req.status)}`} data-testid={`change-request-${req.id}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${
-                          req.change_type === 'add' ? 'bg-blue-100 text-blue-700' :
-                          req.change_type === 'remove' ? 'bg-red-100 text-red-700' :
-                          req.change_type === 'reschedule' ? 'bg-purple-100 text-purple-700' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>{req.change_type}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${
-                          req.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                          req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>{req.status}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${getChangeTypeStyle(req.change_type)}`}>{req.change_type}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-medium ${getStatusBadgeStyle(req.status)}`}>{req.status}</span>
                       </div>
                       <p className="font-medium text-sm mt-1">{req.event_title}</p>
                       <p className="text-xs text-slate-500">

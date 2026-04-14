@@ -53,6 +53,13 @@ import {
   Mail
 } from 'lucide-react';
 
+const ESCALATION_COLORS = {
+  dcs_commandant: 'bg-red-600 hover:bg-red-700',
+  exec_cadre: 'bg-rose-600 hover:bg-rose-700',
+  squadron_commander: 'bg-orange-600 hover:bg-orange-700',
+  flight_commander: 'bg-amber-600 hover:bg-amber-700',
+};
+
 const CATEGORY_LABELS = {
   tlp: 'Training Lesson Plans (TLPs)',
   pocket_class: 'Pocket Classes',
@@ -1971,13 +1978,7 @@ const MyFlightPage = () => {
                     {/* Dynamic escalation button based on current level */}
                     {getNextEscalationLevel(selectedReport.escalation_level) && (
                       <Button 
-                        className={
-                          selectedReport.escalation_level === 'dcs_commandant' ? 'bg-red-600 hover:bg-red-700' :
-                          selectedReport.escalation_level === 'exec_cadre' ? 'bg-rose-600 hover:bg-rose-700' :
-                          selectedReport.escalation_level === 'squadron_commander' ? 'bg-orange-600 hover:bg-orange-700' :
-                          selectedReport.escalation_level === 'flight_commander' ? 'bg-amber-600 hover:bg-amber-700' :
-                          'bg-yellow-600 hover:bg-yellow-700'
-                        }
+                        className={ESCALATION_COLORS[selectedReport.escalation_level] || 'bg-yellow-600 hover:bg-yellow-700'}
                         onClick={() => handleEscalateReport(
                           selectedReport.id, 
                           getNextEscalationLevel(selectedReport.escalation_level)

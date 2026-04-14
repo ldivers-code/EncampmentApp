@@ -116,11 +116,12 @@ const TrainingOfficerPage = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      const params = buildFilterParams();
       const [sumData, bData, cData, iData] = await Promise.all([
         getTrainingSummary(),
-        getBisterChecks(buildFilterParams()),
-        getCounselingLogs(buildFilterParams()),
-        getCadreIssues(buildFilterParams())
+        getBisterChecks(params),
+        getCounselingLogs(params),
+        getCadreIssues(params)
       ]);
       setSummary(sumData);
       setBlisters(bData);
@@ -132,8 +133,7 @@ const TrainingOfficerPage = () => {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dateFilter, flightFilter]);
 
   useEffect(() => {
     loadData();

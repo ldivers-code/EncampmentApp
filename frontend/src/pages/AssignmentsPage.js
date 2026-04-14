@@ -367,7 +367,7 @@ function AssignmentDetailView({ assignmentId, user, onBack }) {
                   <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1"><Award className="w-4 h-4" /> Rubric ({a.max_score} pts)</h3>
                   <div className="grid gap-2">
                     {a.rubric.map((r, i) => (
-                      <div key={i} className="flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-lg text-sm border border-indigo-100">
+                      <div key={r.criterion || `rubric-${i}`} className="flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-lg text-sm border border-indigo-100">
                         <div>
                           <span className="font-medium text-slate-800">{r.criterion}</span>
                           {r.description && <span className="text-xs text-slate-500 ml-2">{r.description}</span>}
@@ -494,7 +494,7 @@ function MySubmissionCard({ sub, assignment, onResubmit }) {
           {sub.answers.map((ans, i) => {
             const q = assignment.questions?.find(q => q.id === ans.question_id);
             return (
-              <div key={i} className="bg-slate-50 p-2 rounded-lg border text-sm">
+              <div key={ans.question_id || `ans-${i}`} className="bg-slate-50 p-2 rounded-lg border text-sm">
                 <span className="text-xs text-slate-400 font-medium">{q ? q.question_text : `Q${i+1}`}</span>
                 <p className="text-slate-700 mt-0.5">{ans.answer_text}</p>
               </div>
@@ -515,7 +515,7 @@ function MySubmissionCard({ sub, assignment, onResubmit }) {
           {sub.rubric_scores?.length > 0 && (
             <div className="mt-2 space-y-1">
               {sub.rubric_scores.map((rs, i) => (
-                <div key={i} className="flex justify-between text-xs"><span>{rs.criterion}</span><span className="font-medium">{rs.score}/{rs.max_points}</span></div>
+                <div key={rs.criterion || `rs-${i}`} className="flex justify-between text-xs"><span>{rs.criterion}</span><span className="font-medium">{rs.score}/{rs.max_points}</span></div>
               ))}
             </div>
           )}
@@ -560,7 +560,7 @@ function SubmissionCard({ sub, assignment, canGrade, onGrade }) {
           {sub.answers.map((ans, i) => {
             const q = assignment.questions?.find(q => q.id === ans.question_id);
             return (
-              <div key={i} className="text-sm bg-slate-50 p-2 rounded border">
+              <div key={`ans2-${ans.question_id || i}`} className="text-sm bg-slate-50 p-2 rounded border">
                 <span className="text-xs font-medium text-slate-400">{q ? q.question_text : `Q${i+1}`}</span>
                 <p className="text-slate-700">{ans.answer_text}</p>
               </div>
@@ -597,7 +597,7 @@ function PeopleTab({ assignment, assignees }) {
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {(assignment[sec.title.toLowerCase() + '_names'] || []).map((name, i) => (
-              <div key={i} className={`flex items-center gap-2 text-sm bg-${sec.color}-50 px-3 py-2 rounded-lg border border-${sec.color}-100`}>
+              <div key={`${sec.title}-${name}-${i}`} className={`flex items-center gap-2 text-sm bg-${sec.color}-50 px-3 py-2 rounded-lg border border-${sec.color}-100`}>
                 <sec.icon className={`w-3.5 h-3.5 text-${sec.color}-500`} /> {name}
               </div>
             ))}
@@ -835,7 +835,7 @@ function CreateAssignmentDialog({ flights, squadrons, allUsers, onClose, onCreat
               </Button>
             </div>
             {form.questions.map((q, i) => (
-              <div key={i} className="flex items-start gap-2 bg-slate-50 p-3 rounded-md mb-2">
+              <div key={q.id || `q-${i}`} className="flex items-start gap-2 bg-slate-50 p-3 rounded-md mb-2">
                 <span className="text-xs text-slate-400 font-medium mt-2">Q{i + 1}</span>
                 <textarea className="flex-1 border border-slate-200 rounded-md p-2 text-sm min-h-[40px]"
                   value={q.question_text} onChange={e => updateQuestion(i, e.target.value)}
@@ -858,7 +858,7 @@ function CreateAssignmentDialog({ flights, squadrons, allUsers, onClose, onCreat
             {materialFiles.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {materialFiles.map((f, i) => (
-                  <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{f.name}</span>
+                  <span key={`file-${f.name}-${i}`} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">{f.name}</span>
                 ))}
               </div>
             )}
@@ -874,7 +874,7 @@ function CreateAssignmentDialog({ flights, squadrons, allUsers, onClose, onCreat
             </div>
             <div className="space-y-2">
               {form.rubric.map((r, i) => (
-                <div key={i} className="flex items-start gap-2 bg-slate-50 p-3 rounded-md">
+                <div key={r.criterion || `rub-${i}`} className="flex items-start gap-2 bg-slate-50 p-3 rounded-md">
                   <div className="flex-1 space-y-1">
                     <Input placeholder="Criterion name" value={r.criterion}
                       onChange={e => updateRubric(i, 'criterion', e.target.value)} className="text-sm" data-testid={`rubric-name-${i}`} />
@@ -1047,7 +1047,7 @@ function GradeDialog({ assignment, submission, onClose, onGraded }) {
               {submission.answers.map((ans, i) => {
                 const q = assignment.questions?.find(q => q.id === ans.question_id);
                 return (
-                  <div key={i} className="bg-slate-50 p-2 rounded border text-sm">
+                  <div key={`ans3-${ans.question_id || i}`} className="bg-slate-50 p-2 rounded border text-sm">
                     <span className="text-xs font-medium text-slate-400">{q ? q.question_text : `Q${i+1}`}</span>
                     <p className="text-slate-700">{ans.answer_text}</p>
                   </div>
@@ -1058,7 +1058,7 @@ function GradeDialog({ assignment, submission, onClose, onGraded }) {
 
           <div className="space-y-2">
             {scores.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-3 bg-indigo-50/50 p-2 rounded-md border border-indigo-100">
+              <div key={s.criterion || `score-${idx}`} className="flex items-center gap-3 bg-indigo-50/50 p-2 rounded-md border border-indigo-100">
                 <div className="flex-1"><span className="text-sm font-medium">{s.criterion}</span></div>
                 <div className="flex items-center gap-1">
                   <Input type="number" min="0" max={s.max_points}
