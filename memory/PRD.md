@@ -7,7 +7,7 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 - **Roster Management**: Interactive roster with live filtering, search, RBAC, flight-grouped views, photo uploads, auto-balance, print-friendly
 - **Assignments System (Google Classroom-style)**: Instructor/mentor/student roles, Q&A, document uploads, grading, email reminders
 - **Student Upload System**: Excel upload with automatic flight assignment
-- **Org Chart**: Interactive node-link command map with SVG connectors, 85 positions from TNWG ENC26 spreadsheet, 4 color-coded categories (Command, Cadet Training, Support, Cadet Support), dual reporting (CSS/CC → CTG/DF dashed line), horizontal branching, collapsible depth, detail side panel on click, search + category filters
+- **Org Chart**: Interactive SVG node-link command map with horizontal branching, 85 positions. Hierarchy: Enc Commander → Commandant → CTG/CC → [CTG/CD, CTG/DF, CTG/CCEA, CSS/CC, CTO + 3 Squadrons]. Squadron TOs under CTO (not Squadron Commanders). 19 positions with secondary academic reporting to CTG/DF (dashed connectors). 5-color scheme: Blue (Command), Maroon (Cadet Training), Yellow (Squadron), Emerald Green (Support), Silver (Cadet Support). Collapsible depth, search, category filters, detail side panel.
 - **Health Services**: Medical roster, allergies, OTC approvals, parent email notifications
 - **Check-In & Barracks**: Multi-step in-processing, bunk assignments
 - **Granular RBAC**: Senior Staff + Cadre roles with permissions
@@ -50,7 +50,7 @@ Encampment Commander (Maj Divers, L) [Command]
 - **Apr 6-9**: Core features, Excel sync, RBAC, Honor Agreements
 - **Apr 10**: Google Classroom-style Assignments. 100% tests.
 - **Apr 11**: SendGrid live. Lillian Yoder account synced.
-- **Apr 14**: Mobile responsiveness. Org Chart V1 (list tree, 86 positions, iteration 59). Org Chart V2 (SVG node-link diagram, 85 positions, restructured hierarchy, dual reporting, 4 categories, iteration 60). 100% tests.
+- **Apr 14**: Mobile responsiveness. Org Chart V1 (list tree, 86 positions). Org Chart V2 (SVG node-link diagram, 85 positions, restructured hierarchy, dual reporting). Org Chart V3 (TOs moved under CTO, 19 secondary academic reports to CTG/DF, 5-color scheme: Blue/Maroon/Yellow/Green/Silver). 100% tests (iterations 59-61).
 
 ## Remaining Backlog
 - P1: Senior Barracks (TR-106, TR-107, TR-105) individual room assignments
