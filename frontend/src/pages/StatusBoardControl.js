@@ -362,7 +362,7 @@ const StatusBoardControl = () => {
             <h2 className="font-bold text-sm uppercase text-slate-700 mb-3">Audit Log</h2>
             <div className="space-y-1 max-h-[500px] overflow-y-auto">
               {audit.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 text-xs border-b border-slate-100 py-2">
+                <div key={a.id || `audit-${a.timestamp}-${i}`} className="flex items-center gap-3 text-xs border-b border-slate-100 py-2">
                   <span className="text-slate-400 font-mono w-36 shrink-0">{new Date(a.timestamp).toLocaleString()}</span>
                   <span className="font-medium text-slate-600 w-24 shrink-0">{a.action}</span>
                   <span className="text-slate-500 truncate flex-1">{a.details}</span>

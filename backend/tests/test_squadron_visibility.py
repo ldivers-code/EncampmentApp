@@ -22,7 +22,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 COMMANDER_CREDS = {"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}
 SQUADRON_COMMANDER_CREDS = {"email": "sqcc@test.com", "password": COMMANDER_PASSWORD}  # role=squadron_commander, squadron=6th_cts
 TRAINING_OFFICER_CREDS = {"email": "to@test.com", "password": COMMANDER_PASSWORD}  # role=training_officer, squadron=21st_cts
-PARENT_CREDS = {"email": "jane.hundley@test.com", "password": "parent123"}
+PARENT_CREDS = {"email": PARENT_EMAIL, "password": PARENT_PASSWORD}
 CADRE_ALPHA_CREDS = {"email": "commander@cap.us", "password": COMMANDER_PASSWORD}  # role=exec_cadre, flight=alpha
 
 # Squadron-flight mappings

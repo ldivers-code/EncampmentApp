@@ -9,13 +9,10 @@ import requests
 import os
 from datetime import datetime, timedelta
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-COMMANDER_EMAIL = "commander@test.com"
-COMMANDER_PASSWORD = "test123"
-CADRE_EMAIL = "commander@cap.us"  # exec_cadre role
-CADRE_PASSWORD = "test123"
 
 
 class TestAssignmentsBackend:

@@ -10,11 +10,12 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-CADRE_USER = {"email": "commander@cap.us", "password": "test123"}  # exec_cadre role
-COMMANDER_USER = {"email": "commander@test.com", "password": "test123"}  # commander role
+CADRE_USER = {"email": "commander@cap.us", "password": COMMANDER_PASSWORD}  # exec_cadre role
+COMMANDER_USER = {"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}  # commander role
 
 
 class TestHonorAgreementBackend:

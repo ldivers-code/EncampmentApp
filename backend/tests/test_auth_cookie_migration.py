@@ -7,13 +7,10 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-COMMANDER_EMAIL = "commander@test.com"
-COMMANDER_PASSWORD = "test123"
-PARENT_EMAIL = "jane.hundley@test.com"
-PARENT_PASSWORD = "parent123"
 
 
 class TestCookieAuthLogin:

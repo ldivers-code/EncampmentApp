@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncUsersToParticipants } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -158,6 +158,23 @@ const AdminPage = () => {
     page_status_board: 'Status Board',
     page_parent_portal: 'Parent Portal'
   };
+
+  // Memoize user groups to avoid re-computing on every render
+  const userGroups = useMemo(() => {
+    const staffRoles = ['dcp', 'commander', 'executive_staff', 'training_officer', 'logistics',
+      'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff'];
+    const cadreRoles = ['exec_cadre', 'cadre'];
+    const parentRoles = ['parent'];
+    return [
+      { label: 'SENIOR STAFF', users: users.filter(u => staffRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+      { label: 'CADRE', users: users.filter(u => cadreRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+      { label: 'PARENT', users: users.filter(u => parentRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
+    ].filter(g => g.users.length > 0);
+  }, [users]);
+
+  const staffRoleOptions = useMemo(() => roles.filter(r => r.group === 'staff'), []);
+  const cadreRoleOptions = useMemo(() => roles.filter(r => r.group === 'cadre'), []);
+  const parentRoleOptions = useMemo(() => roles.filter(r => r.group === 'parent'), []);
 
   useEffect(() => {
     loadUsers();
@@ -636,7 +653,7 @@ const AdminPage = () => {
                         </p>
                         <div className="space-y-2">
                           {matchingParticipants[pendingUser.id].map((match, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                            <div key={match.participant?.capid || `match-${idx}`} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
                               <div>
                                 <p className="text-sm font-medium">
                                   {match.participant.rank} {match.participant.first_name} {match.participant.last_name}
@@ -727,17 +744,7 @@ const AdminPage = () => {
                 </tr>
               ) : (
                 (() => {
-                  const staffRoles = ['dcp', 'commander', 'executive_staff', 'training_officer', 'logistics',
-                    'finance', 'plans_programs', 'health_services', 'dining_facility', 'staff'];
-                  const cadreRoles = ['exec_cadre', 'cadre'];
-                  const parentRoles = ['parent'];
-                  const groups = [
-                    { label: 'SENIOR STAFF', users: users.filter(u => staffRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
-                    { label: 'CADRE', users: users.filter(u => cadreRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
-                    { label: 'PARENT', users: users.filter(u => parentRoles.includes(u.role)).sort((a, b) => (a.name || '').localeCompare(b.name || '')) },
-                  ].filter(g => g.users.length > 0);
-
-                  return groups.map(g => (
+                  return userGroups.map(g => (
                     <React.Fragment key={g.label}>
                       <tr>
                         <td colSpan={7} className="bg-slate-100 py-1.5 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
@@ -773,15 +780,15 @@ const AdminPage = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem disabled value="__staff_header" className="text-xs font-bold text-slate-400">--- Senior Staff ---</SelectItem>
-                          {roles.filter(r => r.group === 'staff').map(role => (
+                          {staffRoleOptions.map(role => (
                             <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                           ))}
                           <SelectItem disabled value="__cadre_header" className="text-xs font-bold text-slate-400">--- Cadre ---</SelectItem>
-                          {roles.filter(r => r.group === 'cadre').map(role => (
+                          {cadreRoleOptions.map(role => (
                             <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                           ))}
                           <SelectItem disabled value="__parent_header" className="text-xs font-bold text-slate-400">--- Other ---</SelectItem>
-                          {roles.filter(r => r.group === 'parent').map(role => (
+                          {parentRoleOptions.map(role => (
                             <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                           ))}
                         </SelectContent>

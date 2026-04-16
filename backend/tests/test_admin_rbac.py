@@ -11,11 +11,12 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-COMMANDER_CREDS = {"email": "commander@test.com", "password": "test123"}
-EXEC_CADRE_CREDS = {"email": "commander@cap.us", "password": "test123"}
+COMMANDER_CREDS = {"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}
+EXEC_CADRE_CREDS = {"email": "commander@cap.us", "password": COMMANDER_PASSWORD}
 
 
 class TestAdminRBAC:

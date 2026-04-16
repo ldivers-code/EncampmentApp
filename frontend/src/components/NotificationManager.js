@@ -399,7 +399,7 @@ const NotificationManager = ({ compact = false }) => {
                         <p className="text-center text-slate-400 py-8">No notifications sent yet</p>
                       ) : (
                         notificationHistory.map((notification, idx) => (
-                          <div key={idx} className="border border-slate-200 rounded p-3">
+                          <div key={notification.id || `notif-${notification.sent_at}-${idx}`} className="border border-slate-200 rounded p-3">
                             <div className="flex items-center justify-between mb-1">
                               <span className="font-semibold text-slate-900">{notification.title}</span>
                               <span className="text-xs text-slate-400">

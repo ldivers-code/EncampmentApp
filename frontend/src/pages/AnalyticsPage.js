@@ -26,6 +26,13 @@ const AnalyticsPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [exporting, setExporting] = useState(false);
 
+  // Memoize expensive sort/entries computations
+  const sortedRanks = useMemo(() => analytics ? Object.entries(analytics.by_rank).sort((a, b) => b[1] - a[1]) : [], [analytics]);
+  const sortedWings = useMemo(() => analytics ? Object.entries(analytics.by_wing).sort((a, b) => b[1] - a[1]) : [], [analytics]);
+  const sortedRegions = useMemo(() => analytics ? Object.entries(analytics.by_region).sort((a, b) => b[1] - a[1]) : [], [analytics]);
+  const sortedGroups = useMemo(() => analytics ? Object.entries(analytics.by_group).sort((a, b) => a[0].localeCompare(b[0])) : [], [analytics]);
+  const sortedSquadrons = useMemo(() => analytics ? Object.entries(analytics.by_squadron).sort((a, b) => b[1] - a[1]) : [], [analytics]);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -372,9 +379,7 @@ const AnalyticsPage = () => {
             </h3>
             {Object.keys(analytics.by_rank || {}).length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                {Object.entries(analytics.by_rank)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([rank, count]) => (
+                {sortedRanks.map(([rank, count]) => (
                     <div key={rank} className="bg-slate-50 p-3 rounded text-center">
                       <p className="text-xs uppercase text-slate-500 truncate">{rank}</p>
                       <p className="text-xl font-bold text-[#00205B]">{count}</p>
@@ -438,9 +443,7 @@ const AnalyticsPage = () => {
             </h3>
             {Object.keys(analytics.by_wing || {}).length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                {Object.entries(analytics.by_wing)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([wing, count]) => (
+                {sortedWings.map(([wing, count]) => (
                     <div key={wing} className="bg-slate-50 p-3 rounded text-center">
                       <p className="text-xs uppercase text-slate-500">{wing}</p>
                       <p className="text-xl font-bold text-[#00205B]">{count}</p>
@@ -462,9 +465,7 @@ const AnalyticsPage = () => {
             </h3>
             {Object.keys(analytics.by_region || {}).length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {Object.entries(analytics.by_region)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([region, count]) => (
+                {sortedRegions.map(([region, count]) => (
                     <div key={region} className="bg-slate-50 p-3 rounded text-center">
                       <p className="text-xs uppercase text-slate-500">{region}</p>
                       <p className="text-xl font-bold text-[#00205B]">{count}</p>
@@ -483,9 +484,7 @@ const AnalyticsPage = () => {
                 Tennessee Group Distribution
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {Object.entries(analytics.by_group)
-                  .sort((a, b) => a[0].localeCompare(b[0]))
-                  .map(([group, count]) => (
+                {sortedGroups.map(([group, count]) => (
                     <div key={group} className="bg-amber-50 border border-amber-200 p-3 rounded text-center">
                       <p className="text-xs uppercase text-amber-700">{group}</p>
                       <p className="text-xl font-bold text-amber-800">{count}</p>
@@ -503,9 +502,7 @@ const AnalyticsPage = () => {
               </h3>
               {Object.keys(analytics.by_squadron || {}).length > 0 ? (
                 <div className="space-y-2">
-                  {Object.entries(analytics.by_squadron)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([sq, count]) => (
+                  {sortedSquadrons.map(([sq, count]) => (
                       <div key={sq} className="flex items-center gap-2">
                         <span className="flex-1 text-sm">{sq}</span>
                         <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
@@ -586,7 +583,7 @@ const AnalyticsPage = () => {
                   </thead>
                   <tbody>
                     {pendingPayments.participants.map((p, idx) => (
-                      <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50">
+                      <tr key={p.capid || `pay-${idx}`} className="border-t border-slate-100 hover:bg-slate-50">
                         <td className="py-3 px-4 font-mono text-[#00205B]">{p.capid}</td>
                         <td className="py-3 px-4">
                           <span className="font-medium">{p.name}</span>

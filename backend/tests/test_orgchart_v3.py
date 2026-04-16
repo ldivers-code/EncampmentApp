@@ -9,6 +9,7 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 @pytest.fixture(scope="module")
@@ -19,8 +20,8 @@ def auth_session():
     
     # Login as commander
     response = session.post(f"{BASE_URL}/api/auth/login", json={
-        "email": "commander@test.com",
-        "password": "test123"
+        "email": COMMANDER_EMAIL,
+        "password": COMMANDER_PASSWORD
     })
     assert response.status_code == 200, f"Login failed: {response.text}"
     return session

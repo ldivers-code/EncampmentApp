@@ -11,8 +11,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
-PARENT_EMAIL = "jane.hundley@test.com"
-PARENT_PASSWORD = "parent123"
+PARENT_EMAIL = PARENT_EMAIL
 
 # Test participant ID (from main agent context)
 TEST_PARTICIPANT_ID = "11e0d188-2260-4421-b8ba-3a8df13e8263"

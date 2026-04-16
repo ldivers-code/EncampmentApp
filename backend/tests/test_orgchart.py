@@ -7,6 +7,7 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 class TestOrgChartAPI:
@@ -17,8 +18,8 @@ class TestOrgChartAPI:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
         
@@ -205,8 +206,8 @@ class TestOrgChartHierarchy:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200
         

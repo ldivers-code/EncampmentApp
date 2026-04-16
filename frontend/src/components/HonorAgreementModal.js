@@ -219,7 +219,7 @@ const HonorAgreementModal = ({ user, onComplete }) => {
           {agreement.map((block, i) => {
             if (block.type === 'section') {
               return (
-                <div key={i}>
+                <div key={`section-${block.title || i}`}>
                   <p className="font-bold text-[#00205B] text-xs uppercase tracking-wider mb-1">{block.title}</p>
                   <p className="italic text-slate-600">{block.text}</p>
                 </div>
@@ -227,9 +227,9 @@ const HonorAgreementModal = ({ user, onComplete }) => {
             }
             if (block.type === 'bullets') {
               return (
-                <ul key={i} className="space-y-2 pl-1">
+                <ul key={`bullets-${i}`} className="space-y-2 pl-1">
                   {block.items.map((item, j) => (
-                    <li key={j} className="flex items-start gap-2">
+                    <li key={`bullet-${item.substring(0,20)}-${j}`} className="flex items-start gap-2">
                       <span className="mt-1.5 w-1.5 h-1.5 bg-[#00205B] rounded-full flex-shrink-0" />
                       <span>{item}</span>
                     </li>
@@ -238,7 +238,7 @@ const HonorAgreementModal = ({ user, onComplete }) => {
               );
             }
             return (
-              <p key={i} className={block.bold ? 'font-bold text-[#00205B]' : ''}>
+              <p key={`text-${i}`} className={block.bold ? 'font-bold text-[#00205B]' : ''}>
                 {block.text}
               </p>
             );

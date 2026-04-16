@@ -21,15 +21,12 @@ import os
 import json
 from datetime import datetime, timedelta
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-COMMANDER_EMAIL = "commander@test.com"
-COMMANDER_PASSWORD = "test123"
 EXEC_CADRE_EMAIL = "commander@cap.us"  # exec_cadre role, flight=alpha
-EXEC_CADRE_PASSWORD = "test123"
-CADRE_EMAIL = "cadre@cap.us"  # cadre role, flight=Alpha
-CADRE_PASSWORD = "test123"
+EXEC_CADRE_PASSWORD = COMMANDER_PASSWORD
 
 
 class TestAssignmentsClassroom:

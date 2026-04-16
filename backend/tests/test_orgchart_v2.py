@@ -9,6 +9,7 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 class TestOrgChartV2API:
@@ -19,8 +20,8 @@ class TestOrgChartV2API:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
         
@@ -157,8 +158,8 @@ class TestOrgChartV2Hierarchy:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200
         
@@ -255,8 +256,8 @@ class TestOrgChartV2Categories:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200
         
@@ -325,8 +326,8 @@ class TestOrgChartV2CRUD:
         """Login as commander before each test"""
         self.session = requests.Session()
         login_resp = self.session.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "commander@test.com",
-            "password": "test123"
+            "email": COMMANDER_EMAIL,
+            "password": COMMANDER_PASSWORD
         })
         assert login_resp.status_code == 200
         

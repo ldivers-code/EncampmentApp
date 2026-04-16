@@ -6,6 +6,7 @@ import pytest
 import requests
 import os
 
+from tests.conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, PARENT_EMAIL, PARENT_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 class TestRoleSystemRedesign:
@@ -20,7 +21,7 @@ class TestRoleSystemRedesign:
         # Login as commander
         login_response = self.session.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "commander@test.com", "password": "test123"}
+            json={"email": COMMANDER_EMAIL, "password": COMMANDER_PASSWORD}
         )
         assert login_response.status_code == 200, f"Login failed: {login_response.text}"
         
@@ -305,7 +306,7 @@ class TestExecCadreUser:
         # Login as exec_cadre
         login_response = self.session.post(
             f"{BASE_URL}/api/auth/login",
-            json={"email": "commander@cap.us", "password": "test123"}
+            json={"email": "commander@cap.us", "password": COMMANDER_PASSWORD}
         )
         
         if login_response.status_code != 200:

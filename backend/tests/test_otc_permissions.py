@@ -13,8 +13,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cadre-hub.preview.em
 
 # Test credentials
 from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
-PARENT_EMAIL = "jane.hundley@test.com"
-PARENT_PASSWORD = "parent123"
+PARENT_EMAIL = PARENT_EMAIL
 PARENT_CAPID = "718873"
 
 # OTC Medications list (13 items)
@@ -337,7 +336,7 @@ class TestOTCFormSubmissionFlow:
                 "parent_name": "Jane Hundley",
                 "parent_relationship": "Mother",
                 "parent_phone": "(555) 123-4567",
-                "parent_email": "jane.hundley@test.com",
+                "parent_email": PARENT_EMAIL,
                 "medications": all_meds,
                 "ack_otc_only": True,
                 "ack_staff_discretion": True,
