@@ -892,12 +892,17 @@ const MyFlightPage = () => {
                     />
                   </div>
                 ) : (
-                  <p className="text-sm font-medium text-slate-800">
-                    {leadership[key]?.rank && leadership[key]?.name
-                      ? `${leadership[key].rank} ${leadership[key].name}`
-                      : <span className="text-slate-300 italic">Not assigned</span>
-                    }
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-800">
+                      {leadership[key]?.rank && leadership[key]?.name
+                        ? `${leadership[key].rank} ${leadership[key].name}`
+                        : <span className="text-slate-300 italic">Not assigned</span>
+                      }
+                    </p>
+                    {leadership[key]?.auto && leadership[key]?.name && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-medium uppercase">Auto</span>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

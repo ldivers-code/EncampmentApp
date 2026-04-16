@@ -134,20 +134,99 @@ async def get_squadron_roster(
 
 # ================= FLIGHT LEADERSHIP =================
 
+# Map position field values to leadership role keys
+POSITION_TO_ROLE = {
+    "flight commander": "flight_commander",
+    "flight sergeant": "flight_sergeant",
+    "squadron commander": "squadron_commander",
+    "first sergeant": "first_sergeant",
+}
+
+FLIGHT_TO_SQUADRON = {
+    "alpha": "6th_cts", "bravo": "6th_cts",
+    "charlie": "21st_cts", "delta": "21st_cts",
+    "echo": "22nd_cts", "foxtrot": "22nd_cts",
+}
+
+
+async def _resolve_leadership(flight_lower: str) -> dict:
+    """Build leadership for a flight by auto-detecting cadre with assigned positions,
+    then overlaying any manual overrides from the flight_leadership collection."""
+    result = {
+        "flight": flight_lower,
+        "flight_sergeant": {"name": "", "rank": "", "capid": "", "auto": False},
+        "flight_commander": {"name": "", "rank": "", "capid": "", "auto": False},
+        "squadron_commander": {"name": "", "rank": "", "capid": "", "auto": False},
+    }
+
+    # 1. Auto-detect from cadre assigned to this flight with a position
+    cadre_in_flight = await db.participants.find(
+        {
+            "flight": flight_lower,
+            "participant_type": {"$in": ["cadre", "staff", "senior_member"]},
+            "position": {"$exists": True, "$ne": None, "$ne": ""},
+            "is_removed": {"$ne": True},
+        },
+        {"_id": 0, "first_name": 1, "last_name": 1, "rank": 1, "capid": 1, "position": 1},
+    ).to_list(50)
+
+    for cadre in cadre_in_flight:
+        pos_lower = (cadre.get("position") or "").lower().strip()
+        role_key = POSITION_TO_ROLE.get(pos_lower)
+        if role_key and role_key in result:
+            result[role_key] = {
+                "name": f"{cadre.get('last_name', '')}, {cadre.get('first_name', '')}",
+                "rank": cadre.get("rank", ""),
+                "capid": cadre.get("capid", ""),
+                "auto": True,
+            }
+
+    # 2. Auto-detect squadron commander from cadre assigned to the parent squadron
+    squadron = FLIGHT_TO_SQUADRON.get(flight_lower)
+    if squadron and not result["squadron_commander"]["name"]:
+        sq_flights = [f for f, s in FLIGHT_TO_SQUADRON.items() if s == squadron]
+        sq_cmdr = await db.participants.find_one(
+            {
+                "position": {"$regex": "^squadron commander$", "$options": "i"},
+                "participant_type": {"$in": ["cadre", "staff", "senior_member"]},
+                "$or": [
+                    {"squadron": squadron},
+                    {"flight": {"$in": sq_flights}},
+                ],
+                "is_removed": {"$ne": True},
+            },
+            {"_id": 0, "first_name": 1, "last_name": 1, "rank": 1, "capid": 1},
+        )
+        if sq_cmdr:
+            result["squadron_commander"] = {
+                "name": f"{sq_cmdr.get('last_name', '')}, {sq_cmdr.get('first_name', '')}",
+                "rank": sq_cmdr.get("rank", ""),
+                "capid": sq_cmdr.get("capid", ""),
+                "auto": True,
+            }
+
+    # 3. Overlay manual overrides (if someone typed in leadership manually)
+    manual = await db.flight_leadership.find_one(
+        {"flight": flight_lower}, {"_id": 0}
+    )
+    if manual:
+        for key in ("flight_sergeant", "flight_commander", "squadron_commander"):
+            manual_entry = manual.get(key, {})
+            if manual_entry.get("name"):
+                result[key] = {
+                    "name": manual_entry["name"],
+                    "rank": manual_entry.get("rank", ""),
+                    "capid": manual_entry.get("capid", ""),
+                    "auto": False,
+                }
+
+    return result
+
+
 @api_router.get("/flights/{flight}/leadership")
 async def get_flight_leadership(flight: str, user: dict = Depends(get_current_user)):
-    """Get leadership assignments for a flight"""
-    doc = await db.flight_leadership.find_one(
-        {"flight": flight.lower()}, {"_id": 0}
-    )
-    if not doc:
-        return {
-            "flight": flight.lower(),
-            "flight_sergeant": {"name": "", "rank": ""},
-            "flight_commander": {"name": "", "rank": ""},
-            "squadron_commander": {"name": "", "rank": ""}
-        }
-    return doc
+    """Get leadership assignments for a flight — auto-detected from cadre positions + manual overrides"""
+    return await _resolve_leadership(flight.lower())
 
 @api_router.put("/flights/{flight}/leadership")
 async def update_flight_leadership(
