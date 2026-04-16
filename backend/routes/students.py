@@ -72,30 +72,37 @@ async def link_to_user_account(participant_id, capid, email):
 
 def determine_participant_type(event_name, member_type, is_staff):
     """Determine participant_type from sub-event context and member data.
-    Respects the sub-event: cadre sub-event → cadre, not student."""
-    event_lower = (event_name or '').lower()
+    Returns None if the sub-event is blank/unrecognizable (meaning: don't change existing type)."""
+    event_lower = (event_name or '').strip().lower()
     member_upper = (member_type or '').upper()
 
-    # Sub-event says Staff/Cadre → never default to student
-    if 'staff' in event_lower or 'cadre' in event_lower:
-        if member_upper == 'SENIOR' or member_upper == 'CADET SPONSOR':
-            return 'staff' if is_staff else 'senior_member'
-        elif member_upper == 'CADET':
-            # Cadets in the cadre sub-event are CADRE regardless of StaffMember flag
-            return 'cadre'
-        else:
+    # "Cadre Application" sub-event → always cadre for cadets
+    if 'cadre' in event_lower:
+        if member_upper in ('SENIOR', 'CADET SPONSOR'):
             return 'staff'
+        return 'cadre'
 
-    # Sub-event says Student → basic_student
+    # "Staff Application" sub-event → staff/senior_member for seniors
+    if 'staff' in event_lower and 'student' not in event_lower:
+        if member_upper in ('SENIOR', 'CADET SPONSOR'):
+            return 'staff'
+        # Cadets in a staff-only sub-event are still cadre (they're cadre applicants)
+        return 'cadre'
+
+    # "Student Application" sub-event → basic_student
     if 'student' in event_lower:
         return 'basic_student'
 
-    # No EventName context — fall back to MbrType + StaffMember
-    if member_upper == 'SENIOR' or member_upper == 'CADET SPONSOR':
+    # EventName blank or unrecognizable → return None (don't override existing)
+    if not event_lower:
+        return None
+
+    # Fallback for other event names — use MbrType + StaffMember
+    if member_upper in ('SENIOR', 'CADET SPONSOR'):
         return 'staff' if is_staff else 'senior_member'
     elif member_upper == 'CADET':
-        return 'cadre' if is_staff else 'basic_student'
-    return 'basic_student'
+        return 'cadre' if is_staff else None  # Don't default cadets to student without evidence
+    return None
 
 # ================= STUDENT UPLOAD WITH AUTO-ASSIGNMENT =================
 
@@ -518,6 +525,7 @@ async def upload_students(
             member_type_val = get_str(row_dict, 'member_type')
             staff_flag = get_str(row_dict, 'staff_member', 'No').lower() in ('yes', 'true', '1')
             p_type = determine_participant_type(event_name, member_type_val, staff_flag)
+            # p_type is None when EventName is blank — will be resolved during upsert
 
             # member_type: use spreadsheet value or default to CADET for student sub-event
             m_type = member_type_val.upper() if member_type_val else 'CADET'
@@ -578,7 +586,7 @@ async def upload_students(
             last_name = student.get("last_name", "")
             
             # Apply flight assignment if available (only for students)
-            if student["participant_type"] == "basic_student" and capid in flight_assignments:
+            if student.get("participant_type") == "basic_student" and capid in flight_assignments:
                 student["flight"] = flight_assignments[capid]["flight"]
                 student["squadron"] = flight_assignments[capid]["squadron"]
             
@@ -593,19 +601,33 @@ async def upload_students(
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
                 
-                # Don't downgrade participant_type (cadre→student)
-                ex_type = existing.get("participant_type", "")
-                if ex_type in ("staff", "senior_member", "cadre") and student["participant_type"] == "basic_student":
-                    student["participant_type"] = ex_type
-                    student["student_type"] = None
+                # If spreadsheet didn't specify a participant_type (blank EventName),
+                # keep the existing type entirely
+                if student.get("participant_type") is None:
+                    student.pop("participant_type", None)
+                    student.pop("student_type", None)
+                else:
+                    # Don't downgrade participant_type (cadre→student, staff→student)
+                    ex_type = existing.get("participant_type", "")
+                    if ex_type in ("staff", "senior_member", "cadre") and student["participant_type"] == "basic_student":
+                        student["participant_type"] = ex_type
+                        student["student_type"] = None
+                
+                # Only update fields that have actual values — don't wipe existing data with blanks
+                update_doc = {k: v for k, v in student.items() if v is not None}
+                update_doc["updated_at"] = now
                 
                 await db.participants.update_one(
                     {"id": existing["id"]},
-                    {"$set": student}
+                    {"$set": update_doc}
                 )
                 updated_count += 1
                 pid = existing["id"]
             else:
+                # New record — if no participant_type was determined, default to basic_student
+                if student.get("participant_type") is None:
+                    student["participant_type"] = "basic_student"
+                    student["student_type"] = "First-Time Student"
                 pid = str(uuid.uuid4())
                 student["id"] = pid
                 student["created_at"] = now

@@ -1279,6 +1279,7 @@ async def import_participants(
             is_staff = get_bool('staff_member')
             event_name = get_str('event_name', '')
             participant_type = determine_participant_type(event_name, member_type, is_staff)
+            # participant_type may be None if EventName is blank — resolved during upsert
             
             if member_type == 'SENIOR' or member_type == 'CADET SPONSOR':
                 stats['seniors'] += 1
@@ -1358,18 +1359,29 @@ async def import_participants(
             existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
 
             if existing:
-                # Don't downgrade participant_type (cadre→student, staff→student)
-                ex_type = existing.get("participant_type", "")
-                if ex_type in ("staff", "senior_member", "cadre") and participant_type == "basic_student":
-                    doc["participant_type"] = ex_type
+                # If spreadsheet didn't specify a type (blank EventName), keep existing
+                if participant_type is None:
+                    doc.pop("participant_type", None)
+                else:
+                    # Don't downgrade participant_type (cadre→student, staff→student)
+                    ex_type = existing.get("participant_type", "")
+                    if ex_type in ("staff", "senior_member", "cadre") and participant_type == "basic_student":
+                        doc["participant_type"] = ex_type
+
+                # Only update fields that have actual values — don't wipe existing data
+                update_doc = {k: v for k, v in doc.items() if v is not None}
+                update_doc["updated_at"] = now
 
                 await db.participants.update_one(
                     {"id": existing["id"]},
-                    {"$set": doc}
+                    {"$set": update_doc}
                 )
                 updated_count += 1
                 pid = existing["id"]
             else:
+                # New record — if no type was determined, default to basic_student
+                if participant_type is None:
+                    doc["participant_type"] = "basic_student"
                 pid = str(uuid.uuid4())
                 doc["id"] = pid
                 doc["created_at"] = now
