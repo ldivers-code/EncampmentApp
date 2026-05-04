@@ -781,6 +781,24 @@ export const seedDefaultOrgChart = async () => {
   return response.data;
 };
 
+// ============ Annual Reset ============
+export const previewBulkReset = async (participantTypes) => {
+  const response = await axios.post(`${API}/participants/bulk-reset/preview`, { participant_types: participantTypes, confirm: false }, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const executeBulkReset = async (participantTypes) => {
+  const response = await axios.post(`${API}/participants/bulk-reset/execute`, { participant_types: participantTypes, confirm: true }, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const clearAllParticipants = async () => {
+  const response = await axios.post(`${API}/participants/bulk-reset/clear-all`, { participant_types: [], confirm: true }, { headers: getAuthHeaders() });
+  return response.data;
+};
+export const resetOrgChart = async () => {
+  const response = await axios.post(`${API}/org-chart/bulk-reset`, { participant_types: [], confirm: true }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Flight/Squadron API
 export const getFlights = async () => {
   const response = await axios.get(`${API}/flights`, { headers: getAuthHeaders() });

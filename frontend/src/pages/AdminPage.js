@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncUsersToParticipants } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncUsersToParticipants, previewBulkReset, executeBulkReset, clearAllParticipants, resetOrgChart } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -29,10 +29,231 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Cloud,
-  ExternalLink
+  ExternalLink,
+  AlertOctagon,
+  Network
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 import AdminSettingsTab from './admin/AdminSettingsTab';
+
+// ─── Annual Reset Tab ───
+const AnnualResetTab = ({ currentUser }) => {
+  const [selectedTypes, setSelectedTypes] = useState([]);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [orgChartConfirm, setOrgChartConfirm] = useState('');
+
+  const TYPE_OPTIONS = [
+    { value: 'cadre', label: 'Cadre', desc: 'All cadre members' },
+    { value: 'staff', label: 'Senior Staff', desc: 'Staff role participants' },
+    { value: 'senior_member', label: 'Senior Members', desc: 'Non-staff seniors' },
+    { value: 'basic_student', label: 'Students', desc: 'All basic students' },
+  ];
+
+  const toggleType = (type) => {
+    setSelectedTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+    setPreview(null);
+    setConfirmText('');
+  };
+
+  const handlePreview = async () => {
+    if (!selectedTypes.length) return;
+    setLoading(true);
+    try {
+      const data = await previewBulkReset(selectedTypes);
+      setPreview(data);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Preview failed');
+    }
+    setLoading(false);
+  };
+
+  const handleExecute = async () => {
+    if (confirmText !== 'RESET') return;
+    setLoading(true);
+    try {
+      const result = await executeBulkReset(selectedTypes);
+      toast.success(result.message);
+      setPreview(null);
+      setSelectedTypes([]);
+      setConfirmText('');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Reset failed');
+    }
+    setLoading(false);
+  };
+
+  const handleOrgChartReset = async () => {
+    if (orgChartConfirm !== 'RESET') return;
+    setLoading(true);
+    try {
+      const result = await resetOrgChart();
+      toast.success(result.message);
+      setOrgChartConfirm('');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Reset failed');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="space-y-6" data-testid="annual-reset-tab">
+      <div className="bg-red-50 border border-red-200 rounded-sm p-4">
+        <div className="flex items-start gap-3">
+          <AlertOctagon className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="font-bold text-red-800 text-sm">Annual Encampment Reset</h3>
+            <p className="text-red-700 text-xs mt-1">
+              Use this to clear the roster and org chart between encampment years. This permanently deletes participant records,
+              unlinks user accounts, and clears related data (med diary, supplements, contraband, check-in records).
+              User accounts are preserved — only the roster link is removed.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Roster Reset */}
+      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+          <h4 className="text-sm font-bold text-[#00205B] flex items-center gap-2">
+            <Users className="w-4 h-4" /> Roster Bulk Removal
+          </h4>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <p className="text-xs text-slate-500 uppercase font-bold mb-2">Select participant types to remove</p>
+            <div className="flex flex-wrap gap-2">
+              {TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => toggleType(opt.value)}
+                  className={`px-3 py-2 rounded-sm border text-sm font-medium transition-colors ${
+                    selectedTypes.includes(opt.value)
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:border-red-300'
+                  }`}
+                  data-testid={`reset-type-${opt.value}`}
+                >
+                  {opt.label}
+                  <span className="block text-[10px] font-normal opacity-75">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selectedTypes.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreview}
+              disabled={loading}
+              className="rounded-sm border-red-300 text-red-700 hover:bg-red-50"
+              data-testid="preview-reset-btn"
+            >
+              <Search className="w-3.5 h-3.5 mr-1.5" />
+              Preview ({selectedTypes.length} type{selectedTypes.length > 1 ? 's' : ''})
+            </Button>
+          )}
+
+          {preview && (
+            <div className="border border-red-200 rounded-sm overflow-hidden">
+              <div className="bg-red-50 px-4 py-2 border-b border-red-200">
+                <p className="text-sm font-bold text-red-800">
+                  {preview.total_to_remove} participants will be permanently deleted
+                </p>
+                {preview.linked_accounts > 0 && (
+                  <p className="text-xs text-red-600 mt-0.5">
+                    {preview.linked_accounts} user account{preview.linked_accounts > 1 ? 's' : ''} will be unlinked (accounts preserved, roster link cleared)
+                  </p>
+                )}
+              </div>
+              {preview.sample.length > 0 && (
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr><th className="px-3 py-1.5 text-left">Name</th><th className="px-3 py-1.5 text-left">Type</th><th className="px-3 py-1.5 text-left">Flight</th><th className="px-3 py-1.5 text-left">Position</th></tr>
+                    </thead>
+                    <tbody>
+                      {preview.sample.map(p => (
+                        <tr key={p.id} className="border-t border-slate-100">
+                          <td className="px-3 py-1.5">{p.rank} {p.last_name}, {p.first_name}</td>
+                          <td className="px-3 py-1.5">{p.participant_type}</td>
+                          <td className="px-3 py-1.5">{p.flight || '-'}</td>
+                          <td className="px-3 py-1.5">{p.position || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {preview.total_to_remove > 20 && (
+                    <p className="text-xs text-slate-500 px-3 py-1.5 bg-slate-50">...and {preview.total_to_remove - 20} more</p>
+                  )}
+                </div>
+              )}
+              <div className="p-3 bg-white border-t border-red-200 space-y-2">
+                <p className="text-xs text-red-700 font-medium">Type RESET to confirm</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={confirmText}
+                    onChange={e => setConfirmText(e.target.value)}
+                    placeholder="RESET"
+                    className="max-w-[150px] h-8 text-sm rounded-sm border-red-300"
+                    data-testid="reset-confirm-input"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={confirmText !== 'RESET' || loading}
+                    onClick={handleExecute}
+                    className="bg-red-600 hover:bg-red-700 text-white rounded-sm"
+                    data-testid="execute-reset-btn"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Delete {preview.total_to_remove} Participants
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Org Chart Reset */}
+      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+          <h4 className="text-sm font-bold text-[#00205B] flex items-center gap-2">
+            <Network className="w-4 h-4" /> Org Chart Reset
+          </h4>
+        </div>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-slate-600">
+            Clear all org chart positions. You can reseed from the spreadsheet after resetting.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              value={orgChartConfirm}
+              onChange={e => setOrgChartConfirm(e.target.value)}
+              placeholder="Type RESET to confirm"
+              className="max-w-[200px] h-8 text-sm rounded-sm border-red-300"
+              data-testid="orgchart-reset-input"
+            />
+            <Button
+              size="sm"
+              disabled={orgChartConfirm !== 'RESET' || loading}
+              onClick={handleOrgChartReset}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-sm"
+              data-testid="orgchart-reset-btn"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              Clear Org Chart
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AdminPage = () => {
   const { user: currentUser } = useAuth();
@@ -578,6 +799,22 @@ const AdminPage = () => {
           </span>
         </button>
         )}
+        {['dcp', 'commander'].includes(currentUser?.role) && (
+        <button
+          onClick={() => setActiveTab('reset')}
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+            activeTab === 'reset'
+              ? 'border-red-600 text-red-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="reset-tab"
+        >
+          <span className="flex items-center gap-1 sm:gap-2">
+            <AlertOctagon className="w-3 h-3 sm:w-4 sm:h-4" />
+            Annual Reset
+          </span>
+        </button>
+        )}
       </div>
 
       {/* Pending Users Tab */}
@@ -1039,6 +1276,11 @@ const AdminPage = () => {
           syncingParticipants={syncingParticipants}
           handleSyncUsersToRoster={handleSyncUsersToRoster}
         />
+      )}
+
+      {/* Annual Reset Tab */}
+      {activeTab === 'reset' && (
+        <AnnualResetTab currentUser={currentUser} />
       )}
 
       {/* Password Reset Modal */}

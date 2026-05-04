@@ -1124,6 +1124,140 @@ async def reinstate_participant(
     return {"message": "Participant reinstated", "participant": updated}
 
 
+# ================= ANNUAL RESET =================
+
+class BulkResetRequest(BaseModel):
+    participant_types: List[str]  # e.g. ["cadre", "staff", "basic_student"]
+    confirm: bool = False
+
+
+@api_router.post("/participants/bulk-reset/preview")
+async def preview_bulk_reset(
+    data: BulkResetRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER]))
+):
+    """Preview what would be removed in a bulk reset — does NOT delete anything."""
+    if not data.participant_types:
+        raise HTTPException(status_code=400, detail="No participant types selected")
+
+    query = {
+        "participant_type": {"$in": data.participant_types},
+        "is_removed": {"$ne": True},
+    }
+    count = await db.participants.count_documents(query)
+    sample = await db.participants.find(query, {
+        "_id": 0, "id": 1, "first_name": 1, "last_name": 1, "rank": 1,
+        "participant_type": 1, "flight": 1, "position": 1,
+    }).sort("last_name", 1).limit(20).to_list(20)
+
+    # Count linked user accounts that would be affected
+    participant_ids = [p["id"] for p in await db.participants.find(query, {"_id": 0, "id": 1}).to_list(5000)]
+    linked_accounts = await db.users.count_documents({"linked_participant_id": {"$in": participant_ids}}) if participant_ids else 0
+
+    return {
+        "total_to_remove": count,
+        "linked_accounts": linked_accounts,
+        "types": data.participant_types,
+        "sample": sample,
+    }
+
+
+@api_router.post("/participants/bulk-reset/execute")
+async def execute_bulk_reset(
+    data: BulkResetRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER]))
+):
+    """Execute annual roster reset: permanently deletes all participants of the selected types.
+    Also unlinks any user accounts tied to deleted participants.
+    Commander or DCP only. Requires confirm=true."""
+    if not data.confirm:
+        raise HTTPException(status_code=400, detail="Must set confirm=true to execute reset")
+    if not data.participant_types:
+        raise HTTPException(status_code=400, detail="No participant types selected")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    query = {
+        "participant_type": {"$in": data.participant_types},
+    }
+
+    # Collect IDs for unlinking user accounts
+    to_delete = await db.participants.find(query, {"_id": 0, "id": 1}).to_list(5000)
+    deleted_ids = [p["id"] for p in to_delete]
+
+    # Delete the participants
+    result = await db.participants.delete_many(query)
+
+    # Unlink user accounts
+    unlinked = 0
+    if deleted_ids:
+        ul = await db.users.update_many(
+            {"linked_participant_id": {"$in": deleted_ids}},
+            {"$set": {"linked_participant_id": None, "updated_at": now}}
+        )
+        unlinked = ul.modified_count
+
+    # Clear related data
+    if deleted_ids:
+        await db.hs_med_diary.delete_many({"participant_id": {"$in": deleted_ids}})
+        await db.hs_supplements.delete_many({"participant_id": {"$in": deleted_ids}})
+        await db.contraband.delete_many({"participant_id": {"$in": deleted_ids}})
+        await db.check_in_records.delete_many({"participant_id": {"$in": deleted_ids}})
+
+    logger.info(f"Annual reset by {user.get('name')}: deleted {result.deleted_count} participants ({data.participant_types}), unlinked {unlinked} accounts")
+
+    return {
+        "message": f"Reset complete: {result.deleted_count} participants removed",
+        "deleted": result.deleted_count,
+        "unlinked_accounts": unlinked,
+        "types": data.participant_types,
+    }
+
+
+@api_router.post("/participants/bulk-reset/clear-all")
+async def clear_all_participants(
+    data: BulkResetRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER]))
+):
+    """Nuclear option: delete ALL participants and related data. Commander/DCP only."""
+    if not data.confirm:
+        raise HTTPException(status_code=400, detail="Must set confirm=true")
+
+    now = datetime.now(timezone.utc).isoformat()
+    count = await db.participants.count_documents({})
+    await db.participants.delete_many({})
+    await db.users.update_many(
+        {"linked_participant_id": {"$ne": None}},
+        {"$set": {"linked_participant_id": None, "updated_at": now}}
+    )
+    await db.hs_med_diary.delete_many({})
+    await db.hs_supplements.delete_many({})
+    await db.contraband.delete_many({})
+    await db.check_in_records.delete_many({})
+    await db.flight_leadership.delete_many({})
+
+    logger.info(f"Full roster clear by {user.get('name')}: {count} participants deleted")
+
+    return {"message": f"All {count} participants cleared", "deleted": count}
+
+
+@api_router.post("/org-chart/bulk-reset")
+async def reset_org_chart(
+    data: BulkResetRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER]))
+):
+    """Clear all org chart positions (annual reset). Commander/DCP only."""
+    if not data.confirm:
+        raise HTTPException(status_code=400, detail="Must set confirm=true")
+
+    count = await db.org_chart_roles.count_documents({})
+    await db.org_chart_roles.delete_many({})
+
+    logger.info(f"Org chart reset by {user.get('name')}: {count} positions deleted")
+
+    return {"message": f"Org chart cleared: {count} positions removed", "deleted": count}
+
+
 @api_router.post("/participants/import")
 async def import_participants(
     file: UploadFile = File(...),
