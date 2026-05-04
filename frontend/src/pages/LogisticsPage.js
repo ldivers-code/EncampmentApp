@@ -76,6 +76,15 @@ const Empty = ({ text }) => (
   </div>
 );
 
+// Static select options (extracted to avoid inline re-creation on every render)
+const CONDITION_OPTIONS = [{v:'good',l:'Good'},{v:'fair',l:'Fair'},{v:'poor',l:'Poor'}];
+const CONDITION_IN_OPTIONS = [{v:'good',l:'Good'},{v:'fair',l:'Fair'},{v:'needs_maintenance',l:'Needs Maintenance'}];
+const CALLSIGN_STATUS_OPTIONS = [{v:'active',l:'Active'},{v:'backup',l:'Backup'},{v:'unassigned',l:'Unassigned'},{v:'out_of_service',l:'Out of Service'}];
+const VEHICLE_FUEL_OPTIONS = [{v:'full',l:'Full'},{v:'3/4',l:'3/4'},{v:'1/2',l:'1/2'},{v:'1/4',l:'1/4'},{v:'empty',l:'Empty'}];
+
+const FACILITY_STATUS_OPTIONS = [{v:'ready',l:'Ready'},{v:'in_use',l:'In Use'},{v:'needs_attention',l:'Needs Attention'},{v:'out_of_service',l:'Out of Service'}];
+const PRIORITY_OPTIONS = [{v:'low',l:'Low'},{v:'normal',l:'Normal'},{v:'high',l:'High'},{v:'urgent',l:'Urgent'}];
+
 const LogisticsPage = () => {
   const { user } = useAuth();
   const isAdmin = ADMIN_ROLES.includes(user?.role);
@@ -568,7 +577,7 @@ const LogisticsPage = () => {
           <Field label="Reorder At"><Input type="number" value={form.reorder_threshold || 0} onChange={e => f('reorder_threshold', parseInt(e.target.value) || 0)} className="h-8 text-sm rounded-sm" /></Field>
         </Row3>
         <Row2>
-          <Field label="Condition"><Sel value={form.condition || 'good'} onChange={v => f('condition', v)} options={[{v:'good',l:'Good'},{v:'fair',l:'Fair'},{v:'poor',l:'Poor'}]} /></Field>
+          <Field label="Condition"><Sel value={form.condition || 'good'} onChange={v => f('condition', v)} options={CONDITION_OPTIONS} /></Field>
           <Field label="Assigned To"><Input value={form.assigned_to || ''} onChange={e => f('assigned_to', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
         </Row2>
         <Field label="Notes"><Textarea value={form.notes || ''} onChange={e => f('notes', e.target.value)} rows={2} className="text-sm rounded-sm" /></Field>
@@ -602,7 +611,7 @@ const LogisticsPage = () => {
         </Row3>
         <Row2>
           <Field label="Expected Return"><Input type="datetime-local" value={form.expected_return || ''} onChange={e => f('expected_return', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
-          <Field label="Condition"><Sel value={form.condition_out || 'good'} onChange={v => f('condition_out', v)} options={[{v:'good',l:'Good'},{v:'fair',l:'Fair'},{v:'poor',l:'Poor'}]} /></Field>
+          <Field label="Condition"><Sel value={form.condition_out || 'good'} onChange={v => f('condition_out', v)} options={CONDITION_OPTIONS} /></Field>
         </Row2>
         <div className="flex gap-4">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.battery_issued || false} onChange={e => f('battery_issued', e.target.checked)} className="rounded" /> Battery</label>
@@ -613,7 +622,7 @@ const LogisticsPage = () => {
 
       {/* Radio Check-In Modal */}
       <FormModal open={modal === 'radio-in'} onClose={closeModal} title="Check In Radio" onSubmit={submitForm}>
-        <Field label="Condition"><Sel value={form.condition_in || 'good'} onChange={v => f('condition_in', v)} options={[{v:'good',l:'Good'},{v:'fair',l:'Fair'},{v:'needs_maintenance',l:'Needs Maintenance'}]} /></Field>
+        <Field label="Condition"><Sel value={form.condition_in || 'good'} onChange={v => f('condition_in', v)} options={CONDITION_IN_OPTIONS} /></Field>
         <Field label="Notes"><Textarea value={form.notes || ''} onChange={e => f('notes', e.target.value)} rows={2} className="text-sm rounded-sm" /></Field>
       </FormModal>
 
@@ -637,7 +646,7 @@ const LogisticsPage = () => {
         }}>
         <Row2>
           <Field label="Call Sign *"><Input value={form.call_sign || ''} onChange={e => f('call_sign', e.target.value)} className="h-8 text-sm rounded-sm" data-testid="cs-callsign" /></Field>
-          <Field label="Status"><Sel value={form.status || 'active'} onChange={v => f('status', v)} options={[{v:'active',l:'Active'},{v:'backup',l:'Backup'},{v:'unassigned',l:'Unassigned'},{v:'out_of_service',l:'Out of Service'}]} /></Field>
+          <Field label="Status"><Sel value={form.status || 'active'} onChange={v => f('status', v)} options={CALLSIGN_STATUS_OPTIONS} /></Field>
         </Row2>
         <Row2>
           <Field label="Assigned Member"><Input value={form.assigned_member || ''} onChange={e => f('assigned_member', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
@@ -702,7 +711,7 @@ const LogisticsPage = () => {
         </Row2>
         <Row2>
           <Field label="Responsible Staff"><Input value={form.responsible_staff || ''} onChange={e => f('responsible_staff', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
-          <Field label="Status"><Sel value={form.status || 'ready'} onChange={v => f('status', v)} options={[{v:'ready',l:'Ready'},{v:'in_use',l:'In Use'},{v:'needs_attention',l:'Needs Attention'},{v:'out_of_service',l:'Out of Service'}]} /></Field>
+          <Field label="Status"><Sel value={form.status || 'ready'} onChange={v => f('status', v)} options={FACILITY_STATUS_OPTIONS} /></Field>
         </Row2>
         <Field label="Notes"><Textarea value={form.notes || ''} onChange={e => f('notes', e.target.value)} rows={2} className="text-sm rounded-sm" /></Field>
       </FormModal>
@@ -715,7 +724,7 @@ const LogisticsPage = () => {
         </Row2>
         <Field label="Purpose"><Input value={form.purpose || ''} onChange={e => f('purpose', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
         <Row2>
-          <Field label="Priority"><Sel value={form.priority || 'normal'} onChange={v => f('priority', v)} options={[{v:'low',l:'Low'},{v:'normal',l:'Normal'},{v:'high',l:'High'},{v:'urgent',l:'Urgent'}]} /></Field>
+          <Field label="Priority"><Sel value={form.priority || 'normal'} onChange={v => f('priority', v)} options={PRIORITY_OPTIONS} /></Field>
           <Field label="Needed By"><Input type="date" value={form.needed_by || ''} onChange={e => f('needed_by', e.target.value)} className="h-8 text-sm rounded-sm" /></Field>
         </Row2>
         <Field label="Notes"><Textarea value={form.notes || ''} onChange={e => f('notes', e.target.value)} rows={2} className="text-sm rounded-sm" /></Field>

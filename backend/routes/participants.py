@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from io import BytesIO
 import uuid
 import logging
+
+logger = logging.getLogger(__name__)
+
 import hashlib
 
 try:

@@ -17,9 +17,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
 # Test credentials
 from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, TEST_CADRE_EMAIL, TEST_CADRE_PASSWORD
 CADET_EMAIL = "cadet_test_budget@test.com"
-CADET_PASSWORD = "cadetpass123"
+CADET_PASSWORD = os.environ.get("TEST_CADET_PASSWORD", "cadetpass123")
 FINANCE_EMAIL = "finance_test@test.com"
-FINANCE_PASSWORD = "financepass123"
+FINANCE_PASSWORD = os.environ.get("TEST_FINANCE_PASSWORD", "financepass123")
 
 
 class TestBudgetSetup:

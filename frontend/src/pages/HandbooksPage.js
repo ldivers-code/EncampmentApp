@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getDocuments, createDocument, updateDocument, deleteDocument, uploadDocumentWithFile, downloadDocumentFile } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -66,6 +66,8 @@ const HandbooksPage = () => {
     category: '',
     content: ''
   });
+
+  const selectableCategories = useMemo(() => CATEGORIES.filter(c => c.value !== 'all'), []);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -483,7 +485,7 @@ const HandbooksPage = () => {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.filter(c => c.value !== 'all').map(c => (
+                  {selectableCategories.map(c => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -551,7 +553,7 @@ const HandbooksPage = () => {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.filter(c => c.value !== 'all').map(c => (
+                  {selectableCategories.map(c => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>

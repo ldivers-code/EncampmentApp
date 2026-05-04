@@ -17,7 +17,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 TEST_EMAIL = COMMANDER_EMAIL
-TEST_PASSWORD = "Test1234!"
+TEST_PASSWORD = COMMANDER_PASSWORD
 
 
 class TestBarracksAuth:

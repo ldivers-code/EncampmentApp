@@ -19,7 +19,7 @@ if not BASE_URL:
 
 # Test credentials
 TEST_EMAIL = COMMANDER_EMAIL
-TEST_PASSWORD = "26GO@lie!"
+TEST_PASSWORD = COMMANDER_PASSWORD
 
 # Test document IDs
 TEXT_HANDBOOK_ID = "bd5e468c-3a0d-419c-b0f5-61b3b83155e0"  # text/plain file

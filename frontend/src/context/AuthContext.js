@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -165,24 +165,26 @@ export const AuthProvider = ({ children }) => {
     } catch (e) { /* ignore */ }
   };
 
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    login,
+    register,
+    logout,
+    hasRole,
+    canEdit,
+    canUploadDocuments,
+    canEditMealPlan,
+    canAccessFinance,
+    isCommander,
+    isAuthenticated: !!user,
+    activeUsers,
+    refreshActiveUsers: fetchActiveUsers,
+    refreshUser
+  }), [user, loading, login, register, logout, hasRole, canEdit, canUploadDocuments, canEditMealPlan, canAccessFinance, isCommander, activeUsers, fetchActiveUsers, refreshUser]);
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      login,
-      register,
-      logout,
-      hasRole,
-      canEdit,
-      canUploadDocuments,
-      canEditMealPlan,
-      canAccessFinance,
-      isCommander,
-      isAuthenticated: !!user,
-      activeUsers,
-      refreshActiveUsers: fetchActiveUsers,
-      refreshUser
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

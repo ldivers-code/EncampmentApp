@@ -60,6 +60,20 @@ import {
   Search
 } from 'lucide-react';
 
+// Chart style constants (extracted to avoid inline object re-creation)
+const CHART_TICK_STYLE = { fontSize: 10, fill: '#64748B' };
+const CHART_TICK_STYLE_SM = { fontSize: 9, fill: '#64748B' };
+const CHART_AXIS_STYLE = { stroke: '#E2E8F0' };
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: '#fff',
+  border: '1px solid #E2E8F0',
+  borderRadius: '2px',
+  fontSize: '12px'
+};
+const CHART_LEGEND_STYLE = { fontSize: '11px' };
+const CHART_BAR_RADIUS = [2, 2, 0, 0];
+const CHART_MARGIN = { bottom: 5 };
+
 const BudgetPage = () => {
   const { canAccessFinance, user } = useAuth();
   const [items, setItems] = useState([]);
@@ -981,12 +995,12 @@ const BudgetPage = () => {
             </div>
             <div className="p-4">
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ bottom: 5 }}>
+                <BarChart data={chartData} margin={CHART_MARGIN}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 9, fill: '#64748B' }}
-                    axisLine={{ stroke: '#E2E8F0' }}
+                    tick={CHART_TICK_STYLE_SM}
+                    axisLine={CHART_AXIS_STYLE}
                     angle={-35}
                     textAnchor="end"
                     height={80}
@@ -994,24 +1008,19 @@ const BudgetPage = () => {
                     tickFormatter={(value) => value.length > 14 ? value.substring(0, 14) + '...' : value}
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={{ stroke: '#E2E8F0' }}
+                    tick={CHART_TICK_STYLE}
+                    axisLine={CHART_AXIS_STYLE}
                     tickFormatter={(value) => `$${value.toLocaleString()}`}
                     width={65}
                   />
                   <Tooltip
                     formatter={(value, name) => [formatCurrency(value), name]}
                     labelFormatter={(label) => label}
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '2px',
-                      fontSize: '12px'
-                    }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
                   />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar dataKey="Estimated" fill="#00205B" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Actual" fill="#BF0D3E" radius={[2, 2, 0, 0]} />
+                  <Legend wrapperStyle={CHART_LEGEND_STYLE} />
+                  <Bar dataKey="Estimated" fill="#00205B" radius={CHART_BAR_RADIUS} />
+                  <Bar dataKey="Actual" fill="#BF0D3E" radius={CHART_BAR_RADIUS} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1042,7 +1051,7 @@ const BudgetPage = () => {
                       <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ fontSize: '12px' }} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={CHART_TOOLTIP_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
               {/* Legend below chart */}

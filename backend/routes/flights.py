@@ -164,7 +164,7 @@ async def _resolve_leadership(flight_lower: str) -> dict:
         {
             "flight": flight_lower,
             "participant_type": {"$in": ["cadre", "staff", "senior_member"]},
-            "position": {"$exists": True, "$ne": None, "$ne": ""},
+            "position": {"$exists": True, "$nin": [None, ""]},
             "is_removed": {"$ne": True},
         },
         {"_id": 0, "first_name": 1, "last_name": 1, "rank": 1, "capid": 1, "position": 1},

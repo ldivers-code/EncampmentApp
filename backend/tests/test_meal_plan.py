@@ -16,7 +16,7 @@ from conftest import COMMANDER_EMAIL, COMMANDER_PASSWORD, ADMIN_EMAIL, ADMIN_PAS
 
 # Test user for dining_facility role
 TEST_DINING_USER_EMAIL = "TEST_dining_test@cap.gov"
-TEST_DINING_USER_PASSWORD = "testpass123"
+TEST_DINING_USER_PASSWORD = os.environ.get("TEST_DINING_PASSWORD", "testpass123")
 TEST_DINING_USER_CAPID = "999999"
 
 @pytest.fixture(scope="module")

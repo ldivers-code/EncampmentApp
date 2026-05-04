@@ -18,7 +18,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials (Commander role)
 TEST_EMAIL = COMMANDER_EMAIL
-TEST_PASSWORD = "26GO@lie!"
+TEST_PASSWORD = COMMANDER_PASSWORD
 
 # Existing test handbook ID for download testing
 EXISTING_HANDBOOK_ID = "bd5e468c-3a0d-419c-b0f5-61b3b83155e0"
