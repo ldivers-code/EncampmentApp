@@ -9,6 +9,8 @@ import uuid
 import os
 import logging
 
+logger = logging.getLogger(__name__)
+
 from database import db, api_router
 from models import (
     UserRole, BudgetItemCreate, BudgetItemResponse,
@@ -621,31 +623,28 @@ async def smart_receipt_upload(
     is_image = any(file.filename.lower().endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp', '.heic'))
     
     if is_image:
-        # Try using emergent integrations for image-to-text (GPT Vision)
+        # Use emergent integrations GPT-4o vision for OCR
         try:
-            from emergentintegrations.llm.chat import chat, ChatMessage, ChatModel
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
             
             b64_content = base64.b64encode(contents).decode('utf-8')
-            mime = 'image/jpeg' if file.filename.lower().endswith(('.jpg', '.jpeg')) else 'image/png'
-            data_url = f"data:{mime};base64,{b64_content}"
             
             api_key = os.environ.get("EMERGENT_LLM_KEY", "")
             
-            messages = [
-                ChatMessage(
-                    role="user",
-                    content="Extract ALL items and their prices from this receipt. Format each line as: ITEM_DESCRIPTION | $AMOUNT\nAlso include the store/vendor name on the first line as: VENDOR: name\nAnd the date as: DATE: date\nAnd the total as: TOTAL: $amount",
-                    images=[data_url]
-                )
-            ]
-            
-            result = await chat(
+            llm = LlmChat(
                 api_key=api_key,
-                model=ChatModel.GPT_4O,
-                messages=messages
+                session_id=f"receipt-ocr-{uuid.uuid4()}",
+                system_message="You are a receipt OCR assistant. Extract structured data from receipt images accurately."
+            ).with_model("openai", "gpt-4o")
+            
+            image_content = ImageContent(image_base64=b64_content)
+            
+            user_msg = UserMessage(
+                text="Extract ALL items and their prices from this receipt. Format each line as: ITEM_DESCRIPTION | $AMOUNT\nAlso include the store/vendor name on the first line as: VENDOR: name\nAnd the date as: DATE: date\nAnd the total as: TOTAL: $amount",
+                file_contents=[image_content]
             )
             
-            raw_text = result.message
+            raw_text = await llm.send_message(user_msg)
             
             # Parse the structured response
             lines = raw_text.strip().split('\n')
@@ -682,7 +681,8 @@ async def smart_receipt_upload(
             
         except Exception as e:
             # Fallback: store as unprocessed receipt
-            parsed["raw_text"] = f"OCR processing unavailable: {str(e)}"
+            logger.error(f"Receipt OCR failed: {str(e)}")
+            parsed["raw_text"] = f"OCR processing error: {str(e)}"
     
     # Auto-categorize each line item
     categorized_items = []
