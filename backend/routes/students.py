@@ -449,10 +449,13 @@ async def upload_students(
         df.columns = df.columns.str.strip()
         
         # Column mapping for CAP Event Admin Report format
+        # Supports both sub-event reports (have RegistrantsCAPID, EventName)
+        # and master reports (have SubEvents at col BL, no CAPID column)
         column_map = {
             'RegistrantsCAPID': 'capid',
             'CAPID': 'capid',
             'EventName': 'event_name',
+            'SubEvents': 'event_name',
             'Rank': 'rank',
             'NameLast': 'last_name',
             'NameFirst': 'first_name',
@@ -462,6 +465,7 @@ async def upload_students(
             'Region': 'region',
             'Gender': 'gender',
             'Age': 'age',
+            'DOB': 'dob',
             'AgeAtEventStart': 'age_at_event',
             'Email': 'email',
             'MbrType': 'member_type',
@@ -475,6 +479,8 @@ async def upload_students(
             'Zip': 'zip_code',
             'EmergencyContactName': 'emergency_contact',
             'EmergencyContactNumber': 'emergency_phone',
+            'HomePhonePrimary': 'home_phone',
+            'CellPhonePrimary': 'cell_phone',
             'CadetParentPhonePrimary': 'cadet_parent_phone',
             'CadetParentPhoneSecondary': 'cadet_parent_phone_secondary',
             'CadetParentPhoneEmergency': 'cadet_parent_phone_emergency',
@@ -485,6 +491,8 @@ async def upload_students(
             'Conflicts': 'conflicts',
             'LastEncampment': 'last_encampment',
             'HighestORide': 'highest_oride',
+            'AmountPaid': 'amount_paid',
+            'PaidInFull': 'paid_in_full',
         }
         
         df = df.rename(columns=column_map)
@@ -512,23 +520,29 @@ async def upload_students(
             except (ValueError, TypeError):
                 return default
         
-        # Process each row as a student
+        # Process each row
         for idx, row in df.iterrows():
             row_dict = row.to_dict()
             
             capid = get_str(row_dict, 'capid')
-            if not capid or capid == 'nan':
-                continue  # Skip rows without CAPID
+            if capid == 'nan':
+                capid = ''
+            first_name = get_str(row_dict, 'first_name')
+            last_name = get_str(row_dict, 'last_name')
+            
+            # Skip rows with no identifying info
+            if not capid and not (first_name and last_name):
+                continue
             
             # Determine participant type from sub-event context
             event_name = get_str(row_dict, 'event_name')
             member_type_val = get_str(row_dict, 'member_type')
             staff_flag = get_str(row_dict, 'staff_member', 'No').lower() in ('yes', 'true', '1')
             p_type = determine_participant_type(event_name, member_type_val, staff_flag)
-            # p_type is None when EventName is blank — will be resolved during upsert
+            # p_type is None when EventName/SubEvents is blank — will be resolved during upsert
 
-            # member_type: use spreadsheet value or default to CADET for student sub-event
-            m_type = member_type_val.upper() if member_type_val else 'CADET'
+            # member_type: use spreadsheet value
+            m_type = member_type_val.upper() if member_type_val else ''
 
             students_to_process.append({
                 "capid": capid,

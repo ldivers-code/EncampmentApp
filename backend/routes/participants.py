@@ -1145,6 +1145,7 @@ async def import_participants(
             'RegistrantsCAPID': 'capid',
             'CAPID': 'capid',
             'EventName': 'event_name',
+            'SubEvents': 'event_name',
             'Rank': 'rank',
             'NameLast': 'last_name',
             'NameFirst': 'first_name',
