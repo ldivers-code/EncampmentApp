@@ -10,7 +10,12 @@ from permissions import get_current_user, require_role
 
 
 async def enrich_role(role: dict) -> dict:
-    """Add children list to a role"""
+    """Add children list to a role and normalize field names"""
+    # Normalize legacy field names
+    if "title" in role and "position_title" not in role:
+        role["position_title"] = role.pop("title")
+    if "assigned_name" not in role:
+        role["assigned_name"] = ""
     children = await db.org_chart_roles.find(
         {"reports_to": role["role_id"]},
         {"_id": 0, "role_id": 1}
@@ -19,10 +24,12 @@ async def enrich_role(role: dict) -> dict:
     return role
 
 
-@api_router.get("/org-chart/roles", response_model=List[OrgChartRoleResponse])
-async def get_org_chart_roles(user: dict = Depends(get_current_user)):
-    """Get all org chart positions"""
+@api_router.get("/org-chart/roles")
+async def get_org_chart_roles(raw: bool = False, user: dict = Depends(get_current_user)):
+    """Get all org chart positions. Pass ?raw=true for flat list without enrichment."""
     roles = await db.org_chart_roles.find({}, {"_id": 0}).to_list(1000)
+    if raw:
+        return roles
     enriched = []
     for role in roles:
         r = await enrich_role(role)

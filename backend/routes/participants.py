@@ -932,7 +932,7 @@ async def update_participant(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     now = datetime.now(timezone.utc).isoformat()
-    update_data = {**data.model_dump(), "updated_at": now}
+    update_data = {**data.model_dump(), "updated_at": now, "manually_edited_at": now, "manually_edited_by": user["id"]}
     
     # First get the existing participant to check current flight
     existing = await db.participants.find_one({"id": participant_id}, {"_id": 0})
@@ -1497,6 +1497,13 @@ async def import_participants(
             existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
 
             if existing:
+                # LOCKDOWN: Skip records that were manually edited
+                if existing.get("manually_edited_at"):
+                    updated_count += 1
+                    pid = existing["id"]
+                    await link_to_user_account(pid, capid, email_val)
+                    continue
+
                 # If spreadsheet didn't specify a type (blank EventName), keep existing
                 if participant_type is None:
                     doc.pop("participant_type", None)

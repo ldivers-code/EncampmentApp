@@ -415,6 +415,8 @@ class ParticipantResponse(ParticipantBase):
     id: str
     created_at: str
     updated_at: str
+    manually_edited_at: Optional[str] = None
+    manually_edited_by: Optional[str] = None
 
 class ScheduleEventBase(BaseModel):
     title: str

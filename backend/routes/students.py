@@ -610,6 +610,14 @@ async def upload_students(
             existing = await find_existing_participant(capid, email, first_name, last_name)
             
             if existing:
+                # LOCKDOWN: Skip records that were manually edited (protect admin changes from bulk overwrite)
+                if existing.get("manually_edited_at"):
+                    updated_count += 1
+                    pid = existing["id"]
+                    if await link_to_user_account(pid, capid, email):
+                        linked_count += 1
+                    continue
+
                 # Don't override manual squadron/flight assignments
                 if existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
                     student["flight"] = existing["flight"]

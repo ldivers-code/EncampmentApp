@@ -941,6 +941,144 @@ async def delete_med_diary_entry(
     return {"message": "Deleted"}
 
 
+# Mobile-compatible med-diary endpoint (participant_id in body, not path)
+@api_router.post("/health/med-diary")
+async def create_med_diary_mobile(
+    body: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Create med diary entry — mobile format (participant_id in body)"""
+    participant_id = body.get("participant_id")
+    if not participant_id:
+        raise HTTPException(status_code=400, detail="participant_id required")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "participant_id": participant_id,
+        "participant_name": body.get("participant_name", ""),
+        "capid": body.get("capid", ""),
+        "flight": body.get("flight", ""),
+        "squadron": body.get("squadron", ""),
+        "medication_name": body.get("medication", body.get("medication_name", "")),
+        "medication": body.get("medication", body.get("medication_name", "")),
+        "dosage": body.get("dose", body.get("dosage", "")),
+        "dose": body.get("dose", body.get("dosage", "")),
+        "route": body.get("route"),
+        "administered_at": body.get("administered_at", now),
+        "administered_by": body.get("administered_by", user.get("name", user.get("id"))),
+        "administered_by_id": user["id"],
+        "indication": body.get("indication"),
+        "notes": body.get("notes", ""),
+        "vital_signs": body.get("vital_signs"),
+        "refused": body.get("refused", False),
+        "date": body.get("date", now[:10]),
+        "created_at": now,
+        "created_by": user["id"],
+        "created_by_name": user.get("name", user.get("email")),
+    }
+    await db.hs_med_diary.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+# Mobile-compatible incidents endpoints (participant_id in body)
+@api_router.post("/health/incidents")
+async def create_incident_mobile(
+    body: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Create health incident — mobile format (participant_id in body)"""
+    participant_id = body.get("participant_id")
+    if not participant_id:
+        raise HTTPException(status_code=400, detail="participant_id required")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "participant_id": participant_id,
+        "participant_name": body.get("participant_name", ""),
+        "capid": body.get("capid", ""),
+        "flight": body.get("flight", ""),
+        "squadron": body.get("squadron", ""),
+        "incident_type": body.get("incident_type", "other"),
+        "severity": body.get("severity", "minor"),
+        "occurred_at": body.get("occurred_at", now),
+        "location": body.get("location"),
+        "description": body.get("description", ""),
+        "treatment_given": body.get("treatment_given"),
+        "follow_up_required": body.get("follow_up_required", False),
+        "evacuated": body.get("evacuated", False),
+        "vital_signs": body.get("vital_signs"),
+        "notes": body.get("notes", ""),
+        "photos": body.get("photos", []),
+        "status": "open",
+        "created_at": now,
+        "created_by": user["id"],
+        "created_by_name": user.get("name", user.get("email")),
+    }
+    await db.hs_incident_log.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/health/incidents/{incident_id}")
+async def update_incident_full(
+    incident_id: str,
+    body: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Full update of a health incident"""
+    existing = await db.hs_incident_log.find_one({"id": incident_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    now = datetime.now(timezone.utc).isoformat()
+    allowed = {"participant_id", "participant_name", "capid", "flight", "squadron",
+               "incident_type", "severity", "occurred_at", "location", "description",
+               "treatment_given", "follow_up_required", "evacuated", "vital_signs",
+               "notes", "photos"}
+    update = {k: v for k, v in body.items() if k in allowed}
+    update["updated_at"] = now
+    update["updated_by"] = user["id"]
+    await db.hs_incident_log.update_one({"id": incident_id}, {"$set": update})
+    updated = await db.hs_incident_log.find_one({"id": incident_id}, {"_id": 0})
+    return updated
+
+
+@api_router.put("/health/incidents/{incident_id}/resolve")
+async def resolve_incident(
+    incident_id: str,
+    body: dict,
+    user: dict = Depends(require_health_full())
+):
+    """Resolve an incident"""
+    existing = await db.hs_incident_log.find_one({"id": incident_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "status": "resolved",
+        "resolved_at": now,
+        "resolved_by": user["id"],
+        "resolution_notes": body.get("resolution_notes", ""),
+        "updated_at": now,
+        "updated_by": user["id"],
+    }
+    await db.hs_incident_log.update_one({"id": incident_id}, {"$set": patch})
+    updated = await db.hs_incident_log.find_one({"id": incident_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/health/incidents/{incident_id}")
+async def delete_incident(
+    incident_id: str,
+    user: dict = Depends(require_health_full())
+):
+    """Delete a health incident"""
+    result = await db.hs_incident_log.delete_one({"id": incident_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return {"message": "Incident deleted successfully"}
+
+
 # ================= SUPPLEMENT LIST =================
 
 @api_router.get("/health/cadet/{cadet_id}/supplements")

@@ -506,3 +506,46 @@ async def sync_users_to_participants(
         "skipped": skipped,
         "total_users": len(all_users)
     }
+
+
+# ================= CADRE POSITION =================
+
+ALLOWED_CADRE_POSITIONS = {
+    "group_commander", "group_deputy_commander", "group_superintendent",
+    "cadet_dean_academics", "cadet_squadron_commander", "cadet_first_sergeant",
+    "flight_commander", "flight_sergeant",
+    "squadron_training_officer", "flight_training_officer",
+    "commandant_of_cadets", "chief_training_officer",
+}
+
+
+@api_router.put("/users/{user_id}/cadre-position")
+async def set_cadre_position(
+    user_id: str,
+    body: dict,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
+):
+    """Set cadre position and unit for a user (admin)"""
+    cadre_position = body.get("cadre_position")
+    cadre_unit = body.get("cadre_unit")
+
+    if cadre_position is not None and cadre_position not in ALLOWED_CADRE_POSITIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"cadre_position must be null or one of: {sorted(ALLOWED_CADRE_POSITIONS)}"
+        )
+
+    existing = await db.users.find_one({"id": user_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    patch = {
+        "cadre_position": cadre_position,
+        "cadre_unit": cadre_unit,
+        "updated_at": now,
+        "updated_by": user["id"],
+    }
+    await db.users.update_one({"id": user_id}, {"$set": patch})
+    updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return updated
