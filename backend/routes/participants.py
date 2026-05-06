@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import uuid
 import logging
@@ -22,7 +22,7 @@ from models import (
     UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
 from permissions import get_current_user, require_role
-from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget, find_existing_participant, link_to_user_account, determine_participant_type
+from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget, find_existing_participant, find_match_with_candidates, link_to_user_account, determine_participant_type
 
 # ================= PARTICIPANT ROUTES =================
 
@@ -1403,296 +1403,508 @@ async def reset_org_chart(
     return {"message": f"Org chart cleared: {count} positions removed", "deleted": count}
 
 
+CAP_IMPORT_COLUMN_MAP = {
+    'RegistrantsCAPID': 'capid',
+    'CAPID': 'capid',
+    'EventName': 'event_name',
+    'SubEvents': 'event_name',
+    'Rank': 'rank',
+    'NameLast': 'last_name',
+    'NameFirst': 'first_name',
+    'NameMiddle': 'middle_name',
+    'Unit': 'unit',
+    'Wing': 'wing',
+    'Region': 'region',
+    'Gender': 'gender',
+    'Age': 'age',
+    'AgeAtEventStart': 'age_at_event',
+    'Email': 'email',
+    'HomePhonePrimary': 'phone',
+    'CellPhonePrimary': 'cell_phone',
+    'ShirtSize': 'shirt_size',
+    'MbrType': 'member_type',
+    'StaffMember': 'staff_member',
+    'PaidInFull': 'paid_in_full',
+    'AmountPaid': 'amount_paid',
+    'RegistrationStatus': 'registration_status',
+    'UnitApproved': 'unit_approved',
+    'UnitApprovalDate': 'unit_approval_date',
+    'WingApproved': 'wing_approved',
+    'WingApprovalDate': 'wing_approval_date',
+    'Slotted': 'slotted',
+    'Addr1': 'address',
+    'City': 'city',
+    'State': 'state',
+    'Zip': 'zip_code',
+    'EmergencyContactName': 'emergency_contact',
+    'EmergencyContactNumber': 'emergency_phone',
+    'CadetParentPhonePrimary': 'cadet_parent_phone',
+    'CadetParentEmailPrimary': 'cadet_parent_email',
+    'UnitCCName': 'unit_cc_name',
+    'UnitCCEmail': 'unit_cc_email',
+    'LastEncampment': 'last_encampment',
+    'CPPTExpiration': 'cppt_expiration',
+    'FirstAid': 'first_aid',
+    'IS100': 'is100_date',
+    'IS700': 'is700_date',
+    'Comments': 'comments',
+}
+
+
+def _parse_import_dataframe(df: pd.DataFrame) -> tuple[list[dict], dict]:
+    """Parse a CAP Event Admin Report dataframe into normalized participant docs.
+    Returns (rows, stats). Each row has keys:
+      capid, doc, participant_type, member_type, paid_in_full, amount_paid
+    where doc is the field-only update dict (no id/created_at), and participant_type
+    may be None when the SubEvents column was blank (so caller decides whether to skip / default)."""
+    df = df.rename(columns=CAP_IMPORT_COLUMN_MAP)
+
+    rows: list[dict] = []
+    stats = {
+        'seniors': 0, 'cadets': 0, 'staff': 0, 'cadre': 0,
+        'paid': 0, 'unpaid': 0, 'total_collected': 0.0,
+    }
+
+    for _idx, row in df.iterrows():
+        row_dict = row.to_dict()
+
+        def get_val(key, default=None):
+            val = row_dict.get(key)
+            if pd.isna(val) or val == '' or val == 'nan':
+                return default
+            return val
+
+        def get_str(key, default=''):
+            val = get_val(key, default)
+            return str(val).strip() if val is not None else default
+
+        def get_bool(key):
+            val = get_val(key)
+            if val is None:
+                return False
+            if isinstance(val, bool):
+                return val
+            return str(val).lower() in ['yes', 'true', '1']
+
+        def get_float(key, default=0.0):
+            val = get_val(key)
+            if val is None:
+                return default
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+
+        def get_int(key, default=None):
+            val = get_val(key)
+            if val is None:
+                return default
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return default
+
+        # CAPID resolution: explicit column → email prefix → name+unit hash
+        capid = str(row_dict.get('capid', '')).strip()
+        # Strip pandas float artifact: "538026.0" → "538026"
+        if capid.endswith('.0') and capid[:-2].isdigit():
+            capid = capid[:-2]
+        if not capid or capid == 'nan':
+            email = get_str('email', '')
+            if email:
+                email_prefix = email.split('@')[0] if '@' in email else ''
+                numeric_parts = ''.join(filter(str.isdigit, email_prefix))
+                if len(numeric_parts) >= 5:
+                    capid = numeric_parts[:6]
+            if not capid or capid == 'nan':
+                last_name = get_str('last_name', '')
+                first_name = get_str('first_name', '')
+                wing = get_str('wing', 'XX')
+                unit = get_str('unit', '000')
+                if last_name and first_name:
+                    import hashlib
+                    composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
+                    hash_digest = hashlib.sha256(composite.encode()).hexdigest()[:6]
+                    capid = f"GEN{hash_digest.upper()}"
+                else:
+                    continue  # not enough info to identify
+
+        # Type inference
+        member_type = get_str('member_type', '').upper()
+        is_staff = get_bool('staff_member')
+        event_name = get_str('event_name', '')
+        participant_type = determine_participant_type(event_name, member_type, is_staff)
+
+        if member_type in ('SENIOR', 'CADET SPONSOR'):
+            stats['seniors'] += 1
+            if participant_type == 'staff':
+                stats['staff'] += 1
+        elif member_type == 'CADET':
+            stats['cadets'] += 1
+            if participant_type == 'cadre':
+                stats['cadre'] += 1
+
+        paid_in_full = get_bool('paid_in_full')
+        amount_paid = get_float('amount_paid', 0.0)
+        if paid_in_full or amount_paid > 0:
+            stats['paid'] += 1
+            stats['total_collected'] += amount_paid
+        else:
+            stats['unpaid'] += 1
+
+        last_enc = get_str('last_encampment', '')
+        first_encampment = last_enc.lower() == 'not complete' or last_enc == ''
+
+        doc = {
+            "capid": capid,
+            "rank": get_str('rank'),
+            "last_name": get_str('last_name'),
+            "first_name": get_str('first_name'),
+            "middle_name": get_str('middle_name') or None,
+            "unit": get_str('unit'),
+            "wing": get_str('wing') or None,
+            "region": get_str('region') or None,
+            "gender": get_str('gender') or None,
+            "age": get_int('age'),
+            "age_at_event": get_int('age_at_event'),
+            "email": get_str('email') or None,
+            "phone": get_str('phone') or None,
+            "cell_phone": get_str('cell_phone') or None,
+            "shirt_size": get_str('shirt_size') or None,
+            "member_type": member_type or None,
+            "participant_type": participant_type,
+            "staff_member": is_staff,
+            "paid": paid_in_full,
+            "paid_in_full": paid_in_full,
+            "amount_paid": amount_paid if amount_paid > 0 else None,
+            "registration_status": get_str('registration_status') or None,
+            "unit_approved": get_bool('unit_approved'),
+            "unit_approval_date": get_str('unit_approval_date') or None,
+            "wing_approved": get_bool('wing_approved'),
+            "wing_approval_date": get_str('wing_approval_date') or None,
+            "slotted": get_bool('slotted'),
+            "address": get_str('address') or None,
+            "city": get_str('city') or None,
+            "state": get_str('state') or None,
+            "zip_code": get_str('zip_code') or None,
+            "emergency_contact": get_str('emergency_contact') or None,
+            "emergency_phone": get_str('emergency_phone') or None,
+            "cadet_parent_phone": get_str('cadet_parent_phone') or None,
+            "cadet_parent_email": get_str('cadet_parent_email') or None,
+            "unit_cc_name": get_str('unit_cc_name') or None,
+            "unit_cc_email": get_str('unit_cc_email') or None,
+            "last_encampment": get_str('last_encampment') or None,
+            "cppt_expiration": get_str('cppt_expiration') or None,
+            "first_aid": get_str('first_aid') or None,
+            "is100_date": get_str('is100_date') or None,
+            "is700_date": get_str('is700_date') or None,
+            "first_encampment": first_encampment,
+            "comments": get_str('comments') or None,
+        }
+
+        rows.append({
+            "capid": capid,
+            "doc": doc,
+            "participant_type": participant_type,
+            "member_type": member_type,
+            "paid_in_full": paid_in_full,
+            "amount_paid": amount_paid,
+        })
+
+    return rows, stats
+
+
+# Fields that are user-facing and shown in the diff
+DIFF_FIELDS = [
+    "rank", "first_name", "last_name", "middle_name", "email", "phone", "cell_phone",
+    "unit", "wing", "region", "gender", "age", "age_at_event", "shirt_size",
+    "participant_type", "member_type", "paid_in_full", "amount_paid",
+    "registration_status", "unit_approved", "wing_approved", "slotted",
+]
+
+
 @api_router.post("/participants/import")
 async def import_participants(
     file: UploadFile = File(...),
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
-    """Import participants from CAP Event Admin Report Excel file"""
+    """Import participants from CAP Event Admin Report Excel file (auto-apply, no preview).
+    For interactive preview/conflict resolution, use POST /participants/import/preview followed by /import/apply."""
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
-    
+
     try:
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
-        
-        # Normalize column names - handle CAP Admin Report format
         df.columns = df.columns.str.strip()
-        
-        # Create column mapping for CAP Admin Report headers
-        column_map = {
-            'RegistrantsCAPID': 'capid',
-            'CAPID': 'capid',
-            'EventName': 'event_name',
-            'SubEvents': 'event_name',
-            'Rank': 'rank',
-            'NameLast': 'last_name',
-            'NameFirst': 'first_name',
-            'NameMiddle': 'middle_name',
-            'Unit': 'unit',
-            'Wing': 'wing',
-            'Region': 'region',
-            'Gender': 'gender',
-            'Age': 'age',
-            'AgeAtEventStart': 'age_at_event',
-            'Email': 'email',
-            'HomePhonePrimary': 'phone',
-            'CellPhonePrimary': 'cell_phone',
-            'ShirtSize': 'shirt_size',
-            'MbrType': 'member_type',
-            'StaffMember': 'staff_member',
-            'PaidInFull': 'paid_in_full',
-            'AmountPaid': 'amount_paid',
-            'RegistrationStatus': 'registration_status',
-            'UnitApproved': 'unit_approved',
-            'UnitApprovalDate': 'unit_approval_date',
-            'WingApproved': 'wing_approved',
-            'WingApprovalDate': 'wing_approval_date',
-            'Slotted': 'slotted',
-            'Addr1': 'address',
-            'City': 'city',
-            'State': 'state',
-            'Zip': 'zip_code',
-            'EmergencyContactName': 'emergency_contact',
-            'EmergencyContactNumber': 'emergency_phone',
-            'CadetParentPhonePrimary': 'cadet_parent_phone',
-            'CadetParentEmailPrimary': 'cadet_parent_email',
-            'UnitCCName': 'unit_cc_name',
-            'UnitCCEmail': 'unit_cc_email',
-            'LastEncampment': 'last_encampment',
-            'CPPTExpiration': 'cppt_expiration',
-            'FirstAid': 'first_aid',
-            'IS100': 'is100_date',
-            'IS700': 'is700_date',
-            'Comments': 'comments',
-        }
-        
-        # Rename columns
-        df = df.rename(columns=column_map)
-        
+
+        rows, stats = _parse_import_dataframe(df)
+        now = datetime.now(timezone.utc).isoformat()
         imported_count = 0
         updated_count = 0
-        now = datetime.now(timezone.utc).isoformat()
-        
-        # Track import stats
-        stats = {
-            'seniors': 0,
-            'cadets': 0,
-            'staff': 0,
-            'cadre': 0,
-            'paid': 0,
-            'unpaid': 0,
-            'total_collected': 0.0
-        }
-        
-        for idx, row in df.iterrows():
-            row_dict = row.to_dict()
-            
-            # Helper function to safely get value
-            def get_val(key, default=None):
-                val = row_dict.get(key)
-                if pd.isna(val) or val == '' or val == 'nan':
-                    return default
-                return val
-            
-            def get_str(key, default=''):
-                val = get_val(key, default)
-                return str(val).strip() if val is not None else default
-            
-            # Get CAPID or generate one from available data
-            capid = str(row_dict.get('capid', '')).strip()
-            if not capid or capid == 'nan':
-                # Try to extract CAPID from email (e.g., 123456@wing.cap.gov or 123456cap@gmail.com)
-                email = get_str('email', '')
-                if email:
-                    email_prefix = email.split('@')[0] if '@' in email else ''
-                    # Check if prefix is numeric or contains numeric CAPID
-                    numeric_parts = ''.join(filter(str.isdigit, email_prefix))
-                    if len(numeric_parts) >= 5:  # CAPIDs are typically 5-6 digits
-                        capid = numeric_parts[:6]
-                
-                # If still no CAPID, generate from name + unit + wing
-                if not capid or capid == 'nan':
-                    last_name = get_str('last_name', '')
-                    first_name = get_str('first_name', '')
-                    wing = get_str('wing', 'XX')
-                    unit = get_str('unit', '000')
-                    if last_name and first_name:
-                        # Generate a pseudo-CAPID from hash of name + unit
-                        import hashlib
-                        composite = f"{last_name}_{first_name}_{wing}_{unit}".upper()
-                        hash_digest = hashlib.sha256(composite.encode()).hexdigest()[:6]
-                        capid = f"GEN{hash_digest.upper()}"
-                    else:
-                        # Skip rows without enough identifying info
-                        continue
-            
-            
-            def get_bool(key):
-                val = get_val(key)
-                if val is None:
-                    return False
-                if isinstance(val, bool):
-                    return val
-                return str(val).lower() in ['yes', 'true', '1']
-            
-            def get_float(key, default=0.0):
-                val = get_val(key)
-                if val is None:
-                    return default
-                try:
-                    return float(val)
-                except (ValueError, TypeError):
-                    return default
-            
-            def get_int(key, default=None):
-                val = get_val(key)
-                if val is None:
-                    return default
-                try:
-                    return int(float(val))
-                except (ValueError, TypeError):
-                    return default
-            
-            # Determine participant type using sub-event context
-            member_type = get_str('member_type', '').upper()
-            is_staff = get_bool('staff_member')
-            event_name = get_str('event_name', '')
-            participant_type = determine_participant_type(event_name, member_type, is_staff)
-            # participant_type may be None if EventName is blank — resolved during upsert
-            
-            if member_type == 'SENIOR' or member_type == 'CADET SPONSOR':
-                stats['seniors'] += 1
-                if participant_type == 'staff':
-                    stats['staff'] += 1
-            elif member_type == 'CADET':
-                stats['cadets'] += 1
-                if participant_type == 'cadre':
-                    stats['cadre'] += 1
-            
-            # Payment tracking
-            paid_in_full = get_bool('paid_in_full')
-            amount_paid = get_float('amount_paid', 0.0)
-            
-            if paid_in_full or amount_paid > 0:
-                stats['paid'] += 1
-                stats['total_collected'] += amount_paid
-            else:
-                stats['unpaid'] += 1
-            
-            # Check if last_encampment is "Not Complete" (first encampment)
-            last_enc = get_str('last_encampment', '')
-            first_encampment = last_enc.lower() == 'not complete' or last_enc == ''
-            
-            doc = {
-                "capid": capid,
-                "rank": get_str('rank'),
-                "last_name": get_str('last_name'),
-                "first_name": get_str('first_name'),
-                "middle_name": get_str('middle_name') or None,
-                "unit": get_str('unit'),
-                "wing": get_str('wing') or None,
-                "region": get_str('region') or None,
-                "gender": get_str('gender') or None,
-                "age": get_int('age'),
-                "age_at_event": get_int('age_at_event'),
-                "email": get_str('email') or None,
-                "phone": get_str('phone') or None,
-                "cell_phone": get_str('cell_phone') or None,
-                "shirt_size": get_str('shirt_size') or None,
-                "member_type": member_type or None,
-                "participant_type": participant_type,
-                "staff_member": is_staff,
-                "paid": paid_in_full,
-                "paid_in_full": paid_in_full,
-                "amount_paid": amount_paid if amount_paid > 0 else None,
-                "registration_status": get_str('registration_status') or None,
-                "unit_approved": get_bool('unit_approved'),
-                "unit_approval_date": get_str('unit_approval_date') or None,
-                "wing_approved": get_bool('wing_approved'),
-                "wing_approval_date": get_str('wing_approval_date') or None,
-                "slotted": get_bool('slotted'),
-                "address": get_str('address') or None,
-                "city": get_str('city') or None,
-                "state": get_str('state') or None,
-                "zip_code": get_str('zip_code') or None,
-                "emergency_contact": get_str('emergency_contact') or None,
-                "emergency_phone": get_str('emergency_phone') or None,
-                "cadet_parent_phone": get_str('cadet_parent_phone') or None,
-                "cadet_parent_email": get_str('cadet_parent_email') or None,
-                "unit_cc_name": get_str('unit_cc_name') or None,
-                "unit_cc_email": get_str('unit_cc_email') or None,
-                "last_encampment": get_str('last_encampment') or None,
-                "cppt_expiration": get_str('cppt_expiration') or None,
-                "first_aid": get_str('first_aid') or None,
-                "is100_date": get_str('is100_date') or None,
-                "is700_date": get_str('is700_date') or None,
-                "first_encampment": first_encampment,
-                "comments": get_str('comments') or None,
-                "updated_at": now
-            }
-            
-            # Cascading match: CAPID → email → first+last name
+
+        for r in rows:
+            doc = r["doc"]
+            participant_type = r["participant_type"]
+            capid = r["capid"]
             email_val = doc.get("email")
             first_name_val = doc.get("first_name", "")
             last_name_val = doc.get("last_name", "")
+
             existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
 
             if existing:
-                # If spreadsheet didn't specify a type (blank SubEvents), keep existing
                 if participant_type is None:
                     doc.pop("participant_type", None)
-                # If spreadsheet DID specify a type, trust it (SubEvents column is authoritative)
-
-                # Only update fields that have actual values — don't wipe existing data
                 update_doc = {k: v for k, v in doc.items() if v is not None}
                 update_doc["updated_at"] = now
-
-                await db.participants.update_one(
-                    {"id": existing["id"]},
-                    {"$set": update_doc}
-                )
+                await db.participants.update_one({"id": existing["id"]}, {"$set": update_doc})
                 updated_count += 1
                 pid = existing["id"]
             else:
-                # New record — if no type was determined, default to basic_student
                 if participant_type is None:
                     doc["participant_type"] = "basic_student"
                 pid = str(uuid.uuid4())
                 doc["id"] = pid
                 doc["created_at"] = now
+                doc["updated_at"] = now
                 await db.participants.insert_one(doc)
                 imported_count += 1
 
-            # Link to existing user account
             await link_to_user_account(pid, capid, email_val)
-        
-        # Get the final total participant count
+
         total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
-        
-        # Update food settings with participant count
         await db.food_expense_settings.update_one(
             {"_id": "settings"},
-            {"$set": {
-                "total_participants": total_participant_count,
-                "updated_at": now
-            }},
-            upsert=True
+            {"$set": {"total_participants": total_participant_count, "updated_at": now}},
+            upsert=True,
         )
-        
-        # AUTO-SYNC: Update budget income items based on roster payment data
         sync_result = await sync_roster_to_budget()
-        
+
         return {
             "message": f"Import complete: {imported_count} new, {updated_count} updated",
             "imported": imported_count,
             "updated": updated_count,
             "total": total_participant_count,
             "stats": stats,
-            "budget_sync": sync_result
+            "budget_sync": sync_result,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
 
+@api_router.post("/participants/import/preview")
+async def import_preview(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+):
+    """Parse an upload, classify each row (create/update/conflict) and return a staging_id
+    along with a preview the user can confirm/resolve before applying."""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
 
+    try:
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = df.columns.str.strip()
+        rows, stats = _parse_import_dataframe(df)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+    preview_rows = []
+    summary = {"new": 0, "update": 0, "conflict": 0, "skipped": 0}
+
+    for idx, r in enumerate(rows):
+        doc = r["doc"]
+        capid = r["capid"]
+        first_name_val = doc.get("first_name", "")
+        last_name_val = doc.get("last_name", "")
+        email_val = doc.get("email")
+
+        match = await find_match_with_candidates(capid, email_val, first_name_val, last_name_val)
+
+        candidates_summary = [
+            {
+                "id": c["id"],
+                "capid": c.get("capid"),
+                "rank": c.get("rank"),
+                "first_name": c.get("first_name"),
+                "last_name": c.get("last_name"),
+                "unit": c.get("unit"),
+                "wing": c.get("wing"),
+                "email": c.get("email"),
+                "participant_type": c.get("participant_type"),
+                "flight": c.get("flight"),
+                "squadron": c.get("squadron"),
+            }
+            for c in match["candidates"]
+        ]
+
+        if match["match_type"] == "name" and len(match["candidates"]) > 1:
+            action = "conflict"
+            target_id = None
+            summary["conflict"] += 1
+        elif match["participant"]:
+            action = "update"
+            target_id = match["participant"]["id"]
+            summary["update"] += 1
+        else:
+            action = "create"
+            target_id = None
+            summary["new"] += 1
+
+        # Compute field-level diff for updates
+        changes = {}
+        if match["participant"] and match["match_type"] != "none":
+            existing = match["participant"]
+            for f in DIFF_FIELDS:
+                new_val = doc.get(f)
+                # Skip blanks: empty string / None / NaN — they won't overwrite
+                if new_val is None or (isinstance(new_val, str) and new_val.strip() == ""):
+                    continue
+                old_val = existing.get(f)
+                if str(old_val or "") != str(new_val or ""):
+                    changes[f] = {"old": old_val, "new": new_val}
+
+        preview_rows.append({
+            "row_idx": idx,
+            "capid": capid,
+            "first_name": first_name_val,
+            "last_name": last_name_val,
+            "email": email_val,
+            "unit": doc.get("unit"),
+            "wing": doc.get("wing"),
+            "incoming_type": r["participant_type"],
+            "match_type": match["match_type"],
+            "default_action": action,
+            "default_target_id": target_id,
+            "candidates": candidates_summary,
+            "changes": changes,
+        })
+
+    # Persist staging
+    staging_id = str(uuid.uuid4())
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    await db.import_staging.insert_one({
+        "id": staging_id,
+        "user_id": user.get("id") or user.get("sub"),
+        "user_email": user.get("email"),
+        "filename": file.filename,
+        "rows": rows,
+        "stats": stats,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+    })
+
+    # Opportunistic cleanup of expired staging docs
+    await db.import_staging.delete_many({"expires_at": {"$lt": datetime.now(timezone.utc).isoformat()}})
+
+    return {
+        "staging_id": staging_id,
+        "filename": file.filename,
+        "summary": summary,
+        "stats": stats,
+        "rows": preview_rows,
+        "expires_at": expires_at,
+    }
+
+
+class ImportApplyRequest(BaseModel):
+    staging_id: str
+    resolutions: dict[str, dict] = {}  # row_idx (str) → {"action": "update"|"create"|"skip", "participant_id": str|None}
+
+
+@api_router.post("/participants/import/apply")
+async def import_apply(
+    data: ImportApplyRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+):
+    """Apply a previously-previewed import using the user's row-level resolutions."""
+    staging = await db.import_staging.find_one({"id": data.staging_id}, {"_id": 0})
+    if not staging:
+        raise HTTPException(status_code=404, detail="Staging not found or expired. Re-upload the file.")
+
+    rows = staging.get("rows") or []
+    stats = staging.get("stats") or {}
+    now = datetime.now(timezone.utc).isoformat()
+
+    imported_count = 0
+    updated_count = 0
+    skipped_count = 0
+
+    for idx, r in enumerate(rows):
+        doc = dict(r["doc"])
+        participant_type = r["participant_type"]
+        capid = r["capid"]
+        email_val = doc.get("email")
+        first_name_val = doc.get("first_name", "")
+        last_name_val = doc.get("last_name", "")
+
+        resolution = data.resolutions.get(str(idx)) or {}
+        action = resolution.get("action")
+        target_id = resolution.get("participant_id")
+
+        # If no resolution provided, fall back to auto-detection
+        if not action:
+            existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
+            if existing:
+                action = "update"
+                target_id = existing["id"]
+            else:
+                action = "create"
+
+        if action == "skip":
+            skipped_count += 1
+            continue
+
+        if action == "update":
+            if not target_id:
+                # Resolve via auto-match if not provided
+                existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
+                if not existing:
+                    # No match — fall through to create
+                    action = "create"
+                else:
+                    target_id = existing["id"]
+
+        if action == "update" and target_id:
+            if participant_type is None:
+                doc.pop("participant_type", None)
+            update_doc = {k: v for k, v in doc.items() if v is not None}
+            update_doc["updated_at"] = now
+            await db.participants.update_one({"id": target_id}, {"$set": update_doc})
+            updated_count += 1
+            pid = target_id
+        else:
+            # create
+            if participant_type is None:
+                doc["participant_type"] = "basic_student"
+            pid = str(uuid.uuid4())
+            doc["id"] = pid
+            doc["created_at"] = now
+            doc["updated_at"] = now
+            await db.participants.insert_one(doc)
+            imported_count += 1
+
+        await link_to_user_account(pid, capid, email_val)
+
+    # Cleanup staging
+    await db.import_staging.delete_one({"id": data.staging_id})
+
+    total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
+    await db.food_expense_settings.update_one(
+        {"_id": "settings"},
+        {"$set": {"total_participants": total_participant_count, "updated_at": now}},
+        upsert=True,
+    )
+    sync_result = await sync_roster_to_budget()
+
+    return {
+        "message": f"Import applied: {imported_count} new, {updated_count} updated, {skipped_count} skipped",
+        "imported": imported_count,
+        "updated": updated_count,
+        "skipped": skipped_count,
+        "total": total_participant_count,
+        "stats": stats,
+        "budget_sync": sync_result,
+    }

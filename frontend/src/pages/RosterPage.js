@@ -13,6 +13,7 @@ import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import CadetHealthSection from '../components/CadetHealthSection';
 import FlightManager from '../components/FlightManager';
+import ImportPreviewModal from '../components/ImportPreviewModal';
 import { 
   Plus, 
   Search, 
@@ -82,6 +83,9 @@ const RosterPage = () => {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  // Import preview modal
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
+  const [importPreviewFile, setImportPreviewFile] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [paidFilter, setPaidFilter] = useState('all');
@@ -501,20 +505,19 @@ const RosterPage = () => {
   const handleImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    setImporting(true);
-    try {
-      const result = await importParticipants(file);
-      setImportResult(result);
-      toast.success(`Import complete: ${result.imported} new, ${result.updated} updated`);
-      loadParticipants();
-      loadStats();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Import failed');
-    } finally {
-      setImporting(false);
-    }
+    // Open the preview modal instead of auto-applying.
+    // The modal handles preview + conflict resolution + apply.
+    setImportPreviewFile(file);
+    setImportPreviewOpen(true);
     e.target.value = '';
+  };
+
+  const handleImportApplied = (result) => {
+    setImportResult(result);
+    toast.success(result.message || `Imported ${result.imported} new, ${result.updated} updated`);
+    loadParticipants();
+    loadStats();
+    loadFlightDistribution();
   };
 
   const handleAutoBalance = async () => {
@@ -1801,6 +1804,14 @@ const RosterPage = () => {
           </div>
         </div>
       )}
+
+      {/* Import Preview Modal */}
+      <ImportPreviewModal
+        open={importPreviewOpen}
+        file={importPreviewFile}
+        onClose={() => { setImportPreviewOpen(false); setImportPreviewFile(null); }}
+        onApplied={handleImportApplied}
+      />
 
       {/* Bulk Assignment Dialog */}
       <Dialog open={bulkAssignOpen} onOpenChange={(o) => { setBulkAssignOpen(o); if (!o) { setBulkAssignFlight('__nochange__'); setBulkAssignSquadron('__nochange__'); } }}>

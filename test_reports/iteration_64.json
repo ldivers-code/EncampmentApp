@@ -1,0 +1,36 @@
+{
+  "summary": "Validated the new CAP Import preview/apply flow with conflict resolution. Created 10 pytest cases (all PASS) covering preview endpoint, apply with update/create/skip resolutions, name-duplicate conflict detection with both candidates returned, CAPID float-artifact normalization (538026.0 -> 538026), diff-only-non-blank rule, backwards-compat /participants/import auto-apply, auth guards, and staging cleanup (re-apply returns 404). E2E Playwright test validated the full UI path: commander login -> Roster -> file input -> ImportPreviewModal opens with summary cards, filter tabs (auto-set to Conflicts), row badge 'Skip' default, resolution dropdown listing BOTH existing candidates + Create New + Skip, picking candidate B flips badge to 'Update', Apply button triggers POST, modal closes, roster refreshes, and the CORRECT participant (B) was updated while the OTHER (A) was left untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ImportPreviewModal", "issues": ["Conflicts auto-default to 'skip' resolution, which counts as resolved -> Apply button is ENABLED immediately and the amber alert is hidden. The original spec said 'disables Apply until each conflict's dropdown picks an option' - the current implementation treats the skip default AS picked. This is a safer UX default (no accidental data change) but differs from the literal spec. Consider either (a) matching spec by starting resolutions[conflict] undefined, or (b) updating the PRD wording to reflect current behavior."]},
+      {"screen": "RosterPage table", "issues": ["Pre-existing React hydration warnings (<span> wrapping <th>/<tr>/<td>/<tbody>) from x-ve-dynamic instrumentation - also reported in iteration_63, not regressed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_import_preview_apply.py",
+    "/app/test_reports/pytest/import_preview_apply.xml"
+  ],
+  "action_items": [
+    "(Minor/optional) Decide whether conflict rows should REQUIRE an explicit user pick before enabling Apply. Current behaviour: conflict default=skip -> Apply enabled, amber alert hidden. Spec wording implies Apply should stay disabled until picked."
+  ],
+  "critical_code_review_comments": [
+    "participants.py is now 1911 lines and growing - import helpers (_parse_import_dataframe, DIFF_FIELDS, import/preview/apply) should be extracted into a dedicated routes/import.py or services/import_service.py module for maintainability.",
+    "The fallback in import_apply line ~1861 silently falls through from 'update' with an unknown target_id to 'create' (if find_existing_participant returns nothing). That is correct, but a warning log would help trace bad resolutions from the UI.",
+    "Both /import and /import/apply duplicate the post-import bookkeeping (food_expense_settings update + sync_roster_to_budget). Extract into a helper _finalize_import() to avoid drift.",
+    "students.find_match_with_candidates docstring says 'candidates only populated when match_type=name and >1 found' but implementation also puts the single candidate in capid/email match results - cosmetic mismatch."
+  ],
+  "updated_files": ["/app/backend/tests/test_import_preview_apply.py"],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "100% (full e2e conflict-resolution path verified)"},
+  "test_credentials": "commander@test.com / test123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Per-test: creates 2 same-named TEST_ participants ('UiConflictTEST UserXXXXXX' with CAPIDs UICFLAxxx/UICFLBxxx) plus 1 float-capid participant ('FloatTEST CapIdXXX'); all torn down via /participants/bulk-delete in fixture teardown and finally-block.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New import flow = POST /api/participants/import/preview (multipart xlsx) -> {staging_id, summary:{new,update,conflict,skipped}, stats, rows[{row_idx, capid, first_name, last_name, email, unit, wing, incoming_type, match_type(capid|email|name|none), default_action(create|update|conflict), default_target_id, candidates[], changes{}}], expires_at}. Then POST /api/participants/import/apply {staging_id, resolutions:{row_idx_str:{action, participant_id?}}} -> updates/creates/skips per user choice and cleans up staging. Legacy POST /api/participants/import still works (auto-apply). Frontend: RosterPage 'Import CAP Report' button triggers <input data-testid=import-roster-input>, which opens ImportPreviewModal. Key testids: summary-new|update|conflict|total, filter-all|conflict|update|create, preview-row-{idx}, expand-row-{idx}, resolve-{idx} (Select trigger), candidate-{idx}-{id}, row-action-{idx}, import-cancel, import-apply. Conflicts auto-default to 'skip' (not 'unresolved'), so Apply is enabled immediately - tests should not assert Apply is disabled unless they first clear the default resolution.",
+  "rca of the issue": "N/A - all requested features verified working as designed. Only finding is a spec/implementation wording gap around conflict-default behavior (see action_items)."
+}

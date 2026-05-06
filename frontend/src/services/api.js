@@ -144,6 +144,23 @@ export const importParticipants = async (file) => {
   return response.data;
 };
 
+export const previewImportParticipants = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/participants/import/preview`, formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
+};
+
+export const applyImportParticipants = async (stagingId, resolutions) => {
+  const response = await axios.post(`${API}/participants/import/apply`, {
+    staging_id: stagingId,
+    resolutions: resolutions || {},
+  }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 // Student-specific upload (separate from staff/cadre)
 export const uploadStudents = async (file, autoAssign = true) => {
   const formData = new FormData();

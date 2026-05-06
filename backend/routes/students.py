@@ -50,6 +50,48 @@ async def find_existing_participant(capid, email, first_name, last_name):
     return None
 
 
+async def find_match_with_candidates(capid, email, first_name, last_name):
+    """Like find_existing_participant but returns:
+    {
+      'match_type': 'capid' | 'email' | 'name' | 'none',
+      'participant': matched doc or None,    # the chosen one (first match for capid/email; first for name)
+      'candidates': list of docs                # all participants with the same first+last name (only populated when match_type='name' and >1 found, OR match_type='none' but name exists for awareness)
+    }
+    """
+    # CAPID
+    if capid and capid not in ('', 'nan'):
+        existing = await db.participants.find_one(
+            {"capid": str(capid), "is_removed": {"$ne": True}}, {"_id": 0}
+        )
+        if existing:
+            return {"match_type": "capid", "participant": existing, "candidates": [existing]}
+
+    # Email
+    if email and email not in ('', 'nan'):
+        existing = await db.participants.find_one(
+            {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"},
+             "is_removed": {"$ne": True}}, {"_id": 0}
+        )
+        if existing:
+            return {"match_type": "email", "participant": existing, "candidates": [existing]}
+
+    # Name — return ALL candidates for ambiguity resolution
+    if first_name and last_name:
+        candidates = await db.participants.find(
+            {"first_name": {"$regex": f"^{re.escape(first_name)}$", "$options": "i"},
+             "last_name": {"$regex": f"^{re.escape(last_name)}$", "$options": "i"},
+             "is_removed": {"$ne": True}}, {"_id": 0}
+        ).to_list(20)
+        if candidates:
+            return {
+                "match_type": "name",
+                "participant": candidates[0],
+                "candidates": candidates,
+            }
+
+    return {"match_type": "none", "participant": None, "candidates": []}
+
+
 async def link_to_user_account(participant_id, capid, email):
     """If a user account exists for this person, link them.
     Sets linked_participant_id on the user doc."""
