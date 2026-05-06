@@ -4,55 +4,51 @@
 Build an interactive roster and management application for a Civil Air Patrol (CAP) encampment titled "Tennessee Wing Civil Air Patrol Encampment".
 
 ## Core Features (Implemented)
-- **Roster Management**: Interactive roster with live filtering, search, RBAC, flight-grouped views, photo uploads, auto-balance, print-friendly
+- **Roster Management**: Interactive roster with live filtering, search, RBAC, flight-grouped views, photo uploads, auto-balance, print-friendly. Bulk-select, bulk-change-type, bulk-delete, Excel export with shirt sizes.
 - **Assignments System (Google Classroom-style)**: Instructor/mentor/student roles, Q&A, document uploads, grading, email reminders
-- **Student Upload System**: Excel upload with automatic flight assignment
-- **Org Chart**: Interactive SVG node-link command map with horizontal branching, 85 positions. Hierarchy: Enc Commander → Commandant → CTG/CC → [CTG/CD, CTG/DF, CTG/CCEA, CSS/CC, CTO + 3 Squadrons]. Squadron TOs under CTO (not Squadron Commanders). 19 positions with secondary academic reporting to CTG/DF (dashed connectors). 5-color scheme: Blue (Command), Maroon (Cadet Training), Yellow (Squadron), Emerald Green (Support), Silver (Cadet Support). Collapsible depth, search, category filters, detail side panel.
-- **Health Services**: Medical roster, allergies, OTC approvals, parent email notifications
+- **Student Upload System**: Excel upload with automatic flight assignment. Supports CAP Master Reports (uses `SubEvents` column) and sub-event reports; falls back to Name matching when CAPID is missing.
+- **Org Chart**: Interactive SVG node-link command map with horizontal branching, 85 positions. Hierarchy: Enc Commander → Commandant → CTG/CC → [CTG/CD, CTG/DF, CTG/CCEA, CSS/CC, CTO + 3 Squadrons]. Squadron TOs under CTO. 19 positions with secondary academic reporting to CTG/DF (dashed connectors). 5-color scheme: Blue/Maroon/Yellow/Emerald/Silver. Collapsible depth, search, category filters, detail side panel.
+- **Health Services**: Medical roster, allergies, OTC approvals, parent email notifications, Daily Med Diary, Supplements, Contraband check-in
 - **Check-In & Barracks**: Multi-step in-processing, bunk assignments
 - **Granular RBAC**: Senior Staff + Cadre roles with permissions
 - **Parent Portal**: "My Cadet" tab, Admin widget editor
 - **Honor Agreement System**: Role-based digital agreements, blocking modal
-- **Budget/Finance Tracker**: Payment imports, receipt OCR, charts
+- **Budget/Finance Tracker**: Payment imports, smart receipt OCR (GPT-4o Vision), charts
 - **Schedule**: 11 categories, Excel import, Squadron View grid
 - **Analytics, Logistics, Status Board, Notifications**
+- **Annual Reset Tab**: bulk roster/org chart wipe in Admin settings
 - **Auth**: httpOnly cookie-based JWT
+- **Mobile App API Spec**: `/app/MOBILE_BACKEND_INTEGRATION.md` documents endpoints for companion mobile app
 
-## Org Chart Hierarchy (Current)
-```
-Encampment Commander (Maj Divers, L) [Command]
-├── Commandant of Cadets [Command]
-│   └── CTG/CC (C/Lt Col Yoder, L) [Cadet Training]
-│       ├── CTG/CD Operations (C/Lt Col Grammer, A)
-│       ├── CTG/DF Academics (C/Maj Doran, G)
-│       ├── CTG/CCEA Enlisted (C/CMSgt Railey, A)
-│       ├── CSS/CC Cadet Support Sq (C/Capt. Posta, A) [Cadet Support] ←--- secondary→CTG/DF
-│       ├── CTO Chief Training Officer
-│       ├── 6th CTS, 21st CTS, 22nd CTS
-│       └── (Flights under each CTS)
-├── DCS Deputy Commander for Support (Capt Belli, S) [Support]
-│   ├── XP Plans & Programs
-│   ├── LG Logistics (Capt Reed, A)
-│   ├── Comm Communications
-│   ├── Finance
-│   └── Health Services / WORD (Lt Col Divers, K)
-├── SM Superintendent (TSgt Breslin, D) [Command]
-├── Chaplain(s) [Command]
-└── Safety [Command]
-```
+## Auto-Balance Flights Algorithm
+`POST /api/students/auto-assign` distributes unassigned students using weighted scoring:
+- Capacity (max 15/flight, weight 10)
+- Male/Female parity (weight 5)
+- Wing spread (weight 3)
+- Home unit spread (weight 3)
+- Age tier balance (weight 2)
+Existing flight assignments are NEVER overwritten.
+
+## Bulk Action Endpoints (Roster)
+- `PUT /api/participants/bulk-type` — change participant_type for multiple IDs (basic_student / cadre / staff / senior_member). Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
+- `POST /api/participants/bulk-delete` — permanently delete with `confirm:true`. Cleans related health/contraband/supplements records and unlinks user accounts. Roles: DCP, COMMANDER, EXECUTIVE_STAFF.
+- These literal-path routes are registered BEFORE `PUT /participants/{participant_id}` to avoid FastAPI route shadowing.
 
 ## Tech Stack
-- Frontend: React 19, Tailwind CSS, Shadcn UI
-- Backend: FastAPI, MongoDB, openpyxl
-- Integrations: SendGrid (LIVE), Emergent Object Storage, GPT-4o (receipt OCR)
+- Frontend: React 19, Tailwind CSS, Shadcn UI, DOMPurify
+- Backend: FastAPI, MongoDB, openpyxl, reportlab
+- Integrations: SendGrid (LIVE), Emergent Object Storage, GPT-4o Vision (receipt OCR via emergentintegrations)
 
 ## Completed Work Log
 - **Apr 6-9**: Core features, Excel sync, RBAC, Honor Agreements
 - **Apr 10**: Google Classroom-style Assignments. 100% tests.
 - **Apr 11**: SendGrid live. Lillian Yoder account synced.
-- **Apr 14**: Mobile responsiveness. Org Chart V1 (list tree, 86 positions). Org Chart V2 (SVG node-link diagram, 85 positions, restructured hierarchy, dual reporting). Org Chart V3 (TOs moved under CTO, 19 secondary academic reports to CTG/DF, 5-color scheme: Blue/Maroon/Yellow/Green/Silver). 100% tests (iterations 59-61).
+- **Apr 14**: Mobile responsiveness. Org Chart V1/V2/V3 (TOs under CTO, 19 secondary academic reports, 5-color scheme).
+- **May**: Smart Receipt OCR (GPT-4o Vision), Annual Reset, sidebar nav editing, code-quality fixes (XSS DOMPurify, removed hardcoded secrets across 11 files), My Flight chain-of-command.
+- **Feb 6, 2026**: Roster Bulk Actions UI complete (checkbox column, select-all, bulk-type-change menu, bulk-delete, Excel-with-shirt-size export). Fixed FastAPI route ordering bug (bulk-type was shadowed by /{participant_id}). 100% backend + 100% frontend tests (iteration_63).
 
 ## Remaining Backlog
 - P1: Senior Barracks (TR-106, TR-107, TR-105) individual room assignments
-- P2: Receipt Scanning (OCR) for the financial module
-- P3: Bulk auto-balance button for flight distribution
+- P3 (Optional cleanup): Resolve React hydration warnings on roster `<table>` (ve-dynamic `<span>` wrappers around `<th>/<tr>/<td>/<tbody>`)
+- P3 (Optional refactor): Split RosterPage.js (~2300 lines) into RosterTable, RosterFilters, RosterToolbar, RosterBulkActions sub-components
+- P3 (Optional alignment): Add 'senior_member' and 'advanced_student' to bulk-change-type frontend dropdown if needed (backend already supports them)
