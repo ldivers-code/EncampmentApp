@@ -938,6 +938,71 @@ class BulkDeleteRequest(BaseModel):
     confirm: bool = False
 
 
+class BulkAssignmentRequest(BaseModel):
+    participant_ids: List[str]
+    flight: Optional[str] = None    # 'alpha'..'foxtrot' or 'None' or '' to clear
+    squadron: Optional[str] = None  # '6th_cts' / '21st_cts' / '22nd_cts' or 'None' or '' to clear
+
+
+VALID_FLIGHTS = {"alpha", "bravo", "charlie", "delta", "echo", "foxtrot"}
+VALID_SQUADRONS = {"6th_cts", "21st_cts", "22nd_cts"}
+
+
+@api_router.put("/participants/bulk-assignment")
+async def bulk_change_assignment(
+    data: BulkAssignmentRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+):
+    """Bulk update flight and/or squadron for multiple participants.
+    Pass empty string or 'None' to clear an assignment. Omit a field to leave it unchanged."""
+    if not data.participant_ids:
+        raise HTTPException(status_code=400, detail="No participants selected")
+
+    update_doc = {}
+
+    # Flight
+    if data.flight is not None:
+        f = (data.flight or "").strip()
+        if f == "" or f.lower() == "none":
+            update_doc["flight"] = None
+        elif f.lower() in VALID_FLIGHTS:
+            # Store capitalized for UI ("Alpha")
+            update_doc["flight"] = f.capitalize()
+        else:
+            raise HTTPException(status_code=400, detail=f"flight must be one of: {sorted(VALID_FLIGHTS)} or empty/None")
+
+    # Squadron
+    if data.squadron is not None:
+        s = (data.squadron or "").strip()
+        if s == "" or s.lower() == "none":
+            update_doc["squadron"] = None
+        elif s in VALID_SQUADRONS:
+            update_doc["squadron"] = s
+        else:
+            raise HTTPException(status_code=400, detail=f"squadron must be one of: {sorted(VALID_SQUADRONS)} or empty/None")
+
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="At least one of flight or squadron must be provided")
+
+    update_doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.participants.update_many(
+        {"id": {"$in": data.participant_ids}},
+        {"$set": update_doc},
+    )
+
+    parts = []
+    if "flight" in update_doc:
+        parts.append(f"flight={update_doc['flight'] or 'None'}")
+    if "squadron" in update_doc:
+        parts.append(f"squadron={update_doc['squadron'] or 'None'}")
+    return {
+        "message": f"Updated {result.modified_count} participants ({', '.join(parts)})",
+        "modified": result.modified_count,
+        "flight": update_doc.get("flight"),
+        "squadron": update_doc.get("squadron"),
+    }
+
+
 @api_router.put("/participants/bulk-type")
 async def bulk_change_type(
     data: BulkTypeChangeRequest,

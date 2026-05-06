@@ -30,8 +30,9 @@ Build an interactive roster and management application for a Civil Air Patrol (C
 Existing flight assignments are NEVER overwritten.
 
 ## Bulk Action Endpoints (Roster)
-- `PUT /api/participants/bulk-type` — change participant_type for multiple IDs (basic_student / cadre / staff / senior_member). Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
+- `PUT /api/participants/bulk-type` — change participant_type for multiple IDs (basic_student / advanced_student / cadre / staff / senior_member). Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
 - `POST /api/participants/bulk-delete` — permanently delete with `confirm:true`. Cleans related health/contraband/supplements records and unlinks user accounts. Roles: DCP, COMMANDER, EXECUTIVE_STAFF.
+- `PUT /api/participants/bulk-assignment` — bulk update Flight and/or Squadron. Pass empty/None to clear, omit field to leave unchanged. Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
 - These literal-path routes are registered BEFORE `PUT /participants/{participant_id}` to avoid FastAPI route shadowing.
 
 ## Tech Stack
@@ -46,9 +47,9 @@ Existing flight assignments are NEVER overwritten.
 - **Apr 14**: Mobile responsiveness. Org Chart V1/V2/V3 (TOs under CTO, 19 secondary academic reports, 5-color scheme).
 - **May**: Smart Receipt OCR (GPT-4o Vision), Annual Reset, sidebar nav editing, code-quality fixes (XSS DOMPurify, removed hardcoded secrets across 11 files), My Flight chain-of-command.
 - **Feb 6, 2026**: Roster Bulk Actions UI complete (checkbox column, select-all, bulk-type-change menu, bulk-delete, Excel-with-shirt-size export). Fixed FastAPI route ordering bug (bulk-type was shadowed by /{participant_id}). 100% backend + 100% frontend tests (iteration_63).
+- **Feb 6, 2026 (later)**: Added **Bulk Edit Flight / Squadron** dialog (`PUT /api/participants/bulk-assignment`) and extended Change Type menu with **Senior Member** and **Advanced Student**. Backend validates flight/squadron values, supports clear-to-None and partial updates. 5/5 curl tests pass.
 
 ## Remaining Backlog
 - P1: Senior Barracks (TR-106, TR-107, TR-105) individual room assignments
 - P3 (Optional cleanup): Resolve React hydration warnings on roster `<table>` (ve-dynamic `<span>` wrappers around `<th>/<tr>/<td>/<tbody>`)
-- P3 (Optional refactor): Split RosterPage.js (~2300 lines) into RosterTable, RosterFilters, RosterToolbar, RosterBulkActions sub-components
-- P3 (Optional alignment): Add 'senior_member' and 'advanced_student' to bulk-change-type frontend dropdown if needed (backend already supports them)
+- P3 (Optional refactor): Split RosterPage.js (~2400 lines) into RosterTable, RosterFilters, RosterToolbar, RosterBulkActions sub-components

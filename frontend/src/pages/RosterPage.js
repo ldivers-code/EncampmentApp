@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents, bulkChangeParticipantType, bulkDeleteParticipants } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents, bulkChangeParticipantType, bulkDeleteParticipants, bulkChangeParticipantAssignment } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -124,6 +124,9 @@ const RosterPage = () => {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [bulkTypeMenuOpen, setBulkTypeMenuOpen] = useState(false);
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssignFlight, setBulkAssignFlight] = useState('__nochange__');
+  const [bulkAssignSquadron, setBulkAssignSquadron] = useState('__nochange__');
 
   // Check if user can see full roster details (sensitive info)
   const canViewSensitiveData = () => {
@@ -655,6 +658,37 @@ const RosterPage = () => {
       await loadStats();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete participants');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    const ids = Array.from(selectedParticipantIds);
+    if (ids.length === 0) {
+      toast.warning('No participants selected');
+      return;
+    }
+    const payload = {};
+    if (bulkAssignFlight !== '__nochange__') payload.flight = bulkAssignFlight;
+    if (bulkAssignSquadron !== '__nochange__') payload.squadron = bulkAssignSquadron;
+    if (Object.keys(payload).length === 0) {
+      toast.warning('Choose a Flight and/or Squadron value to apply');
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      const result = await bulkChangeParticipantAssignment(ids, payload);
+      toast.success(result.message || `Updated ${ids.length} participants`);
+      setBulkAssignOpen(false);
+      setBulkAssignFlight('__nochange__');
+      setBulkAssignSquadron('__nochange__');
+      clearBulkSelection();
+      await loadParticipants();
+      await loadStats();
+      await loadFlightDistribution();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update assignments');
     } finally {
       setBulkActionLoading(false);
     }
@@ -1717,9 +1751,36 @@ const RosterPage = () => {
                     <Briefcase className="w-4 h-4 text-emerald-700" />
                     Set as Staff (Senior Member)
                   </button>
+                  <button
+                    onClick={() => handleBulkChangeType('senior_member')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                    data-testid="bulk-set-senior-member"
+                  >
+                    <Shield className="w-4 h-4 text-slate-700" />
+                    Set as Senior Member
+                  </button>
+                  <button
+                    onClick={() => handleBulkChangeType('advanced_student')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                    data-testid="bulk-set-advanced-student"
+                  >
+                    <GraduationCap className="w-4 h-4 text-violet-600" />
+                    Set as Advanced Student
+                  </button>
                 </div>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-sm border-amber-600 text-amber-800 hover:bg-amber-100"
+              onClick={() => setBulkAssignOpen(true)}
+              disabled={bulkActionLoading}
+              data-testid="bulk-edit-assignment-btn"
+            >
+              <Edit3 className="w-4 h-4 mr-1.5" />
+              Edit Flight / Squadron
+            </Button>
             {['dcp', 'commander', 'executive_staff'].includes(user?.role) && (
               <Button
                 variant="outline"
@@ -1740,6 +1801,77 @@ const RosterPage = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Assignment Dialog */}
+      <Dialog open={bulkAssignOpen} onOpenChange={(o) => { setBulkAssignOpen(o); if (!o) { setBulkAssignFlight('__nochange__'); setBulkAssignSquadron('__nochange__'); } }}>
+        <DialogContent className="rounded-sm max-w-md" data-testid="bulk-assignment-dialog">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit Flight / Squadron</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Apply Flight and/or Squadron to <span className="font-semibold">{selectedParticipantIds.size}</span> selected participant{selectedParticipantIds.size === 1 ? '' : 's'}. Choose <span className="italic">Don't change</span> on a field to leave it untouched.
+            </p>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-slate-500">Flight</Label>
+              <Select value={bulkAssignFlight} onValueChange={setBulkAssignFlight}>
+                <SelectTrigger className="mt-1 rounded-sm" data-testid="bulk-assign-flight-select">
+                  <SelectValue placeholder="Don't change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__nochange__">Don't change</SelectItem>
+                  <SelectItem value="None">Clear (None)</SelectItem>
+                  <SelectItem value="alpha">Alpha</SelectItem>
+                  <SelectItem value="bravo">Bravo</SelectItem>
+                  <SelectItem value="charlie">Charlie</SelectItem>
+                  <SelectItem value="delta">Delta</SelectItem>
+                  <SelectItem value="echo">Echo</SelectItem>
+                  <SelectItem value="foxtrot">Foxtrot</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-slate-500">Squadron</Label>
+              <Select value={bulkAssignSquadron} onValueChange={setBulkAssignSquadron}>
+                <SelectTrigger className="mt-1 rounded-sm" data-testid="bulk-assign-squadron-select">
+                  <SelectValue placeholder="Don't change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__nochange__">Don't change</SelectItem>
+                  <SelectItem value="None">Clear (None)</SelectItem>
+                  <SelectItem value="6th_cts">6th CTS</SelectItem>
+                  <SelectItem value="21st_cts">21st CTS</SelectItem>
+                  <SelectItem value="22nd_cts">22nd CTS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="rounded-sm"
+                onClick={() => setBulkAssignOpen(false)}
+                disabled={bulkActionLoading}
+                data-testid="bulk-assign-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-sm bg-[#00205B] hover:bg-[#001540] text-white"
+                onClick={handleBulkAssign}
+                disabled={bulkActionLoading || (bulkAssignFlight === '__nochange__' && bulkAssignSquadron === '__nochange__')}
+                data-testid="bulk-assign-apply"
+              >
+                {bulkActionLoading ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4 mr-2" />
+                )}
+                Apply to {selectedParticipantIds.size}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">

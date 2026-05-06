@@ -127,6 +127,14 @@ export const bulkDeleteParticipants = async (participantIds) => {
   return response.data;
 };
 
+export const bulkChangeParticipantAssignment = async (participantIds, { flight, squadron }) => {
+  const payload = { participant_ids: participantIds };
+  if (flight !== undefined) payload.flight = flight;
+  if (squadron !== undefined) payload.squadron = squadron;
+  const response = await axios.put(`${API}/participants/bulk-assignment`, payload, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const importParticipants = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
