@@ -120,6 +120,10 @@ const RosterPage = () => {
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'flight'
   const [flightGroupedData, setFlightGroupedData] = useState([]);
   const [autoBalancing, setAutoBalancing] = useState(false);
+  // Bulk selection / actions
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkTypeMenuOpen, setBulkTypeMenuOpen] = useState(false);
 
   // Check if user can see full roster details (sensitive info)
   const canViewSensitiveData = () => {
@@ -556,6 +560,106 @@ const RosterPage = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    setExporting(true);
+    setExportMenuOpen(false);
+    try {
+      const API = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${API}/api/participants/analytics/export?format=excel`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cap_roster_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Excel exported successfully (includes shirt sizes)');
+    } catch (error) {
+      toast.error('Failed to export Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ─── Bulk actions ────────────────────────────────────────────
+  const toggleSelectAll = (visibleIds) => {
+    setSelectedParticipantIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = visibleIds.every((id) => next.has(id));
+      if (allSelected) {
+        visibleIds.forEach((id) => next.delete(id));
+      } else {
+        visibleIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedParticipantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearBulkSelection = () => setSelectedParticipantIds(new Set());
+
+  const handleBulkChangeType = async (newType) => {
+    const ids = Array.from(selectedParticipantIds);
+    if (ids.length === 0) {
+      toast.warning('No participants selected');
+      return;
+    }
+    const typeLabel = {
+      basic_student: 'Student',
+      cadre: 'Cadre',
+      staff: 'Staff (Senior Member)',
+      senior_member: 'Senior Member',
+    }[newType] || newType;
+    if (!window.confirm(`Change ${ids.length} participant(s) to ${typeLabel}?`)) return;
+    setBulkActionLoading(true);
+    setBulkTypeMenuOpen(false);
+    try {
+      const result = await bulkChangeParticipantType(ids, newType);
+      toast.success(result.message || `Updated ${ids.length} participants`);
+      clearBulkSelection();
+      await loadParticipants();
+      await loadStats();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to change participant types');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedParticipantIds);
+    if (ids.length === 0) {
+      toast.warning('No participants selected');
+      return;
+    }
+    if (!window.confirm(`Permanently DELETE ${ids.length} participant(s)? This will also remove their health diary, supplements, and contraband records and unlink any user accounts. This cannot be undone.`)) return;
+    setBulkActionLoading(true);
+    try {
+      const result = await bulkDeleteParticipants(ids);
+      toast.success(result.message || `Deleted ${ids.length} participants`);
+      clearBulkSelection();
+      await loadParticipants();
+      await loadStats();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete participants');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setEditingParticipant(null);
     setFormData({
@@ -799,6 +903,17 @@ const RosterPage = () => {
                     <div>
                       <p className="font-medium text-slate-900">By Type</p>
                       <p className="text-xs text-slate-500">Staff, Cadre, Students sections</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors flex items-center gap-2 border-t border-slate-100"
+                    data-testid="export-excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                    <div>
+                      <p className="font-medium text-slate-900">Excel (with Shirt Sizes)</p>
+                      <p className="text-xs text-slate-500">Full spreadsheet incl. shirt size, contact, payment</p>
                     </div>
                   </button>
                 </div>
@@ -1539,12 +1654,114 @@ const RosterPage = () => {
         )}
       </div>
 
+      {/* Bulk Action Toolbar */}
+      {canEdit() && selectedParticipantIds.size > 0 && (
+        <div
+          className="mb-3 flex flex-wrap items-center justify-between gap-3 bg-amber-50 border border-amber-300 rounded-sm px-4 py-3"
+          data-testid="bulk-action-toolbar"
+        >
+          <div className="flex items-center gap-2 text-sm text-amber-900">
+            <CheckCircle className="w-4 h-4" />
+            <span data-testid="bulk-selected-count">
+              <span className="font-bold">{selectedParticipantIds.size}</span> selected
+            </span>
+            <button
+              type="button"
+              onClick={clearBulkSelection}
+              className="ml-2 underline text-amber-800 hover:text-amber-950 text-xs"
+              data-testid="bulk-clear-selection"
+            >
+              clear
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-sm border-amber-600 text-amber-800 hover:bg-amber-100"
+                onClick={() => setBulkTypeMenuOpen((v) => !v)}
+                disabled={bulkActionLoading}
+                data-testid="bulk-change-type-btn"
+              >
+                <UserCheck className="w-4 h-4 mr-1.5" />
+                Change Type
+                <ChevronRight className={`w-3 h-3 ml-1 transition-transform ${bulkTypeMenuOpen ? 'rotate-90' : ''}`} />
+              </Button>
+              {bulkTypeMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-sm shadow-lg w-56"
+                  data-testid="bulk-change-type-menu"
+                >
+                  <button
+                    onClick={() => handleBulkChangeType('basic_student')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+                    data-testid="bulk-set-student"
+                  >
+                    <GraduationCap className="w-4 h-4 text-blue-600" />
+                    Set as Student
+                  </button>
+                  <button
+                    onClick={() => handleBulkChangeType('cadre')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                    data-testid="bulk-set-cadre"
+                  >
+                    <Star className="w-4 h-4 text-amber-600" />
+                    Set as Cadre
+                  </button>
+                  <button
+                    onClick={() => handleBulkChangeType('staff')}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                    data-testid="bulk-set-staff"
+                  >
+                    <Briefcase className="w-4 h-4 text-emerald-700" />
+                    Set as Staff (Senior Member)
+                  </button>
+                </div>
+              )}
+            </div>
+            {['dcp', 'commander', 'executive_staff'].includes(user?.role) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-sm border-red-500 text-red-600 hover:bg-red-50"
+                onClick={handleBulkDelete}
+                disabled={bulkActionLoading}
+                data-testid="bulk-delete-btn"
+              >
+                {bulkActionLoading ? (
+                  <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                )}
+                Delete Selected
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full cap-table" data-testid="roster-table">
             <thead>
               <tr>
+                {canEdit() && (
+                  <th className="text-left w-8 px-2">
+                    <input
+                      type="checkbox"
+                      className="cursor-pointer"
+                      data-testid="select-all-checkbox"
+                      aria-label="Select all visible"
+                      checked={
+                        paginatedParticipants.length > 0 &&
+                        paginatedParticipants.every((p) => selectedParticipantIds.has(p.id))
+                      }
+                      onChange={() => toggleSelectAll(paginatedParticipants.map((p) => p.id))}
+                    />
+                  </th>
+                )}
                 <th className="text-left">CAP ID</th>
                 <th className="text-left">Rank</th>
                 <th className="text-left">Name</th>
@@ -1564,7 +1781,7 @@ const RosterPage = () => {
             <tbody>
               {paginatedParticipants.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-8 text-slate-400">
+                  <td colSpan={canEdit() ? 12 : 11} className="text-center py-8 text-slate-400">
                     {showRemoved 
                       ? 'No removed participants' 
                       : (searchTerm || typeFilter !== 'all' || paidFilter !== 'all' 
@@ -1583,6 +1800,18 @@ const RosterPage = () => {
                     className={`hover:bg-slate-50 transition-colors ${p.is_removed ? 'bg-red-50/50' : flightColors.bg} ${flightColors.border}`}
                     data-testid={`roster-row-${p.capid}`}
                   >
+                    {canEdit() && (
+                      <td className="px-2 w-8" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="cursor-pointer"
+                          checked={selectedParticipantIds.has(p.id)}
+                          onChange={() => toggleSelectOne(p.id)}
+                          aria-label={`Select ${p.first_name} ${p.last_name}`}
+                          data-testid={`select-row-${p.capid}`}
+                        />
+                      </td>
+                    )}
                     <td className="font-mono text-[#00205B] font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.capid}</td>
                     <td className="cursor-pointer" onClick={() => handleViewParticipant(p)}>{p.rank}</td>
                     <td className="font-medium cursor-pointer" onClick={() => handleViewParticipant(p)}>

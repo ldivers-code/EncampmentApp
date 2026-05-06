@@ -1,0 +1,32 @@
+{
+  "summary": "Tested bulk participant type-change, bulk-delete, and Excel-with-shirt-size export. Found and FIXED a critical FastAPI route-ordering bug where PUT /participants/bulk-type was being shadowed by PUT /participants/{participant_id} (returning 422 'Field required' for capid/rank/etc.) — the bulk routes were defined AFTER the parameterized route. Moved bulk-type and bulk-delete decorator registrations above the /{participant_id} routes. Backend: 10/10 pytest tests pass after fix. Frontend: roster bulk-action UI fully working — checkbox column, row-select, select-all, toolbar, count, change-type menu (3 options), delete button, clear-selection, and Excel export menu item all visible and behave correctly with commander login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RosterPage table", "issues": ["Several React hydration warnings in console: <span> wrapping <th>/<tr>/<td>/<tbody> (from x-ve-dynamic instrumentation around table elements at RosterPage lines ~1751, 1798, 1804). Functional but pollutes console; may need to remove ve-dynamic wrappers on table primitives."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_bulk_participants.py", "/app/test_reports/pytest/bulk_participants.xml"],
+  "action_items": [
+    "BUG FIXED by testing agent: PUT /api/participants/bulk-type was shadowed by /participants/{participant_id} due to route registration order. Moved bulk-type & bulk-delete decorators above /{participant_id} in /app/backend/routes/participants.py. This is the SAME root cause that previously broke any /participants/<keyword> route — main agent should review other bulk-* routes (bulk-reset/preview, bulk-reset/execute, bulk-reset/clear-all are POST and currently OK because there is no POST /participants/{id}, but ANY future PUT/DELETE on /participants/<keyword> must be registered before /{participant_id}).",
+    "Optional cleanup: investigate React hydration warnings on the roster <table> caused by ve-dynamic <span> wrappers around <th>/<tr>/<td>/<tbody>."
+  ],
+  "critical_code_review_comments": [
+    "Route ordering matters in FastAPI: parameterized path routes MUST come after literal-path routes that share the same prefix. Recommend adopting a convention where all /participants/<keyword> static routes are defined before /participants/{id}.",
+    "RosterPage.js is now ~1800+ lines — should be split into RosterTable, RosterFilters, RosterToolbar, RosterBulkActions sub-components.",
+    "bulkChangeParticipantType frontend dropdown does not offer 'senior_member' or 'advanced_student', which the backend supports — fine if intentional, but worth aligning."
+  ],
+  "updated_files": ["/app/backend/routes/participants.py", "/app/backend/tests/test_bulk_participants.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "commander@test.com / test123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "3 TEST_ prefixed disposable participants created during test run; cleaned up via bulk-delete teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend bulk endpoints validated: PUT /api/participants/bulk-type {participant_ids,new_type} -> 200 with modified count + GET-verified persistence; POST /api/participants/bulk-delete {participant_ids,confirm:true} -> 200 + GET 404 verified; confirm=false -> 400; invalid type -> 400; empty ids -> 400; unauth -> 401/403. Excel export at GET /api/participants/analytics/export?format=excel returns xlsx with a 'shirt_size'-containing header row. Frontend roster bulk UI testids all wire up: select-all-checkbox, select-row-{capid}, bulk-action-toolbar, bulk-selected-count, bulk-clear-selection, bulk-change-type-btn, bulk-change-type-menu, bulk-set-student/cadre/staff, bulk-delete-btn, export-excel.",
+  "rca of the issue": "FastAPI evaluates route decorators in registration order. PUT /participants/{participant_id} (line 928) was registered BEFORE PUT /participants/bulk-type (line 1142), so the literal path 'bulk-type' got captured as participant_id and update_participant validated the body against ParticipantCreate, returning 422 'Field required: capid, rank, last_name, first_name, unit'. Reproduced via curl/pytest. Fix: relocated BulkTypeChangeRequest, BulkDeleteRequest, bulk_change_type and bulk_delete_participants definitions to immediately after POST /participants and before PUT /participants/{participant_id}; removed the now-duplicate later block. Verified by re-running pytest: all 10 tests pass."
+}
