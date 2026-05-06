@@ -35,6 +35,14 @@ Existing flight assignments are NEVER overwritten.
 - `PUT /api/participants/bulk-assignment` — bulk update Flight and/or Squadron. Pass empty/None to clear, omit field to leave unchanged. Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
 - These literal-path routes are registered BEFORE `PUT /participants/{participant_id}` to avoid FastAPI route shadowing.
 
+## Roster Import — Preview & Conflict Resolution Flow
+- `POST /api/participants/import/preview` (multipart Excel) → returns `staging_id`, summary `{new, update, conflict, skipped}`, stats, and per-row diffs.
+  - Each row reports `match_type` (capid/email/name/none), `default_action` (create/update/conflict), candidate list, and field-level changes (only non-blank deltas).
+  - When the same first+last name matches multiple existing participants and no CAPID/email, the row is flagged as a **conflict** and ALL candidates are surfaced with their distinguishing details (rank, unit, wing, email, type, flight) so the user can pick the right one.
+- `POST /api/participants/import/apply` → accepts `{ staging_id, resolutions: {row_idx_str: {action: 'update'|'create'|'skip', participant_id?: string}} }`. Cleans staging on success; expired staging docs (>2 h) are auto-purged on next preview.
+- Frontend: `ImportPreviewModal` (RosterPage → "Import CAP Report") shows summary cards, filter tabs, expandable rows with `existing match` cards + `field changes` (strike-through old → green new). Conflict rows start unresolved; **Apply Import** button is disabled until each conflict has an explicit pick. CAPID float artifacts (e.g., `538026.0`) are now normalized to integer strings.
+- `POST /api/participants/import` (legacy auto-apply) is preserved for back-compat / scripts.
+
 ## Tech Stack
 - Frontend: React 19, Tailwind CSS, Shadcn UI, DOMPurify
 - Backend: FastAPI, MongoDB, openpyxl, reportlab
@@ -48,6 +56,7 @@ Existing flight assignments are NEVER overwritten.
 - **May**: Smart Receipt OCR (GPT-4o Vision), Annual Reset, sidebar nav editing, code-quality fixes (XSS DOMPurify, removed hardcoded secrets across 11 files), My Flight chain-of-command.
 - **Feb 6, 2026**: Roster Bulk Actions UI complete (checkbox column, select-all, bulk-type-change menu, bulk-delete, Excel-with-shirt-size export). Fixed FastAPI route ordering bug (bulk-type was shadowed by /{participant_id}). 100% backend + 100% frontend tests (iteration_63).
 - **Feb 6, 2026 (later)**: Added **Bulk Edit Flight / Squadron** dialog (`PUT /api/participants/bulk-assignment`) and extended Change Type menu with **Senior Member** and **Advanced Student**. Backend validates flight/squadron values, supports clear-to-None and partial updates. 5/5 curl tests pass.
+- **Feb 6, 2026 (later)**: Added Roster Import **Preview / Apply** flow with per-row conflict resolution (`/import/preview` + `/import/apply`). New `ImportPreviewModal` shows New/Update/Conflict summary, filter tabs, expandable diff (strike-through old → green new), and forces explicit pick for same-name conflicts before Apply. CAPID float artifact (`538026.0` → `538026`) normalized; diff filter skips empty-string changes. 10/10 backend pytest + full e2e conflict-resolution path pass (iteration_64).
 
 ## Remaining Backlog
 - P1: Senior Barracks (TR-106, TR-107, TR-105) individual room assignments

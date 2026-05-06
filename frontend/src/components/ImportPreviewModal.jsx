@@ -66,17 +66,16 @@ export const ImportPreviewModal = ({ open, file, onClose, onApplied }) => {
         const data = await previewImportParticipants(file);
         if (cancelled) return;
         setPreview(data);
-        // Pre-populate default resolutions: conflicts default to "skip" until user picks
+        // Pre-populate default resolutions for non-conflict rows.
+        // Conflict rows are intentionally left unresolved so the user MUST pick.
         const defaults = {};
         data.rows.forEach((r) => {
-          if (r.default_action === 'conflict') {
-            defaults[r.row_idx] = { action: 'skip' };
-            // auto-expand conflicts so user sees them immediately
-          } else if (r.default_action === 'update') {
+          if (r.default_action === 'update') {
             defaults[r.row_idx] = { action: 'update', participant_id: r.default_target_id };
-          } else {
+          } else if (r.default_action === 'create') {
             defaults[r.row_idx] = { action: 'create' };
           }
+          // Conflict rows: leave undefined → unresolvedConflicts counter blocks Apply
         });
         setResolutions(defaults);
         // Auto-filter to conflicts if any exist
@@ -165,10 +164,8 @@ export const ImportPreviewModal = ({ open, file, onClose, onApplied }) => {
     if (action === 'skip') {
       return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase font-bold bg-slate-200 text-slate-700 rounded-sm" data-testid={`row-action-${row.row_idx}`}><X className="w-3 h-3" /> Skip</span>;
     }
-    if (action === 'conflict') {
-      return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase font-bold bg-amber-200 text-amber-900 rounded-sm" data-testid={`row-action-${row.row_idx}`}><AlertTriangle className="w-3 h-3" /> Conflict</span>;
-    }
-    return null;
+    // unresolved conflict (no res yet, default_action='conflict')
+    return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase font-bold bg-amber-200 text-amber-900 rounded-sm animate-pulse" data-testid={`row-action-${row.row_idx}`}><AlertTriangle className="w-3 h-3" /> Needs Pick</span>;
   };
 
   return (
@@ -301,7 +298,9 @@ export const ImportPreviewModal = ({ open, file, onClose, onApplied }) => {
                                       ? `update:${res.participant_id}`
                                       : res.action === 'create'
                                         ? 'create'
-                                        : 'skip'
+                                        : res.action === 'skip'
+                                          ? 'skip'
+                                          : undefined
                                   }
                                   onValueChange={(v) => {
                                     if (v === 'create') setRowAction(row.row_idx, 'create');
@@ -309,8 +308,8 @@ export const ImportPreviewModal = ({ open, file, onClose, onApplied }) => {
                                     else if (v.startsWith('update:')) setRowAction(row.row_idx, 'update', v.slice('update:'.length));
                                   }}
                                 >
-                                  <SelectTrigger className="h-8 w-72 text-xs rounded-sm" data-testid={`resolve-${row.row_idx}`}>
-                                    <SelectValue placeholder="Choose…" />
+                                  <SelectTrigger className="h-8 w-72 text-xs rounded-sm border-amber-400" data-testid={`resolve-${row.row_idx}`}>
+                                    <SelectValue placeholder="⚠ Pick existing match…" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     {row.candidates.map((c) => (
