@@ -610,30 +610,17 @@ async def upload_students(
             existing = await find_existing_participant(capid, email, first_name, last_name)
             
             if existing:
-                # LOCKDOWN: Skip records that were manually edited (protect admin changes from bulk overwrite)
-                if existing.get("manually_edited_at"):
-                    updated_count += 1
-                    pid = existing["id"]
-                    if await link_to_user_account(pid, capid, email):
-                        linked_count += 1
-                    continue
-
                 # Don't override manual squadron/flight assignments
                 if existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
                 
-                # If spreadsheet didn't specify a participant_type (blank EventName),
-                # keep the existing type entirely
+                # If spreadsheet didn't specify a participant_type (blank SubEvents/EventName),
+                # keep the existing type entirely — don't change what's already set
                 if student.get("participant_type") is None:
                     student.pop("participant_type", None)
                     student.pop("student_type", None)
-                else:
-                    # Don't downgrade participant_type (cadre→student, staff→student)
-                    ex_type = existing.get("participant_type", "")
-                    if ex_type in ("staff", "senior_member", "cadre") and student["participant_type"] == "basic_student":
-                        student["participant_type"] = ex_type
-                        student["student_type"] = None
+                # If spreadsheet DID specify a type, trust it (the SubEvents column is authoritative)
                 
                 # Only update fields that have actual values — don't wipe existing data with blanks
                 update_doc = {k: v for k, v in student.items() if v is not None}

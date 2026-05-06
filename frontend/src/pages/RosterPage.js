@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents, bulkChangeParticipantType, bulkDeleteParticipants } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 

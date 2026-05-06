@@ -548,7 +548,7 @@ async def export_analytics(
     export_columns = [
         'capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 'region',
         'gender', 'age', 'age_at_event', 'member_type', 'participant_type',
-        'squadron', 'flight', 'email', 'phone', 'cell_phone',
+        'squadron', 'flight', 'position', 'shirt_size', 'email', 'phone', 'cell_phone',
         'paid', 'paid_in_full', 'amount_paid', 'registration_status',
         'unit_approved', 'wing_approved', 'slotted'
     ]
@@ -1127,6 +1127,79 @@ async def reinstate_participant(
     return {"message": "Participant reinstated", "participant": updated}
 
 
+# ================= BULK OPERATIONS =================
+
+class BulkTypeChangeRequest(BaseModel):
+    participant_ids: List[str]
+    new_type: str  # basic_student, cadre, staff, senior_member
+
+
+class BulkDeleteRequest(BaseModel):
+    participant_ids: List[str]
+    confirm: bool = False
+
+
+@api_router.put("/participants/bulk-type")
+async def bulk_change_type(
+    data: BulkTypeChangeRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
+):
+    """Bulk change participant_type for multiple participants"""
+    valid_types = {"basic_student", "cadre", "staff", "senior_member"}
+    if data.new_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"new_type must be one of: {sorted(valid_types)}")
+    if not data.participant_ids:
+        raise HTTPException(status_code=400, detail="No participants selected")
+
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.participants.update_many(
+        {"id": {"$in": data.participant_ids}},
+        {"$set": {
+            "participant_type": data.new_type,
+            "student_type": "First-Time Student" if data.new_type == "basic_student" else None,
+            "updated_at": now,
+        }}
+    )
+    return {
+        "message": f"Changed {result.modified_count} participants to {data.new_type}",
+        "modified": result.modified_count,
+        "new_type": data.new_type,
+    }
+
+
+@api_router.post("/participants/bulk-delete")
+async def bulk_delete_participants(
+    data: BulkDeleteRequest,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+):
+    """Permanently delete selected participants"""
+    if not data.confirm:
+        raise HTTPException(status_code=400, detail="Must set confirm=true")
+    if not data.participant_ids:
+        raise HTTPException(status_code=400, detail="No participants selected")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Unlink user accounts
+    await db.users.update_many(
+        {"linked_participant_id": {"$in": data.participant_ids}},
+        {"$set": {"linked_participant_id": None, "updated_at": now}}
+    )
+
+    # Delete related data
+    await db.hs_med_diary.delete_many({"participant_id": {"$in": data.participant_ids}})
+    await db.hs_supplements.delete_many({"participant_id": {"$in": data.participant_ids}})
+    await db.contraband.delete_many({"participant_id": {"$in": data.participant_ids}})
+
+    # Delete the participants
+    result = await db.participants.delete_many({"id": {"$in": data.participant_ids}})
+
+    return {
+        "message": f"Deleted {result.deleted_count} participants",
+        "deleted": result.deleted_count,
+    }
+
+
 # ================= ANNUAL RESET =================
 
 class BulkResetRequest(BaseModel):
@@ -1497,21 +1570,10 @@ async def import_participants(
             existing = await find_existing_participant(capid, email_val, first_name_val, last_name_val)
 
             if existing:
-                # LOCKDOWN: Skip records that were manually edited
-                if existing.get("manually_edited_at"):
-                    updated_count += 1
-                    pid = existing["id"]
-                    await link_to_user_account(pid, capid, email_val)
-                    continue
-
-                # If spreadsheet didn't specify a type (blank EventName), keep existing
+                # If spreadsheet didn't specify a type (blank SubEvents), keep existing
                 if participant_type is None:
                     doc.pop("participant_type", None)
-                else:
-                    # Don't downgrade participant_type (cadre→student, staff→student)
-                    ex_type = existing.get("participant_type", "")
-                    if ex_type in ("staff", "senior_member", "cadre") and participant_type == "basic_student":
-                        doc["participant_type"] = ex_type
+                # If spreadsheet DID specify a type, trust it (SubEvents column is authoritative)
 
                 # Only update fields that have actual values — don't wipe existing data
                 update_doc = {k: v for k, v in doc.items() if v is not None}

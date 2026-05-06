@@ -117,6 +117,16 @@ export const reinstateParticipant = async (participantId) => {
   return response.data;
 };
 
+export const bulkChangeParticipantType = async (participantIds, newType) => {
+  const response = await axios.put(`${API}/participants/bulk-type`, { participant_ids: participantIds, new_type: newType }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const bulkDeleteParticipants = async (participantIds) => {
+  const response = await axios.post(`${API}/participants/bulk-delete`, { participant_ids: participantIds, confirm: true }, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const importParticipants = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
