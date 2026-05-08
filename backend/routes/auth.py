@@ -48,10 +48,19 @@ async def register(user_data: UserCreate, response: Response):
     user_count = await db.users.count_documents({})
     is_first_user = user_count == 0
     assigned_role = UserRole.COMMANDER if is_first_user else user_data.role
-    
-    valid_registration_roles = [UserRole.STAFF, UserRole.CADRE, UserRole.PARENT]
+
+    # Roles a brand-new user is allowed to self-claim at registration.
+    # Higher-trust roles (commander, exec staff, finance, exec_cadre, etc.) must
+    # be assigned by an admin via PUT /users/{id}/role — never granted by self-registration.
+    valid_registration_roles = [
+        UserRole.STAFF,    # Senior Staff (senior members only — admin can demote later if mis-claimed)
+        UserRole.CADRE,    # Cadre cadets
+        UserRole.STUDENT,  # Student cadets
+        UserRole.PARENT,
+    ]
     if not is_first_user and assigned_role not in valid_registration_roles:
-        assigned_role = UserRole.STAFF
+        # Default fallback is the LEAST privileged role, not Senior Staff.
+        assigned_role = UserRole.STUDENT
     
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()

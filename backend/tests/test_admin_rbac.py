@@ -108,36 +108,32 @@ class TestAdminRBAC:
         assert isinstance(users, list), "Expected list of users"
         print(f"PASS: Exec Cadre can get users ({len(users)} users)")
     
-    def test_exec_cadre_can_update_user_role(self, exec_cadre_session):
-        """Exec Cadre can update user roles via PUT /api/users/{id}/role (allowed per routes/users.py line 93)"""
-        # First get a user to update
+    def test_exec_cadre_cannot_update_user_role(self, exec_cadre_session):
+        """Exec Cadre must NOT be able to update user roles — admin-only.
+        Per the cadre/senior-staff permission separation policy, role-changes are
+        admin-tier (DCP / Commander / Executive Staff) only."""
         response = exec_cadre_session.get(f"{BASE_URL}/api/users")
         users = response.json()
-        
-        # Find a non-exec_cadre user to test role update
+
+        # Find a non-admin user to attempt to modify
         test_user = None
         for u in users:
             if u.get("role") not in ["commander", "exec_cadre", "dcp", "executive_staff"]:
                 test_user = u
                 break
-        
+
         if test_user:
-            original_role = test_user.get("role")
-            # Update to cadre then back
             response = exec_cadre_session.put(
                 f"{BASE_URL}/api/users/{test_user['id']}/role",
                 params={"role": "cadre"}
             )
-            assert response.status_code == 200, f"Exec Cadre role update failed: {response.text}"
-            
-            # Restore original role
-            exec_cadre_session.put(
-                f"{BASE_URL}/api/users/{test_user['id']}/role",
-                params={"role": original_role}
+            assert response.status_code == 403, (
+                f"Exec Cadre must be denied role-update; got {response.status_code} "
+                f"({response.text})"
             )
-            print(f"PASS: Exec Cadre can update user roles")
+            print("PASS: Exec Cadre is correctly denied PUT /users/{id}/role")
         else:
-            print("SKIP: No suitable user found to test role update")
+            print("SKIP: No suitable user found to test role update denial")
     
     def test_exec_cadre_cannot_get_pending_users(self, exec_cadre_session):
         """Exec Cadre CANNOT access GET /api/users/pending (restricted to DCP/Commander/Executive Staff)"""

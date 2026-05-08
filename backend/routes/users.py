@@ -90,11 +90,12 @@ async def get_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.CO
     return [UserResponse(**u) for u in users]
 
 @api_router.put("/users/{user_id}/role")
-async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))):
+async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
     valid_roles = [
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
         UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
-        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.HEALTH_SERVICES,
+        UserRole.EXEC_CADRE, UserRole.STAFF, UserRole.CADRE, UserRole.STUDENT,
+        UserRole.HEALTH_SERVICES,
         UserRole.DINING_FACILITY, UserRole.SUPPORT_LOGISTICS, UserRole.SUPPORT_COMMS,
         UserRole.SUPPORT_PA, UserRole.SUPPORT_DINING, UserRole.SUPPORT_HEALTH,
         UserRole.SQUADRON_COMMANDER, UserRole.PARENT
