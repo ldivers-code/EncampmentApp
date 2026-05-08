@@ -311,15 +311,25 @@ async def link_user_to_participant(
     }
     
     if auto_populate:
-        ptype = participant.get("participant_type", "")
+        ptype = (participant.get("participant_type") or "").lower()
         member_type = (participant.get("member_type") or "").upper()
-        
-        if member_type == "SENIOR" or ptype == "staff":
+
+        # Senior members & senior-staff sub-event applicants → senior staff role
+        SENIOR_PTYPES = {"senior_staff", "staff", "senior_member"}
+        # Cadre cadets (incl. legacy exec_cadre records). Exec Cadre is a duty
+        # subset of cadre, not a senior-staff promotion path.
+        CADRE_PTYPES = {"cadre", "exec_cadre"}
+        # Students (incl. legacy basic_student / advanced_student labels).
+        STUDENT_PTYPES = {"student", "basic_student", "advanced_student"}
+
+        if member_type in ("SENIOR", "CADET SPONSOR") or ptype in SENIOR_PTYPES:
             update_fields["role"] = UserRole.STAFF
-        elif ptype == "cadre":
-            update_fields["role"] = UserRole.STAFF
-        else:
-            update_fields["role"] = UserRole.CADET
+        elif ptype in CADRE_PTYPES:
+            update_fields["role"] = UserRole.CADRE
+        elif ptype in STUDENT_PTYPES:
+            update_fields["role"] = UserRole.STUDENT
+        # Any other ptype (e.g. "needs_review", blank) → don't auto-promote;
+        # leave the user's current role untouched so admins can resolve manually.
         
         profile_fields = [
             "rank", "unit", "wing", "region", "gender", "age", "shirt_size",

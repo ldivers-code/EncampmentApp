@@ -14,6 +14,7 @@ class UserRole:
     EXEC_CADRE = "exec_cadre"
     STAFF = "staff"
     CADRE = "cadre"
+    STUDENT = "student"
     HEALTH_SERVICES = "health_services"
     DINING_FACILITY = "dining_facility"
     SUPPORT_LOGISTICS = "support_logistics"
@@ -134,6 +135,15 @@ DEFAULT_PERMISSIONS = {
     ),
     UserRole.CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
+        schedule_view=True, schedule_edit=False,
+        meal_plan_view=True, meal_plan_edit=False,
+        budget_view=False, budget_edit=False,
+        analytics=False, org_chart=True, handbooks=True,
+        documents=True, admin_panel=False,
+        health_view=False, health_full=False
+    ),
+    UserRole.STUDENT: AccessPermissions(
+        dashboard=True, roster_view=False, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
         budget_view=False, budget_edit=False,
