@@ -22,6 +22,16 @@ from models import (
     UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
 from permissions import get_current_user, require_role
+from scope import (
+    apply_participant_visibility,
+    redact_participant,
+    redact_participants,
+    can_view_full_participant,
+    can_view_finance,
+    can_view_contact_pii,
+    is_full_admin,
+    PRIVILEGED_VIEWING_ROLES,
+)
 from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget, find_existing_participant, find_match_with_candidates, link_to_user_account, determine_participant_type
 
 # ================= PARTICIPANT ROUTES =================
@@ -38,68 +48,18 @@ FLIGHT_TO_SQUADRON_MAP = {
 }
 
 def _apply_visibility_filter(query: dict, user: dict):
-    """Apply role-based visibility filter to participant queries.
-    Squadron-level roles (Squadron Commander, Training Officer) see both flights in their squadron.
-    Flight-level roles (Cadre, Exec Cadre) see only their assigned flight.
-    """
-    user_role = user.get('role')
-    user_flight = (user.get('flight') or '').lower()
-    user_squadron = (user.get('squadron') or '').lower()
-
-    if user_role == UserRole.PARENT:
-        raise HTTPException(status_code=403, detail="Parents do not have roster access")
-
-    # Squadron-level roles: see both flights in their squadron
-    squadron_level_roles = [UserRole.SQUADRON_COMMANDER, UserRole.TRAINING_OFFICER]
-    if user_role in squadron_level_roles:
-        sq = user_squadron or FLIGHT_TO_SQUADRON_MAP.get(user_flight, '')
-        if sq and sq in SQUADRON_FLIGHTS_MAP:
-            query["flight"] = {"$in": SQUADRON_FLIGHTS_MAP[sq]}
-        return
-
-    # Flight-level cadre: see only their assigned flight
-    flight_level_roles = [UserRole.CADRE, UserRole.EXEC_CADRE]
-    if user_role in flight_level_roles and user_flight:
-        query["flight"] = user_flight
+    """Backwards-compatible alias for the shared scope.apply_participant_visibility."""
+    return apply_participant_visibility(query, user)
 
 
 @api_router.get("/participants", response_model=List[ParticipantResponse])
 async def get_participants(user: dict = Depends(get_current_user)):
     query = {"is_removed": {"$ne": True}}
-    
-    user_role = user.get('role')
-    
-    _apply_visibility_filter(query, user)
-    
+    apply_participant_visibility(query, user)
+
     participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
-    
-    privileged_roles = [
-        UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.DCP,
-        UserRole.EXEC_CADRE, UserRole.PLANS_PROGRAMS,
-        UserRole.FINANCE, UserRole.STAFF, UserRole.HEALTH_SERVICES
-    ]
-    
-    if user_role not in privileged_roles:
-        sensitive_fields = [
-            'address', 'city', 'state', 'zip_code',
-            'amount_paid', 'registration_status', 'notes', 'comments', 
-            'religious_preference', 'shirt_size', 'unit_cc_name', 'unit_cc_email'
-        ]
-        filtered_participants = []
-        for p in participants:
-            filtered_p = dict(p)
-            for field in sensitive_fields:
-                if field in filtered_p:
-                    filtered_p[field] = None
-            filtered_p['paid'] = False
-            filtered_p['paid_in_full'] = False
-            filtered_p['amount_paid'] = None
-            filtered_p['unit_approved'] = False
-            filtered_p['wing_approved'] = False
-            filtered_participants.append(filtered_p)
-        return [ParticipantResponse(**p) for p in filtered_participants]
-    
-    return [ParticipantResponse(**p) for p in participants]
+    redacted = redact_participants(participants, user)
+    return [ParticipantResponse(**p) for p in redacted]
 
 
 @api_router.get("/participants/by-flight")
@@ -121,7 +81,9 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
     
     flights_map = {}
     unassigned = []
-    
+
+    show_contact = can_view_contact_pii(user)
+
     for p in participants:
         flight = (p.get("flight") or "").lower()
         entry = {
@@ -138,11 +100,11 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
             "age": p.get("age"),
             "wing": p.get("wing", ""),
             "unit": p.get("unit", ""),
-            "email": p.get("email", ""),
-            "phone": p.get("phone", "") or p.get("cell_phone", ""),
-            "parent_email": p.get("cadet_parent_email", ""),
-            "parent_phone": p.get("cadet_parent_phone", ""),
-            "parent_name": p.get("cadet_parent_name", ""),
+            "email":         p.get("email", "")               if show_contact else "",
+            "phone":         (p.get("phone", "") or p.get("cell_phone", "")) if show_contact else "",
+            "parent_email":  p.get("cadet_parent_email", "")  if show_contact else "",
+            "parent_phone":  p.get("cadet_parent_phone", "")  if show_contact else "",
+            "parent_name":   p.get("cadet_parent_name", "")   if show_contact else "",
             "photo_path": p.get("photo_path", ""),
         }
         
@@ -188,8 +150,13 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
 
 @api_router.get("/participants/stats")
 async def get_participant_stats(user: dict = Depends(get_current_user)):
-    """Get participant statistics for dashboard"""
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
+    """Get participant statistics for dashboard.
+    Visibility filter is applied so cadre/squadron-level callers only see counts
+    for participants they're allowed to view. Finance fields (`total_collected`)
+    are zeroed out for non-finance callers."""
+    query = {"is_removed": {"$ne": True}}
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
     
     stats = {
         'total': len(participants),
@@ -251,14 +218,27 @@ async def get_participant_stats(user: dict = Depends(get_current_user)):
         unit = p.get('unit', 'Unknown')
         if unit:
             stats['by_unit'][unit] = stats['by_unit'].get(unit, 0) + 1
-    
+
+    # Finance gating — only finance/admin callers see total_collected & paid counts
+    if not can_view_finance(user):
+        stats['total_collected'] = 0.0
+        stats['paid'] = 0
+        stats['unpaid'] = 0
+        stats['unit_approved'] = 0
+        stats['wing_approved'] = 0
+        stats['slotted'] = 0
+
     return stats
 
 
 @api_router.get("/participants/analytics/detailed")
 async def get_detailed_analytics(user: dict = Depends(get_current_user)):
-    """Get comprehensive analytics for encampment attendees"""
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
+    """Get comprehensive analytics for encampment attendees.
+    Visibility filter applied so squadron/cadre callers only see counts within
+    their scope. Aggregate counts only — no PII surface here."""
+    query = {"is_removed": {"$ne": True}}
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
     
     # Return empty analytics structure when no participants
     if not participants:
@@ -533,17 +513,31 @@ async def get_pending_payments(user: dict = Depends(get_current_user)):
 @api_router.get("/participants/analytics/export")
 async def export_analytics(
     format: str = "csv",
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.FINANCE,
+        UserRole.HEALTH_SERVICES, UserRole.LOGISTICS, UserRole.TRAINING_OFFICER,
+        UserRole.SQUADRON_COMMANDER,
+    ]))
 ):
-    """Export analytics data as CSV or Excel"""
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
-    
+    """Export analytics data as CSV or Excel.
+    Restricted to senior staff / directorate roles. Visibility filter is also
+    applied so squadron-level callers only export their own scope, and
+    finance-only columns are stripped for non-finance callers."""
+    query = {"is_removed": {"$ne": True}}
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
+
     if not participants:
         raise HTTPException(status_code=404, detail="No participants found")
-    
+
+    # Apply field-level redaction (no-op for full admins; strips payment for
+    # senior-staff-without-finance; strips contact for cadre-tier callers)
+    participants = redact_participants(participants, user)
+
     # Create DataFrame with participant data
     df = pd.DataFrame(participants)
-    
+
     # Select and reorder columns for export
     export_columns = [
         'capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 'region',
@@ -552,6 +546,13 @@ async def export_analytics(
         'paid', 'paid_in_full', 'amount_paid', 'registration_status',
         'unit_approved', 'wing_approved', 'slotted'
     ]
+
+    # Strip finance columns when caller can't view finance
+    if not can_view_finance(user):
+        export_columns = [c for c in export_columns if c not in (
+            'paid', 'paid_in_full', 'amount_paid', 'registration_status',
+            'unit_approved', 'wing_approved', 'slotted'
+        )]
     
     # Only include columns that exist
     available_columns = [col for col in export_columns if col in df.columns]
@@ -581,13 +582,23 @@ async def export_analytics(
 
 @api_router.get("/participants/analytics/summary-export")
 async def export_analytics_summary(
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.FINANCE,
+        UserRole.HEALTH_SERVICES, UserRole.LOGISTICS, UserRole.TRAINING_OFFICER,
+        UserRole.SQUADRON_COMMANDER,
+    ]))
 ):
-    """Export analytics summary report as Excel with multiple sheets"""
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
-    
+    """Export analytics summary report as Excel with multiple sheets.
+    Same role/visibility rules as /analytics/export."""
+    query = {"is_removed": {"$ne": True}}
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
+
     if not participants:
         raise HTTPException(status_code=404, detail="No participants found")
+
+    participants = redact_participants(participants, user)
     
     output = BytesIO()
     
@@ -665,9 +676,16 @@ async def export_analytics_summary(
 @api_router.get("/participants/export-pdf")
 async def export_roster_pdf(
     format: str = "simple",
-    user: dict = Depends(get_current_user)
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.FINANCE,
+        UserRole.HEALTH_SERVICES, UserRole.LOGISTICS, UserRole.TRAINING_OFFICER,
+        UserRole.SQUADRON_COMMANDER,
+    ]))
 ):
-    """Export roster as PDF. format: simple, by_flight, by_type"""
+    """Export roster as PDF. format: simple, by_flight, by_type.
+    Restricted to senior staff / directorate roles. Visibility filter scopes
+    squadron-level callers to their own flights."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter, landscape
     from reportlab.lib.units import inch
@@ -676,9 +694,13 @@ async def export_roster_pdf(
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
     from collections import Counter
 
-    participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
+    query = {"is_removed": {"$ne": True}}
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
     if not participants:
         raise HTTPException(status_code=404, detail="No participants found")
+
+    participants = redact_participants(participants, user)
 
     output = BytesIO()
     timestamp_str = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
