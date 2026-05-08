@@ -211,10 +211,44 @@ async def approve_user(
     background_tasks: BackgroundTasks,
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
+    """Mark a pending user as approved. Idempotent — re-approving a user
+    returns 200 with already_approved=true and does NOT re-send the email.
+
+    Note: approval and participant-linking are deliberately separate steps.
+    Use POST /api/users/{user_id}/link-participant?participant_id=... to attach
+    a roster record after approval (or do both via the admin UI's combined
+    'Approve & Link' action which calls these endpoints sequentially).
+    """
+    if not user_id or len(user_id) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail={"reason": "invalid_user_id", "message": "user_id is required and must be a valid UUID."},
+        )
+
     target_user = await db.users.find_one({"id": user_id})
     if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "reason": "user_not_found",
+                "user_id": user_id,
+                "message": (
+                    f"No user with id={user_id}. They may have been deleted, "
+                    "or your pending list is stale — refresh and try again."
+                ),
+            },
+        )
+
+    if target_user.get("is_approved"):
+        # Idempotent — already approved, don't re-send the email
+        existing = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        return {
+            "message": "User was already approved",
+            "already_approved": True,
+            "user": existing,
+            "email_sent": False,
+        }
+
     now = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
         {"id": user_id},
@@ -224,7 +258,7 @@ async def approve_user(
             "approved_at": now
         }}
     )
-    
+
     app_url = os.environ.get('APP_URL', 'https://cadre-hub.preview.emergentagent.com')
     background_tasks.add_task(
         send_approval_email,
@@ -232,9 +266,14 @@ async def approve_user(
         target_user.get('name', 'Member'),
         app_url
     )
-    
+
     updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    return {"message": "User approved successfully", "user": updated_user, "email_sent": True}
+    return {
+        "message": "User approved successfully",
+        "already_approved": False,
+        "user": updated_user,
+        "email_sent": True,
+    }
 
 
 @api_router.put("/users/{user_id}/permissions")

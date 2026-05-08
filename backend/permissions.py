@@ -89,10 +89,13 @@ def _extract_token(request: Request, credentials: Optional[HTTPAuthorizationCred
         return token
     raise HTTPException(status_code=401, detail="Not authenticated")
 
-async def get_current_user(
+async def get_current_user_pending_ok(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ):
+    """Resolve the JWT to a user record. Does NOT enforce approval status — use
+    only on endpoints that legitimately accept pending/unapproved users (e.g.
+    /auth/me, /auth/status). For everything else, prefer get_current_user."""
     token = _extract_token(request, credentials)
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -108,6 +111,25 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    """Resolve the JWT and ENFORCE that the account is approved.
+    Returns 403 with reason='pending_approval' for pending users so the client
+    can route them to a pending-approval screen instead of the app."""
+    user = await get_current_user_pending_ok(request, credentials)
+    if not user.get("is_approved"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "reason": "pending_approval",
+                "message": "Your account is awaiting approval. You will receive an email once an administrator approves your access.",
+            },
+        )
+    return user
 
 
 async def get_current_user_from_token(token: str):
