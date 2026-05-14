@@ -205,11 +205,40 @@ async def delete_user(user_id: str, user: dict = Depends(require_role([UserRole.
 
 @api_router.get("/users/pending")
 async def get_pending_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+    """List unapproved users. Each entry now includes the Phase 4 status
+    block so the admin UI can see at-a-glance whether the user already has
+    a participant link (rare for pending users, but possible for parents)."""
+    from account_status import compute_account_status
     pending_users = await db.users.find(
         {"$or": [{"is_approved": False}, {"is_approved": None}]},
         {"_id": 0, "password_hash": 0}
     ).to_list(1000)
+    for u in pending_users:
+        u["status"] = await compute_account_status(db, u)
     return pending_users
+
+
+async def _resolve_user_for_approval(identifier: str):
+    """Phase 4: tolerant lookup for the approval endpoint.
+
+    Admin UI may send the user's UUID (the canonical identifier), but a
+    stale pending list or a CSV-driven workflow may also send the email or
+    CAPID. We try each in turn and return both the document and a label of
+    HOW it was found so we can surface that in the response.
+    """
+    if not identifier:
+        return None, None
+    by_id = await db.users.find_one({"id": identifier})
+    if by_id:
+        return by_id, "id"
+    ident_lower = identifier.strip().lower()
+    by_email = await db.users.find_one({"email": {"$regex": f"^{ident_lower}$", "$options": "i"}})
+    if by_email:
+        return by_email, "email"
+    by_capid = await db.users.find_one({"capid": identifier.strip()})
+    if by_capid:
+        return by_capid, "capid"
+    return None, None
 
 
 @api_router.post("/users/{user_id}/approve")
@@ -218,47 +247,69 @@ async def approve_user(
     background_tasks: BackgroundTasks,
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
-    """Mark a pending user as approved. Idempotent — re-approving a user
-    returns 200 with already_approved=true and does NOT re-send the email.
+    """Mark a pending user as approved. Phase 4 hardened.
 
-    Note: approval and participant-linking are deliberately separate steps.
-    Use POST /api/users/{user_id}/link-participant?participant_id=... to attach
-    a roster record after approval (or do both via the admin UI's combined
-    'Approve & Link' action which calls these endpoints sequentially).
+    * Idempotent — re-approving a user returns 200 with already_approved=true
+      and does NOT re-send the email.
+    * Tolerant identifier lookup — accepts the canonical UUID `id`, the
+      user's email, or their CAPID. The matched_by field in the response
+      tells the caller which path resolved.
+    * Always returns the canonical Phase 4 status block (six fields) so the
+      caller knows both that approval succeeded AND the current linkage
+      state — making the (separate) link-participant step's prerequisites
+      explicit.
+
+    Note: approval and participant-linking are deliberately SEPARATE steps.
+    Use POST /api/users/{user_id}/link-participant?participant_id=... to
+    attach a roster record after approval. The admin UI may chain them in
+    an "Approve & Link" action, but each step is independently auditable.
     """
-    if not user_id or len(user_id) < 8:
+    if not user_id or len(user_id.strip()) < 3:
         raise HTTPException(
             status_code=400,
-            detail={"reason": "invalid_user_id", "message": "user_id is required and must be a valid UUID."},
+            detail={
+                "reason": "invalid_identifier",
+                "identifier": user_id,
+                "message": "An identifier (UUID / email / CAPID) is required.",
+            },
         )
 
-    target_user = await db.users.find_one({"id": user_id})
+    target_user, matched_by = await _resolve_user_for_approval(user_id)
     if not target_user:
         raise HTTPException(
             status_code=404,
             detail={
                 "reason": "user_not_found",
-                "user_id": user_id,
+                "identifier": user_id,
+                "tried": ["id", "email", "capid"],
                 "message": (
-                    f"No user with id={user_id}. They may have been deleted, "
-                    "or your pending list is stale — refresh and try again."
+                    f"No user matched '{user_id}' on id, email, or CAPID. "
+                    "Your pending list may be stale — refresh and try again. "
+                    "If the user just registered, ask them to re-submit; if "
+                    "they were already approved, look in /users instead of "
+                    "/users/pending."
                 ),
             },
         )
 
+    from account_status import compute_account_status
+
+    resolved_id = target_user["id"]
     if target_user.get("is_approved"):
         # Idempotent — already approved, don't re-send the email
-        existing = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        existing = await db.users.find_one({"id": resolved_id}, {"_id": 0, "password_hash": 0})
         return {
-            "message": "User was already approved",
+            "message": f"User '{existing.get('name') or existing.get('email')}' was already approved.",
             "already_approved": True,
+            "matched_by": matched_by,
             "user": existing,
             "email_sent": False,
+            "status": await compute_account_status(db, existing),
         }
 
     now = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
-        {"id": user_id},
+        {"id": resolved_id},
         {"$set": {
             "is_approved": True,
             "approved_by": user["id"],
@@ -274,12 +325,43 @@ async def approve_user(
         app_url
     )
 
-    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    updated_user = await db.users.find_one({"id": resolved_id}, {"_id": 0, "password_hash": 0})
     return {
-        "message": "User approved successfully",
+        "message": f"User '{updated_user.get('name') or updated_user.get('email')}' approved successfully.",
         "already_approved": False,
+        "matched_by": matched_by,
         "user": updated_user,
         "email_sent": True,
+        "status": await compute_account_status(db, updated_user),
+    }
+
+
+@api_router.get("/users/{user_id}/status")
+async def get_user_status(
+    user_id: str,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+):
+    """Phase 4: admin-only — return the canonical six-field status block for
+    any target user. Mirrors GET /auth/status but for a target identified by
+    UUID, email, or CAPID."""
+    target_user, matched_by = await _resolve_user_for_approval(user_id)
+    if not target_user:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "reason": "user_not_found",
+                "identifier": user_id,
+                "tried": ["id", "email", "capid"],
+                "message": f"No user matched '{user_id}'.",
+            },
+        )
+    from account_status import compute_account_status
+    return {
+        **(await compute_account_status(db, target_user)),
+        "user_id": target_user.get("id"),
+        "email": target_user.get("email"),
+        "name": target_user.get("name"),
+        "matched_by": matched_by,
     }
 
 
@@ -339,16 +421,37 @@ async def link_user_to_participant(
     auto_populate: bool = True,
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
-    target_user = await db.users.find_one({"id": user_id})
+    """Link a user account to a roster participant. INDEPENDENT of approval —
+    this only mutates linkage, never approval state. Returns the canonical
+    Phase 4 status block so the caller knows the resulting account_status.
+    """
+    target_user, _ = await _resolve_user_for_approval(user_id)
     if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "reason": "user_not_found",
+                "identifier": user_id,
+                "tried": ["id", "email", "capid"],
+                "message": f"No user matched '{user_id}'.",
+            },
+        )
+    resolved_user_id = target_user["id"]
+
     participant = await db.participants.find_one(
         {"$or": [{"id": participant_id}, {"capid": participant_id}]},
         {"_id": 0}
     )
     if not participant:
-        raise HTTPException(status_code=404, detail="Participant not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "reason": "participant_not_found",
+                "identifier": participant_id,
+                "tried": ["id", "capid"],
+                "message": f"No participant matched '{participant_id}' on id or CAPID.",
+            },
+        )
     
     now = datetime.now(timezone.utc).isoformat()
     update_fields = {
@@ -391,13 +494,15 @@ async def link_user_to_participant(
         if participant.get("first_name") and participant.get("last_name"):
             update_fields["name"] = f"{participant['first_name']} {participant['last_name']}"
     
-    await db.users.update_one({"id": user_id}, {"$set": update_fields})
+    await db.users.update_one({"id": resolved_user_id}, {"$set": update_fields})
     
-    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    updated_user = await db.users.find_one({"id": resolved_user_id}, {"_id": 0, "password_hash": 0})
+    from account_status import compute_account_status
     return {
         "message": "User linked to participant successfully",
         "user": updated_user,
-        "participant": participant
+        "participant": participant,
+        "status": await compute_account_status(db, updated_user),
     }
 
 

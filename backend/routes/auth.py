@@ -151,7 +151,7 @@ async def get_account_status(user: dict = Depends(get_current_user_pending_ok)):
     to decide which screen to render and what to surface to the user.
 
     Always returns 200 for any authenticated session (approved or not).
-    Fields:
+    Fields (canonical Phase 4 status payload):
       - is_approved (bool)
       - linked_participant_id (str | None)
       - participant_link_status: "linked" | "unlinked"
@@ -161,46 +161,10 @@ async def get_account_status(user: dict = Depends(get_current_user_pending_ok)):
       - duty_assignment: high-level duty / position summary
       - account_status: "pending_approval" | "approved_unlinked" | "approved_linked"
     """
-    is_approved = bool(user.get("is_approved"))
-    linked_pid = user.get("linked_participant_id")
-    participant = None
-    if linked_pid:
-        participant = await db.participants.find_one(
-            {"id": linked_pid, "is_removed": {"$ne": True}},
-            {"_id": 0, "id": 1, "participant_type": 1, "flight": 1, "squadron": 1, "position": 1},
-        )
-
-    link_status = "linked" if participant else "unlinked"
-    encampment_ptype = (participant or {}).get("participant_type")
-
-    if not is_approved:
-        account_status = "pending_approval"
-    elif link_status == "unlinked":
-        account_status = "approved_unlinked"
-    else:
-        account_status = "approved_linked"
-
-    duty_parts = []
-    if user.get("cadre_position"):
-        duty_parts.append(user["cadre_position"])
-    if user.get("cadre_unit"):
-        duty_parts.append(user["cadre_unit"])
-    if (participant or {}).get("position"):
-        duty_parts.append(participant["position"])
-    if user.get("flight") or (participant or {}).get("flight"):
-        duty_parts.append(f"Flight {user.get('flight') or participant['flight']}")
-    if user.get("squadron") or (participant or {}).get("squadron"):
-        duty_parts.append(user.get("squadron") or participant["squadron"])
-    duty_assignment = " / ".join([str(p) for p in duty_parts if p]) or None
-
+    from account_status import compute_account_status
+    status = await compute_account_status(db, user)
     return {
-        "is_approved": is_approved,
-        "linked_participant_id": linked_pid,
-        "participant_link_status": link_status,
-        "encampment_participant_type": encampment_ptype,
-        "permission_role": user.get("role"),
-        "duty_assignment": duty_assignment,
-        "account_status": account_status,
+        **status,
         "user_id": user.get("id"),
         "email": user.get("email"),
         "name": user.get("name"),

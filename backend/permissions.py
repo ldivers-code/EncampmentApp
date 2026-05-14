@@ -126,7 +126,37 @@ async def get_current_user(
             status_code=403,
             detail={
                 "reason": "pending_approval",
+                "account_status": "pending_approval",
                 "message": "Your account is awaiting approval. You will receive an email once an administrator approves your access.",
+            },
+        )
+    return user
+
+
+async def get_current_user_linked(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    """Phase 4: enforce BOTH approval AND participant linkage.
+
+    Use this dependency on routes that require participant context to be
+    meaningful (e.g. parent portal, self-service medical, my-flight actions).
+    Approved-but-unlinked users get a structured 403 so the client can route
+    them to an "admin needs to link your roster record" screen.
+    """
+    user = await get_current_user(request, credentials)
+    linked_pid = user.get("linked_participant_id")
+    if not linked_pid:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "reason": "linkage_required",
+                "account_status": "approved_unlinked",
+                "message": (
+                    "Your account is approved but not yet linked to a roster "
+                    "record. Please ask an administrator to link your account "
+                    "to your participant record before continuing."
+                ),
             },
         )
     return user

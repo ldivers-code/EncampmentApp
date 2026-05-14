@@ -501,12 +501,26 @@ const AdminPage = () => {
 
   const handleApproveUser = async (userId) => {
     try {
-      await approveUser(userId);
-      toast.success('User approved successfully');
+      const result = await approveUser(userId);
+      const name = result?.user?.name || result?.user?.email || 'User';
+      if (result?.already_approved) {
+        toast.info(`${name} was already approved`);
+      } else {
+        toast.success(`${name} approved successfully`);
+      }
       loadPendingUsers();
       loadUsers();
     } catch (error) {
-      toast.error('Failed to approve user');
+      // Phase 4: surface the structured server error so the admin sees
+      // exactly WHY approval failed (stale list, missing user, etc.).
+      const detail = error?.response?.data?.detail;
+      const message = (typeof detail === 'object' && detail?.message)
+        || (typeof detail === 'string' && detail)
+        || error?.message
+        || 'Failed to approve user';
+      toast.error(`Approve failed: ${message}`);
+      // Refresh pending list so the admin sees the current state.
+      loadPendingUsers();
     }
   };
 
