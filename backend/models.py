@@ -136,12 +136,17 @@ DEFAULT_PERMISSIONS = {
         health_view=False, health_full=False,
         check_in_view=True, check_in_edit=True
     ),
+    # Phase 3: EXEC_CADRE is the cadre-lead permission role. It receives
+    # ELEVATED CADRE-LEVEL permissions only — never Senior Staff capabilities
+    # by default. `analytics` is a senior-staff cross-cutting view, so it is
+    # OFF by default for cadre leads. Admin can grant it explicitly via the
+    # per-user permission editor when warranted.
     UserRole.EXEC_CADRE: AccessPermissions(
         dashboard=True, roster_view=True, roster_edit=False,
         schedule_view=True, schedule_edit=False,
         meal_plan_view=True, meal_plan_edit=False,
         budget_view=False, budget_edit=False,
-        analytics=True, org_chart=True, handbooks=True,
+        analytics=False, org_chart=True, handbooks=True,
         documents=True, admin_panel=False,
         health_view=False, health_full=False
     ),

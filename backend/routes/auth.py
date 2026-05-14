@@ -305,10 +305,19 @@ async def send_honor_agreement_reminders(
 async def get_honor_agreement_status(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))
 ):
-    """Get honor agreement signing status for all cadre/staff users."""
-    all_roles = CADRE_ROLES + STAFF_ROLES
+    """Get honor agreement signing status for all cadre/staff users.
+
+    Phase 3 scope: Full admins see both cadre and senior-staff agreement
+    status. Exec Cadre (cadre-lead) is restricted to the CADRE agreements
+    only — they have no senior-staff visibility.
+    """
+    # Restrict the role-window for cadre-lead callers to cadre roles only.
+    if user.get("role") == UserRole.EXEC_CADRE:
+        visible_roles = CADRE_ROLES
+    else:
+        visible_roles = CADRE_ROLES + STAFF_ROLES
     users = await db.users.find(
-        {"role": {"$in": all_roles}, "is_approved": True},
+        {"role": {"$in": visible_roles}, "is_approved": True},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1,
          "honor_agreement_signed": 1, "honor_agreement_type": 1,
          "honor_agreement_signed_at": 1, "honor_agreement_signature_name": 1}

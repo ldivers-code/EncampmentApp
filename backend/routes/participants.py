@@ -889,21 +889,12 @@ async def get_participant(participant_id: str, user: dict = Depends(get_current_
     participant = await db.participants.find_one({"id": participant_id}, {"_id": 0})
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
-    
-    # Define roles that can see all data
-    privileged_roles = [
-        UserRole.COMMANDER,
-        UserRole.EXECUTIVE_STAFF,
-        UserRole.EXEC_CADRE,
-        UserRole.PLANS_PROGRAMS,
-        UserRole.FINANCE,
-        UserRole.STAFF
-    ]
-    
-    user_role = user.get('role')
-    
-    # If user doesn't have a privileged role, filter sensitive fields
-    if user_role not in privileged_roles:
+
+    # Phase 3: defer to scope.can_view_full_participant (single source of truth).
+    # This explicitly EXCLUDES EXEC_CADRE / CADRE / STUDENT / PARENT from the
+    # full-PII view — they receive the redacted projection like everyone else
+    # who is not in PRIVILEGED_VIEWING_ROLES.
+    if not can_view_full_participant(user):
         sensitive_fields = [
             'email', 'phone', 'cell_phone', 'address', 'city', 'state', 'zip_code',
             'emergency_contact', 'emergency_phone', 'cadet_parent_name', 

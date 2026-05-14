@@ -1,64 +1,61 @@
-# CAP Encampment Management App — PRD
+# CAP Encampment App — PRD & Changelog
 
 ## Original Problem Statement
-Build an interactive roster and management application for a Civil Air Patrol (CAP) encampment titled "Tennessee Wing Civil Air Patrol Encampment".
+Build an interactive roster & management application for the **Tennessee Wing
+Civil Air Patrol Encampment** with:
+- Roster Management (live filtering, RBAC, flight-grouped views, contact info)
+- Student Upload (Excel) with auto-flight assignment + sub-event handling
+- Org Chart (strict 1:1 interactive mind-map)
+- Health Services (allergies, OTC approvals, Daily Med Diary, Supplements, Contraband)
+- Check-In & Barracks (multi-step in-processing)
+- Granular RBAC with visibility / redaction / cascading assignments
+- Parent Portal "My Cadet" + Admin widget editor
+- Budget/Finance Tracker + Smart Receipt OCR
+- Schedule Sync (Excel auto-publish)
+- Honor Agreements (digital signature)
+- Mobile App back-end ready
 
-## Core Features (Implemented)
-- **Roster Management**: Interactive roster with live filtering, search, RBAC, flight-grouped views, photo uploads, auto-balance, print-friendly. Bulk-select, bulk-change-type, bulk-delete, Excel export with shirt sizes.
-- **Assignments System (Google Classroom-style)**: Instructor/mentor/student roles, Q&A, document uploads, grading, email reminders
-- **Student Upload System**: Excel upload with automatic flight assignment. Supports CAP Master Reports (uses `SubEvents` column) and sub-event reports; falls back to Name matching when CAPID is missing.
-- **Org Chart**: Interactive SVG node-link command map with horizontal branching, 85 positions. Hierarchy: Enc Commander → Commandant → CTG/CC → [CTG/CD, CTG/DF, CTG/CCEA, CSS/CC, CTO + 3 Squadrons]. Squadron TOs under CTO. 19 positions with secondary academic reporting to CTG/DF (dashed connectors). 5-color scheme: Blue/Maroon/Yellow/Emerald/Silver. Collapsible depth, search, category filters, detail side panel.
-- **Health Services**: Medical roster, allergies, OTC approvals, parent email notifications, Daily Med Diary, Supplements, Contraband check-in
-- **Check-In & Barracks**: Multi-step in-processing, bunk assignments
-- **Granular RBAC**: Senior Staff + Cadre roles with permissions
-- **Parent Portal**: "My Cadet" tab, Admin widget editor
-- **Honor Agreement System**: Role-based digital agreements, blocking modal
-- **Budget/Finance Tracker**: Payment imports, smart receipt OCR (GPT-4o Vision), charts
-- **Schedule**: 11 categories, Excel import, Squadron View grid
-- **Analytics, Logistics, Status Board, Notifications**
-- **Annual Reset Tab**: bulk roster/org chart wipe in Admin settings
-- **Auth**: httpOnly cookie-based JWT
-- **Mobile App API Spec**: `/app/MOBILE_BACKEND_INTEGRATION.md` documents endpoints for companion mobile app
+## Stack
+- React 19, Tailwind, Shadcn UI, DOMPurify, lucide-react
+- FastAPI, MongoDB, Python
+- emergentintegrations (GPT-4o Vision OCR); SendGrid email
+- JWT auth (httpOnly cookie + Bearer header); bcrypt
 
-## Auto-Balance Flights Algorithm
-`POST /api/students/auto-assign` distributes unassigned students using weighted scoring:
-- Capacity (max 15/flight, weight 10)
-- Male/Female parity (weight 5)
-- Wing spread (weight 3)
-- Home unit spread (weight 3)
-- Age tier balance (weight 2)
-Existing flight assignments are NEVER overwritten.
+## Architecture (current)
+```
+/app/
+├── backend/
+│   ├── models.py              # Roles, Permissions, ParticipantTypes
+│   ├── role_groups.py         # 7-concern separation, semantic groups (Phase 3)
+│   ├── scope.py               # Visibility filtering & Redaction rules
+│   ├── classifier.py          # Unified RegZone sub-event classifier
+│   ├── permissions.py         # JWT, get_current_user, require_role, require_health_*
+│   ├── database.py            # Centralized DB logic & participant counts
+│   └── routes/                # auth, users, participants, …
+└── frontend/src/{pages,components}
+```
 
-## Bulk Action Endpoints (Roster)
-- `PUT /api/participants/bulk-type` — change participant_type for multiple IDs (basic_student / advanced_student / cadre / staff / senior_member). Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
-- `POST /api/participants/bulk-delete` — permanently delete with `confirm:true`. Cleans related health/contraband/supplements records and unlinks user accounts. Roles: DCP, COMMANDER, EXECUTIVE_STAFF.
-- `PUT /api/participants/bulk-assignment` — bulk update Flight and/or Squadron. Pass empty/None to clear, omit field to leave unchanged. Roles: DCP, COMMANDER, EXECUTIVE_STAFF, STAFF.
-- These literal-path routes are registered BEFORE `PUT /participants/{participant_id}` to avoid FastAPI route shadowing.
+## Seven Separated Concerns (Phase 3)
+1. **Account status** — `users.is_approved`; surfaced by `GET /api/auth/status`
+2. **CAP member type** — `participants.member_type` (SENIOR / CADET / CADET SPONSOR)
+3. **Encampment participant type** — `participants.participant_type` (`student | cadre | senior_staff | needs_review`)
+4. **Cadre role type** — `participants.is_exec_cadre` + `users.cadre_position`
+5. **Duty assignment** — `users.flight / squadron / cadre_unit / cadre_position / support_section`
+6. **Permission role** — `users.role` (UserRole) grouped via `role_groups.py`
+7. **Access scope** — `scope.py` (visibility filter + field redaction)
 
-## Roster Import — Preview & Conflict Resolution Flow
-- `POST /api/participants/import/preview` (multipart Excel) → returns `staging_id`, summary `{new, update, conflict, skipped}`, stats, and per-row diffs.
-  - Each row reports `match_type` (capid/email/name/none), `default_action` (create/update/conflict), candidate list, and field-level changes (only non-blank deltas).
-  - When the same first+last name matches multiple existing participants and no CAPID/email, the row is flagged as a **conflict** and ALL candidates are surfaced with their distinguishing details (rank, unit, wing, email, type, flight) so the user can pick the right one.
-- `POST /api/participants/import/apply` → accepts `{ staging_id, resolutions: {row_idx_str: {action: 'update'|'create'|'skip', participant_id?: string}} }`. Cleans staging on success; expired staging docs (>2 h) are auto-purged on next preview.
-- Frontend: `ImportPreviewModal` (RosterPage → "Import CAP Report") shows summary cards, filter tabs, expandable rows with `existing match` cards + `field changes` (strike-through old → green new). Conflict rows start unresolved; **Apply Import** button is disabled until each conflict has an explicit pick. CAPID float artifacts (e.g., `538026.0`) are now normalized to integer strings.
-- `POST /api/participants/import` (legacy auto-apply) is preserved for back-compat / scripts.
+## Implementation Log
+- **Phase 1**: Backend classification audit (canonical taxonomy proposal).
+- **Phase 2** (Feb 2026): DB migration — all participants normalized to `student / cadre / senior_staff / needs_review`; added `is_exec_cadre` flag; centralized `get_active_participant_count`; created `scope.py` for visibility/redaction.
+- **Phase 3** (Feb 2026): Separated the seven concerns above; introduced `role_groups.py` as a single source of truth; tightened EXEC_CADRE so it cannot leak into senior-staff capabilities by default; added `cadre_lead_can_target()` guard. 22 unit tests + 9 live RBAC tests passing.
 
-## Tech Stack
-- Frontend: React 19, Tailwind CSS, Shadcn UI, DOMPurify
-- Backend: FastAPI, MongoDB, openpyxl, reportlab
-- Integrations: SendGrid (LIVE), Emergent Object Storage, GPT-4o Vision (receipt OCR via emergentintegrations)
+## Backlog
+- **P0**: Frontend taxonomy sync — replace `basic_student / staff / exec_cadre` literals across ~16 React files with `student / cadre / senior_staff / needs_review`.
+- **P0**: Add `is_exec_cadre` toggle on Cadre participant edit UI.
+- **P1**: `Needs Review` filter chip + admin resolution flow on Roster page.
+- **P1**: Re-publish `MOBILE_BACKEND_INTEGRATION.md` with new ParticipantType vocabulary + the 7-concern model from `role_groups.py`.
+- **P2**: Senior Barracks individual room assignments (TR-106, TR-107, TR-105).
+- **P2**: Schedule Sync (Excel auto-publish), Honor Agreements digital signature flow.
 
-## Completed Work Log
-- **Apr 6-9**: Core features, Excel sync, RBAC, Honor Agreements
-- **Apr 10**: Google Classroom-style Assignments. 100% tests.
-- **Apr 11**: SendGrid live. Lillian Yoder account synced.
-- **Apr 14**: Mobile responsiveness. Org Chart V1/V2/V3 (TOs under CTO, 19 secondary academic reports, 5-color scheme).
-- **May**: Smart Receipt OCR (GPT-4o Vision), Annual Reset, sidebar nav editing, code-quality fixes (XSS DOMPurify, removed hardcoded secrets across 11 files), My Flight chain-of-command.
-- **Feb 6, 2026**: Roster Bulk Actions UI complete (checkbox column, select-all, bulk-type-change menu, bulk-delete, Excel-with-shirt-size export). Fixed FastAPI route ordering bug (bulk-type was shadowed by /{participant_id}). 100% backend + 100% frontend tests (iteration_63).
-- **Feb 6, 2026 (later)**: Added **Bulk Edit Flight / Squadron** dialog (`PUT /api/participants/bulk-assignment`) and extended Change Type menu with **Senior Member** and **Advanced Student**. Backend validates flight/squadron values, supports clear-to-None and partial updates. 5/5 curl tests pass.
-- **Feb 6, 2026 (later)**: Added Roster Import **Preview / Apply** flow with per-row conflict resolution (`/import/preview` + `/import/apply`). New `ImportPreviewModal` shows New/Update/Conflict summary, filter tabs, expandable diff (strike-through old → green new), and forces explicit pick for same-name conflicts before Apply. CAPID float artifact (`538026.0` → `538026`) normalized; diff filter skips empty-string changes. 10/10 backend pytest + full e2e conflict-resolution path pass (iteration_64).
-
-## Remaining Backlog
-- P1: Senior Barracks (TR-106, TR-107, TR-105) individual room assignments
-- P3 (Optional cleanup): Resolve React hydration warnings on roster `<table>` (ve-dynamic `<span>` wrappers around `<th>/<tr>/<td>/<tbody>`)
-- P3 (Optional refactor): Split RosterPage.js (~2400 lines) into RosterTable, RosterFilters, RosterToolbar, RosterBulkActions sub-components
+## Test Credentials
+See `/app/memory/test_credentials.md`.

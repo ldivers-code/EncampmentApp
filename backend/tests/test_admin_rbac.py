@@ -98,21 +98,24 @@ class TestAdminRBAC:
         else:
             print("SKIP: No non-commander user found to test role update")
     
-    # ============ EXEC CADRE (RESTRICTED ADMIN) TESTS ============
+    # ============ EXEC CADRE (CADRE-LEAD — NOT ADMIN) TESTS ============
     
-    def test_exec_cadre_can_get_users(self, exec_cadre_session):
-        """Exec Cadre can access GET /api/users (allowed per routes/users.py line 88)"""
+    def test_exec_cadre_cannot_get_users(self, exec_cadre_session):
+        """Phase 3: Exec Cadre is a CADRE-LEAD, not a senior-staff/admin role.
+        Listing all users (including senior staff) is admin-only."""
         response = exec_cadre_session.get(f"{BASE_URL}/api/users")
-        assert response.status_code == 200, f"Exec Cadre GET users failed: {response.text}"
-        users = response.json()
-        assert isinstance(users, list), "Expected list of users"
-        print(f"PASS: Exec Cadre can get users ({len(users)} users)")
+        assert response.status_code == 403, (
+            f"Exec Cadre must be denied GET /api/users; got {response.status_code} "
+            f"({response.text})"
+        )
+        print("PASS: Exec Cadre correctly denied GET /api/users (Phase 3 policy)")
     
-    def test_exec_cadre_cannot_update_user_role(self, exec_cadre_session):
+    def test_exec_cadre_cannot_update_user_role(self, exec_cadre_session, commander_session):
         """Exec Cadre must NOT be able to update user roles — admin-only.
         Per the cadre/senior-staff permission separation policy, role-changes are
         admin-tier (DCP / Commander / Executive Staff) only."""
-        response = exec_cadre_session.get(f"{BASE_URL}/api/users")
+        # Use commander session to find a target user (exec_cadre cannot list users)
+        response = commander_session.get(f"{BASE_URL}/api/users")
         users = response.json()
 
         # Find a non-admin user to attempt to modify
@@ -141,10 +144,9 @@ class TestAdminRBAC:
         assert response.status_code == 403, f"Expected 403 for Exec Cadre pending users, got {response.status_code}"
         print("PASS: Exec Cadre correctly denied access to pending users")
     
-    def test_exec_cadre_cannot_delete_user(self, exec_cadre_session):
+    def test_exec_cadre_cannot_delete_user(self, exec_cadre_session, commander_session):
         """Exec Cadre CANNOT delete users (restricted to DCP/Commander/Executive Staff)"""
-        # Get a user ID to try to delete
-        response = exec_cadre_session.get(f"{BASE_URL}/api/users")
+        response = commander_session.get(f"{BASE_URL}/api/users")
         users = response.json()
         
         if users:
@@ -155,9 +157,9 @@ class TestAdminRBAC:
         else:
             print("SKIP: No users to test delete restriction")
     
-    def test_exec_cadre_cannot_update_permissions(self, exec_cadre_session):
+    def test_exec_cadre_cannot_update_permissions(self, exec_cadre_session, commander_session):
         """Exec Cadre CANNOT update user permissions (restricted to DCP/Commander/Executive Staff)"""
-        response = exec_cadre_session.get(f"{BASE_URL}/api/users")
+        response = commander_session.get(f"{BASE_URL}/api/users")
         users = response.json()
         
         if users:
@@ -171,9 +173,9 @@ class TestAdminRBAC:
         else:
             print("SKIP: No users to test permissions restriction")
     
-    def test_exec_cadre_cannot_reset_password(self, exec_cadre_session):
+    def test_exec_cadre_cannot_reset_password(self, exec_cadre_session, commander_session):
         """Exec Cadre CANNOT reset user passwords (restricted to DCP/Commander/Executive Staff)"""
-        response = exec_cadre_session.get(f"{BASE_URL}/api/users")
+        response = commander_session.get(f"{BASE_URL}/api/users")
         users = response.json()
         
         if users:

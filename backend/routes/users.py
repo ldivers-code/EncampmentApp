@@ -13,6 +13,9 @@ from models import (
 from permissions import (
     get_default_permissions, get_current_user, require_role, send_approval_email
 )
+from role_groups import (
+    FULL_ADMIN_ROLES, CADRE_LEAD_ROLES, cadre_lead_can_target, is_full_admin
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +88,11 @@ async def auto_sync_org_chart(user_data: dict):
 # ================= USER MANAGEMENT =================
 
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.EXEC_CADRE]))):
+async def get_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+    # Phase 3: listing ALL users (incl. senior-staff & admin accounts) is a
+    # FULL ADMIN capability. Cadre-leads (EXEC_CADRE) MUST NOT receive a
+    # senior-staff cross-cutting view. They can supervise their own cadre via
+    # /flights/* and /reports/* endpoints instead.
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return [UserResponse(**u) for u in users]
 
@@ -588,6 +595,15 @@ async def set_cadre_position(
     existing = await db.users.find_one({"id": user_id})
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Phase 3 cadre-lead scope guard: an EXEC_CADRE caller may set cadre
+    # positions only on cadre / exec-cadre / student targets. Senior-staff or
+    # admin accounts can only be modified by a full admin.
+    if not cadre_lead_can_target(user, existing):
+        raise HTTPException(
+            status_code=403,
+            detail="Cadre Leads may only assign cadre positions to cadre/student accounts."
+        )
 
     now = datetime.now(timezone.utc).isoformat()
     patch = {
