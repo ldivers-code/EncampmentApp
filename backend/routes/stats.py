@@ -2,7 +2,7 @@
 from fastapi import Depends, HTTPException
 from datetime import datetime, timezone
 
-from database import db, api_router
+from database import db, api_router, get_active_participant_count
 from models import UserRole
 from permissions import get_current_user, require_role, get_user_permissions
 
@@ -13,9 +13,10 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     participants = await db.participants.find({"is_removed": {"$ne": True}}, {"_id": 0}).to_list(1000)
     budget_items = await db.budget.find({}, {"_id": 0}).to_list(1000)
     events = await db.schedule.find({}, {"_id": 0}).to_list(1000)
-    
-    # Participant stats
-    total_participants = len(participants)
+
+    # Participant stats — total derives from the canonical helper so the
+    # dashboard tile never disagrees with the roster page.
+    total_participants = await get_active_participant_count()
     by_type = {}
     by_gender = {"M": 0, "F": 0, "Other": 0}
     paid_count = 0
@@ -79,8 +80,7 @@ async def get_dashboard_quickview(user: dict = Depends(get_current_user)):
     # --- Check-in quick-view ---
     checkin_roles = ["dcp", "commander", "executive_staff", "plans_programs", "logistics", "support_logistics"]
     if role in checkin_roles or permissions.get("check_in_view") or permissions.get("page_check_in"):
-        base = {"is_removed": {"$ne": True}}
-        total = await db.participants.count_documents(base)
+        total = await get_active_participant_count()
         check_ins = await db.check_ins.find({}, {"_id": 0, "steps": 1}).to_list(1000)
         fully_checked = sum(1 for ci in check_ins if sum(1 for s in ["arrival", "paperwork", "bunk_assignment", "gear_issue"] if ci.get("steps", {}).get(s, {}).get("completed")) == 4)
         data["check_in"] = {"total": total, "checked_in": fully_checked, "remaining": total - fully_checked}
@@ -131,7 +131,9 @@ async def get_dashboard_quickview(user: dict = Depends(get_current_user)):
         user_squadron = user.get("squadron", "")
         flight_data = {}
         if user_flight:
-            flight_count = await db.participants.count_documents({"flight": {"$regex": f"^{user_flight}$", "$options": "i"}, "is_removed": {"$ne": True}})
+            flight_count = await get_active_participant_count(
+                {"flight": {"$regex": f"^{user_flight}$", "$options": "i"}}
+            )
             flight_data["flight"] = user_flight
             flight_data["flight_count"] = flight_count
         if user_squadron:
@@ -141,7 +143,7 @@ async def get_dashboard_quickview(user: dict = Depends(get_current_user)):
     # --- Dining quick-view ---
     dining_roles = ["dcp", "commander", "executive_staff", "dining_facility", "support_dining"]
     if role in dining_roles or permissions.get("page_meal_plan"):
-        total_pax = await db.participants.count_documents({"is_removed": {"$ne": True}})
+        total_pax = await get_active_participant_count()
         meal_plans = await db.meal_plans.count_documents({})
         data["dining"] = {"total_headcount": total_pax, "meal_plans_set": meal_plans}
 

@@ -17,7 +17,7 @@ try:
 except ImportError:
     pd = None
 
-from database import db, api_router
+from database import db, api_router, get_active_participant_count
 from models import (
     UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
@@ -1695,7 +1695,7 @@ async def import_participants(
 
             await link_to_user_account(pid, capid, email_val)
 
-        total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
+        total_participant_count = await get_active_participant_count()
         await db.food_expense_settings.update_one(
             {"_id": "settings"},
             {"$set": {"total_participants": total_participant_count, "updated_at": now}},
@@ -1913,7 +1913,7 @@ async def import_apply(
     # Cleanup staging
     await db.import_staging.delete_one({"id": data.staging_id})
 
-    total_participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
+    total_participant_count = await get_active_participant_count()
     await db.food_expense_settings.update_one(
         {"_id": "settings"},
         {"$set": {"total_participants": total_participant_count, "updated_at": now}},

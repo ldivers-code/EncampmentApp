@@ -2,7 +2,7 @@
 from fastapi import Depends, HTTPException
 from datetime import datetime, timezone
 
-from database import db, api_router
+from database import db, api_router, get_active_participant_count
 from models import UserRole, CheckInStepRequest
 from permissions import get_current_user, get_user_permissions
 
@@ -108,12 +108,11 @@ async def get_check_in_roster(
 
 @api_router.get("/check-in/summary")
 async def get_check_in_summary(user: dict = Depends(require_check_in_access())):
-    """Get check-in summary stats"""
-    base_filter = {"is_removed": {"$ne": True}}
-    total_participants = await db.participants.count_documents(base_filter)
-    total_students = await db.participants.count_documents({**base_filter, "participant_type": {"$in": ["basic_student", "student"]}})
-    total_staff = await db.participants.count_documents({**base_filter, "participant_type": "staff"})
-    total_cadre = await db.participants.count_documents({**base_filter, "participant_type": {"$in": ["cadre", "exec_cadre"]}})
+    """Get check-in summary stats. Uses canonical get_active_participant_count."""
+    total_participants = await get_active_participant_count()
+    total_students = await get_active_participant_count({"participant_type": {"$in": ["basic_student", "student"]}})
+    total_staff = await get_active_participant_count({"participant_type": "staff"})
+    total_cadre = await get_active_participant_count({"participant_type": {"$in": ["cadre", "exec_cadre"]}})
     
     check_ins = await db.check_ins.find({}, {"_id": 0}).to_list(1000)
     

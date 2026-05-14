@@ -37,3 +37,32 @@ app = FastAPI(title="CAP Encampment Roster API")
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer(auto_error=False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Active participant counter — single source of truth
+# ─────────────────────────────────────────────────────────────────────────────
+async def get_active_participant_count(extra_filter: dict | None = None) -> int:
+    """Return the count of participants where `is_removed` is not True.
+
+    This is the canonical helper. Use it for every dashboard, roster, analytics,
+    check-in, barracks, My Flight, budget/food planning, and report tile that
+    needs "how many people are at encampment right now".
+
+    Pass `extra_filter` to scope to a subset (e.g. by participant_type, flight,
+    squadron). The is_removed exclusion is always applied — callers do NOT
+    have to repeat it.
+
+    Do NOT hard-code participant totals (e.g. 170) and do NOT rely on the
+    stored value in `food_expense_settings.total_participants` as a count —
+    that field is only a *planning estimate* used by Finance when locking a
+    food budget; it is no longer used as a live count.
+    """
+    query: dict = {"is_removed": {"$ne": True}}
+    if extra_filter:
+        for k, v in extra_filter.items():
+            if k == "is_removed":
+                continue  # ignore — the canonical exclusion always wins
+            query[k] = v
+    return await db.participants.count_documents(query)
+

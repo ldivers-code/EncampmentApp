@@ -11,7 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from database import db, api_router
+from database import db, api_router, get_active_participant_count
 from models import (
     UserRole, BudgetItemCreate, BudgetItemResponse,
     FoodExpenseSettings, FoodExpenseSettingsUpdate
@@ -83,34 +83,45 @@ async def get_budget_summary(user: dict = Depends(require_finance_access())):
 
 @api_router.get("/budget/food-settings")
 async def get_food_expense_settings(user: dict = Depends(require_finance_access())):
-    """Get food expense settings for cost-per-person-per-day calculation"""
+    """Get food expense settings for cost-per-person-per-day calculation.
+
+    The live count (`active_participant_count`) is always recomputed from the
+    canonical helper. The stored `total_participants` field is a planning
+    estimate that Finance can lock at budget-approval time; it is exposed as
+    `planning_total_participants` so the UI can show both numbers."""
     settings = await db.food_expense_settings.find_one({"_id": "settings"})
-    
-    # Get participant count from roster
-    participant_count = await db.participants.count_documents({"is_removed": {"$ne": True}})
-    
-    # Default cost from 2026 TNWG Encampment Budget: $13.15 per person per day
-    default_cost = 13.15
-    
+
+    # Live count — single source of truth
+    active_count = await get_active_participant_count()
+
+    default_cost = 13.15  # 2026 TNWG: $13.15/person/day
+
     if not settings:
         return {
             "cost_per_person_per_day": default_cost,
-            "total_participants": participant_count,
+            "total_participants": active_count,
+            "active_participant_count": active_count,
+            "planning_total_participants": None,
             "total_days": 8,
             "notes": "Default: $13.15/day from TNWG Budget (July 17-24)",
-            "total_food_budget": default_cost * participant_count * 8
+            "total_food_budget": default_cost * active_count * 8,
         }
-    
+
     cost = settings.get("cost_per_person_per_day", default_cost)
-    participants = settings.get("total_participants") or participant_count
+    planning_estimate = settings.get("total_participants")  # may be a locked planning number
     days = settings.get("total_days", 8)
-    
+    # Use the live count for the bottom-line budget unless the user has locked
+    # a planning estimate explicitly (planning_estimate is a deliberate snapshot).
+    participants = planning_estimate or active_count
+
     return {
         "cost_per_person_per_day": cost,
         "total_participants": participants,
+        "active_participant_count": active_count,
+        "planning_total_participants": planning_estimate,
         "total_days": days,
         "notes": settings.get("notes", ""),
-        "total_food_budget": cost * participants * days
+        "total_food_budget": cost * participants * days,
     }
 
 
@@ -131,18 +142,21 @@ async def update_food_expense_settings(
     
     # Fetch and return updated settings
     settings = await db.food_expense_settings.find_one({"_id": "settings"})
-    participant_count = await db.participants.count_documents({})
-    
+    active_count = await get_active_participant_count()
+
     cost = settings.get("cost_per_person_per_day", 15.0)
-    participants = settings.get("total_participants") or participant_count
+    planning_estimate = settings.get("total_participants")
     days = settings.get("total_days", 8)
-    
+    participants = planning_estimate or active_count
+
     return {
         "cost_per_person_per_day": cost,
         "total_participants": participants,
+        "active_participant_count": active_count,
+        "planning_total_participants": planning_estimate,
         "total_days": days,
         "notes": settings.get("notes", ""),
-        "total_food_budget": cost * participants * days
+        "total_food_budget": cost * participants * days,
     }
 
 
@@ -295,11 +309,17 @@ async def seed_tnwg_budget_template(
         inserted_count += 1
     
     # Also update food settings with TNWG defaults
+    # Pull live active count instead of hard-coding planning totals.
+    seed_count = await get_active_participant_count()
     await db.food_expense_settings.update_one(
         {"_id": "settings"},
         {"$set": {
             "cost_per_person_per_day": 13.15,
-            "total_participants": 170,  # 42 SM + 38 Cadre + 90 Students
+            # Planning estimate seeded from the LIVE active count at the moment
+            # of seeding. Finance can later lock or override this number via
+            # PUT /budget/food-settings; the live count remains exposed
+            # separately as `active_participant_count`.
+            "total_participants": seed_count,
             "total_days": 8,
             "notes": "2026 TNWG Encampment: $13.15/day (Breakfast + Lunch + Dinner)",
             "updated_at": now
