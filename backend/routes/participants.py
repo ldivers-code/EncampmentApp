@@ -183,13 +183,13 @@ async def get_participant_stats(user: dict = Depends(get_current_user)):
         elif member_type == 'CADET':
             stats['cadets'] += 1
         
-        # Role counts
+        # Role counts (Phase 5: include legacy aliases so historical rows are counted)
         ptype = p.get('participant_type', '')
-        if ptype == 'staff':
+        if ptype in ('senior_staff', 'staff', 'senior_member'):
             stats['staff'] += 1
-        elif ptype == 'cadre':
+        elif ptype in ('cadre', 'exec_cadre'):
             stats['cadre'] += 1
-        elif ptype in ['basic_student', 'advanced_student']:
+        elif ptype in ('student', 'basic_student', 'advanced_student'):
             stats['students'] += 1
         
         # Payment
@@ -477,36 +477,50 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
 
 @api_router.get("/participants/pending-payments")
 async def get_pending_payments(user: dict = Depends(get_current_user)):
-    """Get list of participants with pending payments for follow-up"""
-    participants = await db.participants.find(
-        {"is_removed": {"$ne": True}, "$or": [{"paid": False}, {"paid": None}, {"paid_in_full": False}, {"paid_in_full": None}]},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    # Filter to only truly unpaid
+    """Get list of participants with pending payments for follow-up.
+
+    Phase 5: payment + parent-contact data is gated on finance permission.
+    Non-finance callers receive an empty list (they have no business seeing
+    who owes money). Finance / Admin callers see the full follow-up list
+    scoped by their roster visibility."""
+    if not can_view_finance(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Pending payments are visible to finance / admin roles only.",
+        )
+
+    query = {"is_removed": {"$ne": True}, "$or": [
+        {"paid": False}, {"paid": None},
+        {"paid_in_full": False}, {"paid_in_full": None},
+    ]}
+    apply_participant_visibility(query, user)
+
+    participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
+
     unpaid = []
     for p in participants:
-        if not p.get('paid') and not p.get('paid_in_full'):
-            unpaid.append({
-                'capid': p.get('capid'),
-                'name': f"{p.get('last_name', '')}, {p.get('first_name', '')}",
-                'rank': p.get('rank'),
-                'unit': p.get('unit'),
-                'wing': p.get('wing'),
-                'participant_type': p.get('participant_type'),
-                'member_type': p.get('member_type'),
-                'email': p.get('email'),
-                'phone': p.get('phone') or p.get('cell_phone'),
-                'parent_email': p.get('cadet_parent_email'),
-                'parent_phone': p.get('cadet_parent_phone'),
-                'unit_cc_email': p.get('unit_cc_email'),
-                'amount_paid': p.get('amount_paid', 0),
-                'registration_status': p.get('registration_status')
-            })
-    
+        if p.get('paid') or p.get('paid_in_full'):
+            continue
+        unpaid.append({
+            'capid': p.get('capid'),
+            'name': f"{p.get('last_name', '')}, {p.get('first_name', '')}",
+            'rank': p.get('rank'),
+            'unit': p.get('unit'),
+            'wing': p.get('wing'),
+            'participant_type': p.get('participant_type'),
+            'member_type': p.get('member_type'),
+            'email': p.get('email'),
+            'phone': p.get('phone') or p.get('cell_phone'),
+            'parent_email': p.get('cadet_parent_email'),
+            'parent_phone': p.get('cadet_parent_phone'),
+            'unit_cc_email': p.get('unit_cc_email'),
+            'amount_paid': p.get('amount_paid', 0),
+            'registration_status': p.get('registration_status'),
+        })
+
     return {
         'count': len(unpaid),
-        'participants': unpaid
+        'participants': unpaid,
     }
 
 
@@ -653,14 +667,15 @@ async def export_analytics_summary(
             unit_counts = df_full.groupby('unit').size().reset_index(name='Count')
             unit_counts.to_excel(writer, sheet_name='By Unit', index=False)
         
-        # Sheet 5: Pending Payments
-        unpaid = [p for p in participants if not p.get('paid') and not p.get('paid_in_full')]
-        if unpaid:
-            df_unpaid = pd.DataFrame(unpaid)
-            unpaid_columns = ['capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 
-                            'email', 'phone', 'cadet_parent_email', 'cadet_parent_phone']
-            available_unpaid = [col for col in unpaid_columns if col in df_unpaid.columns]
-            df_unpaid[available_unpaid].to_excel(writer, sheet_name='Pending Payments', index=False)
+        # Sheet 5: Pending Payments — Phase 5: only emit for finance/admin callers
+        if can_view_finance(user):
+            unpaid = [p for p in participants if not p.get('paid') and not p.get('paid_in_full')]
+            if unpaid:
+                df_unpaid = pd.DataFrame(unpaid)
+                unpaid_columns = ['capid', 'rank', 'last_name', 'first_name', 'unit', 'wing', 
+                                'email', 'phone', 'cadet_parent_email', 'cadet_parent_phone']
+                available_unpaid = [col for col in unpaid_columns if col in df_unpaid.columns]
+                df_unpaid[available_unpaid].to_excel(writer, sheet_name='Pending Payments', index=False)
     
     output.seek(0)
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')

@@ -102,6 +102,12 @@ def can_view_finance(user: dict) -> bool:
     return user.get("role") in FINANCE_ROLES
 
 
+# Phase 5: semantic alias — used at call sites that talk about "payment"
+# specifically (vs the more general "finance / budget" concept).
+def can_view_payment(user: dict) -> bool:
+    return can_view_finance(user)
+
+
 def can_view_health(user: dict) -> bool:
     """Allowed to read medical roster / allergies / diary etc."""
     if user.get("role") in HEALTH_ROLES:
@@ -116,6 +122,15 @@ def can_view_full_health(user: dict) -> bool:
         return True
     perms = user.get("permissions") or {}
     return bool(perms.get("health_full"))
+
+
+# Phase 5: semantic alias — used at call sites that talk about "medical" specifically.
+def can_view_medical(user: dict) -> bool:
+    return can_view_health(user)
+
+
+def can_view_full_medical(user: dict) -> bool:
+    return can_view_full_health(user)
 
 
 def can_view_contact_pii(user: dict) -> bool:
@@ -160,6 +175,65 @@ def apply_participant_visibility(query: dict, user: dict) -> None:
 
     if role in (UserRole.CADRE, UserRole.EXEC_CADRE) and user_flight:
         query["flight"] = user_flight
+
+
+# Phase 5 helper: are the requested flight(s) visible to this user?
+# Returns the (possibly narrowed) list of flights the caller is allowed to
+# see, or raises 403 when the request is completely out of scope.
+def visible_flights_for(user: dict, requested_flights: Iterable[str]) -> list[str]:
+    """Restrict a requested flight set to the caller's visibility scope.
+
+    * Full admin / senior staff: returns the requested list unchanged.
+    * Squadron Commander / Training Officer: intersect with their squadron's flights.
+    * Cadre / Exec Cadre: intersect with their assigned flight.
+    * Parent: 403 (matches apply_participant_visibility).
+
+    Raises 403 if the intersection is empty — i.e. the caller asked for a
+    flight they have no business seeing.
+    """
+    role = user.get("role")
+    if role == UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Parents do not have roster access")
+
+    requested = [f.lower() for f in requested_flights if f]
+    if not requested:
+        return []
+
+    user_flight = (user.get("flight") or "").lower()
+    user_squadron = (user.get("squadron") or "").lower()
+
+    # Phase 5: Squadron Commander / Training Officer are PRIVILEGED viewers
+    # (full PII within their squadron) BUT still flight-scoped at the row
+    # level. Check their squadron scope BEFORE the broad full-participant
+    # short-circuit so they can't reach cross-squadron flights.
+    if role in (UserRole.SQUADRON_COMMANDER, UserRole.TRAINING_OFFICER):
+        sq = user_squadron or FLIGHT_TO_SQUADRON_MAP.get(user_flight, "")
+        allowed = set(SQUADRON_FLIGHTS_MAP.get(sq, []))
+        narrowed = [f for f in requested if f in allowed]
+        if not narrowed:
+            raise HTTPException(
+                status_code=403,
+                detail="You are not authorized to view this flight's roster.",
+            )
+        return narrowed
+
+    # Full admin / senior staff (non-squadron-scoped): see the requested list.
+    if can_view_full_participant(user):
+        return requested
+
+    if role in (UserRole.CADRE, UserRole.EXEC_CADRE) and user_flight:
+        allowed = {user_flight}
+    else:
+        # Student / unscoped cadre / anything else without scope: no flight-roster access.
+        allowed = set()
+
+    narrowed = [f for f in requested if f in allowed]
+    if not narrowed:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to view this flight's roster.",
+        )
+    return narrowed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -277,3 +351,71 @@ def export_columns_for(user: dict, requested: Optional[Iterable[str]] = None) ->
     if requested is None:
         return list(SAFE_EXPORT_COLUMNS)
     return [c for c in requested if c in safe]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5: shared roster-entry shaper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def safe_roster_entry(p: dict, user: dict) -> dict:
+    """Build the canonical 'roster row' dict — used by /flights/*/roster,
+    /squadrons/*/roster, and by-flight callers — with sensitive fields
+    automatically nulled-out for non-privileged viewers.
+
+    Always includes identity fields (rank/name/capid/flight/squadron/ptype).
+    Contact PII (email/phone/parent_*), payment, notes and pii fields are
+    populated only when the caller is allowed to see them, otherwise empty
+    strings / None.
+
+    Returns a flat dict; the caller is responsible for sorting / grouping.
+    """
+    show_contact = can_view_contact_pii(user)
+    show_payment = can_view_finance(user)
+    show_notes = can_view_notes(user)
+
+    def _maybe(field, allowed, default=""):
+        return p.get(field, default) if allowed else default
+
+    return {
+        "id": p.get("id"),
+        "first_name": p.get("first_name", ""),
+        "last_name": p.get("last_name", ""),
+        "rank": p.get("rank", ""),
+        "capid": p.get("capid", ""),
+        "name": f"{p.get('rank', '')} {p.get('last_name', '')}, {p.get('first_name', '')}".strip(", "),
+        "flight": (p.get("flight") or "").lower(),
+        "squadron": p.get("squadron", ""),
+        "participant_type": p.get("participant_type", ""),
+        "is_exec_cadre": bool(p.get("is_exec_cadre")),
+        "member_type": p.get("member_type", ""),
+        "position": p.get("position", ""),
+        "gender": p.get("gender", ""),
+        "age": p.get("age"),
+        "wing": p.get("wing", ""),
+        "unit": p.get("unit", ""),
+        "photo_path": p.get("photo_path", ""),
+        # Contact (PII) — gated.
+        "email":         _maybe("email", show_contact),
+        "phone":         _maybe("phone", show_contact) or _maybe("cell_phone", show_contact),
+        "parent_email":  _maybe("cadet_parent_email", show_contact),
+        "parent_phone":  _maybe("cadet_parent_phone", show_contact),
+        "parent_name":   _maybe("cadet_parent_name", show_contact),
+        # Payment — gated.
+        "paid":          bool(p.get("paid")) if show_payment else False,
+        "amount_paid":   p.get("amount_paid") if show_payment else None,
+        # Notes — gated.
+        "notes":         _maybe("notes", show_notes, None),
+    }
+
+
+def redact_payment_only(p: dict, user: dict) -> dict:
+    """Strip payment fields only, leaving contact/PII/notes intact. Used by
+    senior-staff (non-finance) callers who legitimately see full PII but
+    must not see money."""
+    if can_view_finance(user):
+        return dict(p)
+    redacted = dict(p)
+    for f in PAYMENT_FIELDS:
+        if f in redacted:
+            redacted[f] = _redact_payment_value(f, redacted[f])
+    return redacted

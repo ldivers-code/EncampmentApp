@@ -7,6 +7,9 @@ import uuid
 from database import db, api_router
 from models import UserRole
 from permissions import get_current_user, require_role
+from scope import (
+    apply_participant_visibility, visible_flights_for, safe_roster_entry,
+)
 
 # ================= FLIGHT ROSTER ROUTES =================
 
@@ -38,31 +41,36 @@ async def get_flight_roster(
     flight: str,
     user: dict = Depends(get_current_user)
 ):
-    """Get roster for a specific flight"""
+    """Get roster for a specific flight. Phase 5: visibility-scoped + redacted.
+    Cadre/squadron-level callers asking for a flight outside their scope get a 403.
+    """
     flight_lower = flight.lower()
-    
+
+    # Phase 5: enforce visibility scope — 403 if caller has no business seeing this flight
+    visible_flights_for(user, [flight_lower])
+
     # Get participants in this flight (case-insensitive)
-    participants = await db.participants.find(
-        {"flight": {"$regex": f"^{flight_lower}$", "$options": "i"}, "is_removed": {"$ne": True}},
-        {"_id": 0}
-    ).to_list(500)
-    
-    # Format roster entries
+    query = {
+        "flight": {"$regex": f"^{flight_lower}$", "$options": "i"},
+        "is_removed": {"$ne": True},
+    }
+    # apply_participant_visibility further narrows (e.g. parent → 403),
+    # but since we already gated above, this is mostly belt-and-braces.
+    apply_participant_visibility(query, user)
+    participants = await db.participants.find(query, {"_id": 0}).to_list(500)
+
+    # Phase 5: use safe_roster_entry so contact PII / payment / notes are
+    # automatically gated by the caller's permissions.
     roster = []
     for p in participants:
-        roster.append({
-            "id": p.get("id"),
-            "name": f"{p.get('rank', '')} {p.get('first_name', '')} {p.get('last_name', '')}".strip(),
-            "rank": p.get("rank"),
-            "first_name": p.get("first_name"),
-            "last_name": p.get("last_name"),
-            "position": None if p.get("participant_type") in ("basic_student", "student", "advanced_student") else p.get("position", ""),
-            "participant_type": p.get("participant_type"),
-            "capid": p.get("capid"),
-            "unit": p.get("unit"),
-            "is_student": p.get("participant_type") in ("basic_student", "student", "advanced_student")
-        })
-    
+        entry = safe_roster_entry(p, user)
+        is_student = entry["participant_type"] in ("basic_student", "student", "advanced_student")
+        entry["is_student"] = is_student
+        # Students don't carry a position string.
+        if is_student:
+            entry["position"] = None
+        roster.append(entry)
+
     # Sort by participant type (cadre first), then by rank
     rank_order = ["Col", "Lt Col", "Maj", "Capt", "1st Lt", "2nd Lt", "CMSgt", "SMSgt", "MSgt", "TSgt", "SSgt", "SrA", "A1C", "Amn", "AB",
                   "C/Col", "C/Lt Col", "C/Maj", "C/Capt", "C/1st Lt", "C/2nd Lt", "C/CMSgt", "C/SMSgt", "C/MSgt", "C/TSgt", "C/SSgt", "C/SrA", "C/A1C", "C/Amn", "C/AB"]
@@ -88,7 +96,8 @@ async def get_squadron_roster(
     squadron: str,
     user: dict = Depends(get_current_user)
 ):
-    """Get roster for a specific squadron (all flights in squadron)"""
+    """Get roster for a specific squadron (all flights in squadron).
+    Phase 5: visibility-scoped + redacted via safe_roster_entry."""
     squadron_flights = {
         "6th_cts": ["alpha", "bravo"],
         "21st_cts": ["charlie", "delta"],
@@ -98,34 +107,31 @@ async def get_squadron_roster(
     flights = squadron_flights.get(squadron.lower(), [])
     if not flights:
         raise HTTPException(status_code=404, detail="Squadron not found")
-    
-    # Build regex pattern for flights
+
+    # Phase 5: narrow requested flights to caller's visibility scope (403 if none allowed)
+    flights = visible_flights_for(user, flights)
+
+    # Build regex pattern for the flights the caller is allowed to see
     flight_pattern = "|".join([f"^{f}$" for f in flights])
-    
+
     participants = await db.participants.find(
         {"flight": {"$regex": flight_pattern, "$options": "i"}, "is_removed": {"$ne": True}},
         {"_id": 0}
     ).to_list(500)
-    
+
     # Group by flight
-    roster_by_flight = {}
-    for f in flights:
-        roster_by_flight[f] = []
-    
+    roster_by_flight = {f: [] for f in flights}
+
     for p in participants:
-        flight = p.get("flight", "").lower()
+        flight = (p.get("flight") or "").lower()
         if flight in roster_by_flight:
-            roster_by_flight[flight].append({
-                "id": p.get("id"),
-                "name": f"{p.get('rank', '')} {p.get('first_name', '')} {p.get('last_name', '')}".strip(),
-                "rank": p.get("rank"),
-                "first_name": p.get("first_name"),
-                "last_name": p.get("last_name"),
-                "position": None if p.get("participant_type") in ("basic_student", "student", "advanced_student") else p.get("position", ""),
-                "participant_type": p.get("participant_type"),
-                "is_student": p.get("participant_type") in ("basic_student", "student", "advanced_student")
-            })
-    
+            entry = safe_roster_entry(p, user)
+            is_student = entry["participant_type"] in ("basic_student", "student", "advanced_student")
+            entry["is_student"] = is_student
+            if is_student:
+                entry["position"] = None
+            roster_by_flight[flight].append(entry)
+
     return {
         "squadron": squadron,
         "flights": roster_by_flight,
