@@ -262,17 +262,14 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                     else:
                         continue
             
-            # Determine participant type
+            # ── Canonical classification ──────────────────────────────
+            # The Registration Zone SubEvents column is the single source of
+            # truth. The generic `staff_member` boolean is NOT consulted.
+            # Cadets in mismatched sub-events become `needs_review`.
+            from classifier import classify_from_subevent
             member_type = get_str('member_type', '').upper()
-            is_staff = get_bool('staff_member')
-            sub_events = get_str('sub_events', '').lower()
-            
-            if member_type == 'SENIOR':
-                participant_type = 'staff'
-            elif 'cadre' in sub_events:
-                participant_type = 'cadre'
-            else:
-                participant_type = 'basic_student'
+            sub_events = get_str('sub_events', '')
+            participant_type = classify_from_subevent(member_type, sub_events)
             
             participant_data = {
                 'capid': capid,
@@ -297,7 +294,7 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                 'amount_paid': get_float('amount_paid'),
                 'paid': get_bool('paid_in_full') or get_float('amount_paid') > 0,
                 'registration_status': get_str('registration_status'),
-                'staff_member': is_staff,
+                'staff_member': get_bool('staff_member'),
                 'unit_approved': get_bool('unit_approved'),
                 'wing_approved': get_bool('wing_approved'),
                 'address': get_str('address'),
@@ -744,7 +741,10 @@ async def sync_orgchart_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                                     'flight': flight_name,
                                     'squadron': config['squadron'],
                                     'squadron_full': config['squadron_full'],
-                                    'participant_type': 'basic_student',
+                                    # Do NOT rewrite participant_type here —
+                                    # classification is owned by the import
+                                    # classifier and the canonical migration.
+                                    # This branch only assigns flight/squadron.
                                     'updated_at': now
                                 }}
                             )

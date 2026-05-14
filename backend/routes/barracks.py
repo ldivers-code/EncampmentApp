@@ -99,7 +99,7 @@ async def get_unassigned_participants(user: dict = Depends(get_current_user)):
     assigned_ids = await db.bunk_assignments.distinct("participant_id")
     
     participants = await db.participants.find(
-        {"id": {"$nin": assigned_ids}, "is_removed": {"$ne": True}, "participant_type": {"$in": ["basic_student", "student", "cadre", "exec_cadre"]}},
+        {"id": {"$nin": assigned_ids}, "is_removed": {"$ne": True}, "participant_type": {"$in": ["basic_student", "student", "advanced_student", "cadre", "exec_cadre"]}},
         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "capid": 1,
          "flight": 1, "squadron": 1, "participant_type": 1, "gender": 1}
     ).to_list(500)
@@ -112,7 +112,7 @@ async def get_unassigned_participants(user: dict = Depends(get_current_user)):
             "capid": p.get("capid", ""),
             "flight": p.get("flight", ""),
             "squadron": p.get("squadron", ""),
-            "category": "student" if p.get("participant_type") in ["basic_student", "student"] else "cadre",
+            "category": "student" if p.get("participant_type") in ["basic_student", "student", "advanced_student"] else "cadre",
             "gender": p.get("gender", "")
         })
     

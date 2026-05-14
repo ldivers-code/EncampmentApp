@@ -56,11 +56,11 @@ async def get_flight_roster(
             "rank": p.get("rank"),
             "first_name": p.get("first_name"),
             "last_name": p.get("last_name"),
-            "position": None if p.get("participant_type") == "basic_student" else p.get("position", ""),
+            "position": None if p.get("participant_type") in ("basic_student", "student", "advanced_student") else p.get("position", ""),
             "participant_type": p.get("participant_type"),
             "capid": p.get("capid"),
             "unit": p.get("unit"),
-            "is_student": p.get("participant_type") == "basic_student"
+            "is_student": p.get("participant_type") in ("basic_student", "student", "advanced_student")
         })
     
     # Sort by participant type (cadre first), then by rank
@@ -121,9 +121,9 @@ async def get_squadron_roster(
                 "rank": p.get("rank"),
                 "first_name": p.get("first_name"),
                 "last_name": p.get("last_name"),
-                "position": None if p.get("participant_type") == "basic_student" else p.get("position", ""),
+                "position": None if p.get("participant_type") in ("basic_student", "student", "advanced_student") else p.get("position", ""),
                 "participant_type": p.get("participant_type"),
-                "is_student": p.get("participant_type") == "basic_student"
+                "is_student": p.get("participant_type") in ("basic_student", "student", "advanced_student")
             })
     
     return {
@@ -163,7 +163,7 @@ async def _resolve_leadership(flight_lower: str) -> dict:
     cadre_in_flight = await db.participants.find(
         {
             "flight": flight_lower,
-            "participant_type": {"$in": ["cadre", "staff", "senior_member"]},
+            "participant_type": {"$in": ["cadre", "exec_cadre", "staff", "senior_staff", "senior_member"]},
             "position": {"$exists": True, "$nin": [None, ""]},
             "is_removed": {"$ne": True},
         },
@@ -188,7 +188,7 @@ async def _resolve_leadership(flight_lower: str) -> dict:
         sq_cmdr = await db.participants.find_one(
             {
                 "position": {"$regex": "^squadron commander$", "$options": "i"},
-                "participant_type": {"$in": ["cadre", "staff", "senior_member"]},
+                "participant_type": {"$in": ["cadre", "exec_cadre", "staff", "senior_staff", "senior_member"]},
                 "$or": [
                     {"squadron": squadron},
                     {"flight": {"$in": sq_flights}},

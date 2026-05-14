@@ -33,6 +33,27 @@ class UserUnit:
     OPS_CADRE = "ops_cadre"
 
 
+class ParticipantType:
+    """Canonical participant classification (encampment-level).
+
+    The single source of truth is the Registration Zone SubEvents column.
+    Cadets are NEVER classified as Senior Staff — that is reserved for
+    senior members. Exec Cadre is a SUBSET of Cadre (use the
+    `is_exec_cadre` flag on the participant row) — NOT a separate type.
+    """
+    SENIOR_STAFF = "senior_staff"   # senior member + Senior Staff sub-event
+    CADRE = "cadre"                  # cadet + Cadre sub-event
+    STUDENT = "student"              # cadet + Student sub-event
+    NEEDS_REVIEW = "needs_review"    # sub-event missing / ambiguous / mismatched
+
+
+# Alias sets to absorb legacy values during the transition. These are READ-side
+# only — new rows must use the canonical values above.
+LEGACY_SENIOR_STAFF_ALIASES = {"senior_staff", "staff", "senior_member"}
+LEGACY_CADRE_ALIASES = {"cadre", "exec_cadre"}
+LEGACY_STUDENT_ALIASES = {"student", "basic_student", "advanced_student"}
+
+
 class AccessPermissions(BaseModel):
     dashboard: bool = True
     roster_view: bool = True
@@ -368,7 +389,8 @@ class ParticipantBase(BaseModel):
     cell_phone: Optional[str] = None
     shirt_size: Optional[str] = None
     member_type: Optional[str] = None
-    participant_type: str = "basic_student"
+    participant_type: str = ParticipantType.NEEDS_REVIEW
+    is_exec_cadre: bool = False  # subset signal for cadre — Exec Cadre is NOT a separate participant_type
     student_type: Optional[str] = None
     squadron: Optional[str] = None
     flight: Optional[str] = None

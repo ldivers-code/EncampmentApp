@@ -50,7 +50,7 @@ async def get_check_in_roster(
     query = {"is_removed": {"$ne": True}}
     if category and category != "all":
         if category == "student":
-            query["participant_type"] = {"$in": ["basic_student", "student"]}
+            query["participant_type"] = {"$in": ["basic_student", "student", "advanced_student"]}
         elif category == "staff":
             query["participant_type"] = "staff"
         elif category == "cadre":
@@ -81,7 +81,7 @@ async def get_check_in_roster(
             "capid": p.get("capid", ""),
             "flight": p.get("flight", ""),
             "squadron": p.get("squadron", ""),
-            "category": "student" if p.get("participant_type") in ["basic_student", "student"] else p.get("participant_type", ""),
+            "category": "student" if p.get("participant_type") in ["basic_student", "student", "advanced_student"] else p.get("participant_type", ""),
             "gender": p.get("gender", ""),
             "wing": p.get("wing", ""),
             "unit": p.get("unit", ""),
@@ -110,8 +110,8 @@ async def get_check_in_roster(
 async def get_check_in_summary(user: dict = Depends(require_check_in_access())):
     """Get check-in summary stats. Uses canonical get_active_participant_count."""
     total_participants = await get_active_participant_count()
-    total_students = await get_active_participant_count({"participant_type": {"$in": ["basic_student", "student"]}})
-    total_staff = await get_active_participant_count({"participant_type": "staff"})
+    total_students = await get_active_participant_count({"participant_type": {"$in": ["basic_student", "student", "advanced_student"]}})
+    total_staff = await get_active_participant_count({"participant_type": {"$in": ["staff", "senior_staff", "senior_member"]}})
     total_cadre = await get_active_participant_count({"participant_type": {"$in": ["cadre", "exec_cadre"]}})
     
     check_ins = await db.check_ins.find({}, {"_id": 0}).to_list(1000)

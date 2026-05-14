@@ -19,7 +19,7 @@ except ImportError:
 
 from database import db, api_router, get_active_participant_count
 from models import (
-    UserRole, ParticipantCreate, ParticipantResponse, ParticipantRemoval
+    UserRole, ParticipantType, ParticipantCreate, ParticipantResponse, ParticipantRemoval
 )
 from permissions import get_current_user, require_role
 from scope import (
@@ -728,14 +728,14 @@ async def export_roster_pdf(
 
     # ─── Summary Stats ───
     total = len(participants)
-    students = [p for p in participants if p.get('participant_type') in ['basic_student', 'student']]
+    students = [p for p in participants if p.get('participant_type') in ['basic_student', 'student', 'advanced_student']]
     cadre = [p for p in participants if p.get('participant_type') in ['cadre', 'exec_cadre']]
-    staff = [p for p in participants if p.get('participant_type') == 'staff']
+    staff = [p for p in participants if p.get('participant_type') in ['staff', 'senior_staff', 'senior_member']]
     paid = sum(1 for p in participants if p.get('paid') or p.get('paid_in_full'))
     males = sum(1 for p in participants if (p.get('gender') or '').upper() in ['M', 'MALE'])
     females = sum(1 for p in participants if (p.get('gender') or '').upper() in ['F', 'FEMALE'])
 
-    flights = Counter(p.get('flight', 'Unassigned') or 'Unassigned' for p in participants if p.get('participant_type') in ['basic_student', 'student', 'cadre', 'exec_cadre'])
+    flights = Counter(p.get('flight', 'Unassigned') or 'Unassigned' for p in participants if p.get('participant_type') in ['basic_student', 'student', 'advanced_student', 'cadre', 'exec_cadre'])
     wings = Counter(p.get('wing', 'Unknown') or 'Unknown' for p in participants)
     units = Counter(p.get('unit', 'Unknown') or 'Unknown' for p in participants)
 
@@ -864,13 +864,13 @@ async def export_roster_pdf(
             build_table(members, f"Flight: {flight_name} ({len(members)} members)")
 
     elif format == "by_type":
-        for ptype, label in [('staff', 'Staff (Senior Members)'), ('cadre', 'Cadre'), ('basic_student', 'Basic Students')]:
+        for ptype, label in [('staff', 'Senior Staff'), ('cadre', 'Cadre'), ('basic_student', 'Students')]:
             if ptype == 'cadre':
                 group = [p for p in sorted_participants if p.get('participant_type') in ['cadre', 'exec_cadre']]
             elif ptype == 'basic_student':
-                group = [p for p in sorted_participants if p.get('participant_type') in ['basic_student', 'student']]
-            else:
-                group = [p for p in sorted_participants if p.get('participant_type') == ptype]
+                group = [p for p in sorted_participants if p.get('participant_type') in ['basic_student', 'student', 'advanced_student']]
+            else:  # senior staff bucket
+                group = [p for p in sorted_participants if p.get('participant_type') in ['staff', 'senior_staff', 'senior_member']]
             if group:
                 build_table(group, f"{label} ({len(group)})")
 
@@ -1031,7 +1031,13 @@ async def bulk_change_type(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF]))
 ):
     """Bulk change participant_type for multiple participants"""
-    valid_types = {"basic_student", "cadre", "staff", "senior_member"}
+    # Accept canonical names AND legacy aliases during the transition.
+    valid_types = {
+        ParticipantType.SENIOR_STAFF, ParticipantType.CADRE,
+        ParticipantType.STUDENT, ParticipantType.NEEDS_REVIEW,
+        # legacy
+        "basic_student", "advanced_student", "staff", "senior_member", "exec_cadre",
+    }
     if data.new_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"new_type must be one of: {sorted(valid_types)}")
     if not data.participant_ids:
@@ -1559,12 +1565,18 @@ def _parse_import_dataframe(df: pd.DataFrame) -> tuple[list[dict], dict]:
 
         if member_type in ('SENIOR', 'CADET SPONSOR'):
             stats['seniors'] += 1
-            if participant_type == 'staff':
+            if participant_type in ('senior_staff', 'staff'):
                 stats['staff'] += 1
         elif member_type == 'CADET':
             stats['cadets'] += 1
             if participant_type == 'cadre':
                 stats['cadre'] += 1
+            elif participant_type == 'student':
+                stats.setdefault('students', 0)
+                stats['students'] += 1
+        if participant_type == 'needs_review':
+            stats.setdefault('needs_review', 0)
+            stats['needs_review'] += 1
 
         paid_in_full = get_bool('paid_in_full')
         amount_paid = get_float('amount_paid', 0.0)
@@ -1685,7 +1697,9 @@ async def import_participants(
                 pid = existing["id"]
             else:
                 if participant_type is None:
-                    doc["participant_type"] = "basic_student"
+                    # No sub-event signal → flag for admin review rather than
+                    # silently defaulting to a category.
+                    doc["participant_type"] = ParticipantType.NEEDS_REVIEW
                 pid = str(uuid.uuid4())
                 doc["id"] = pid
                 doc["created_at"] = now
@@ -1900,7 +1914,7 @@ async def import_apply(
         else:
             # create
             if participant_type is None:
-                doc["participant_type"] = "basic_student"
+                doc["participant_type"] = ParticipantType.NEEDS_REVIEW
             pid = str(uuid.uuid4())
             doc["id"] = pid
             doc["created_at"] = now

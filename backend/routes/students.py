@@ -114,37 +114,17 @@ async def link_to_user_account(participant_id, capid, email):
 
 def determine_participant_type(event_name, member_type, is_staff):
     """Determine participant_type from sub-event context and member data.
-    Returns None if the sub-event is blank/unrecognizable (meaning: don't change existing type)."""
-    event_lower = (event_name or '').strip().lower()
-    member_upper = (member_type or '').upper()
 
-    # "Cadre Application" sub-event → always cadre for cadets
-    if 'cadre' in event_lower:
-        if member_upper in ('SENIOR', 'CADET SPONSOR'):
-            return 'staff'
-        return 'cadre'
+    DELEGATES to the canonical `classify_from_subevent` helper. The
+    `is_staff` argument (generic RegZone "staff" boolean) is INTENTIONALLY
+    IGNORED — per the Phase-2 rule:
+      "Do not use the generic Registration Zone 'staff' selection as
+       the source of truth."
 
-    # "Staff Application" sub-event → staff/senior_member for seniors
-    if 'staff' in event_lower and 'student' not in event_lower:
-        if member_upper in ('SENIOR', 'CADET SPONSOR'):
-            return 'staff'
-        # Cadets in a staff-only sub-event are still cadre (they're cadre applicants)
-        return 'cadre'
-
-    # "Student Application" sub-event → basic_student
-    if 'student' in event_lower:
-        return 'basic_student'
-
-    # EventName blank or unrecognizable → return None (don't override existing)
-    if not event_lower:
-        return None
-
-    # Fallback for other event names — use MbrType + StaffMember
-    if member_upper in ('SENIOR', 'CADET SPONSOR'):
-        return 'staff' if is_staff else 'senior_member'
-    elif member_upper == 'CADET':
-        return 'cadre' if is_staff else None  # Don't default cadets to student without evidence
-    return None
+    Returns one of: senior_staff / cadre / student / needs_review.
+    """
+    from classifier import classify_from_subevent
+    return classify_from_subevent(member_type, event_name)
 
 # ================= STUDENT UPLOAD WITH AUTO-ASSIGNMENT =================
 

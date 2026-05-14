@@ -299,7 +299,7 @@ async def get_individual_leaderboard(
     if participant_type == "cadet":
         participant_query["participant_type"] = {"$in": ["student", "cadet", "basic_student", "advanced_student"]}
     elif participant_type == "cadre":
-        participant_query["participant_type"] = {"$in": ["cadre", "staff", "senior_member"]}
+        participant_query["participant_type"] = {"$in": ["cadre", "exec_cadre", "staff", "senior_staff", "senior_member"]}
     
     participants = await db.participants.find(participant_query, {"_id": 0}).to_list(1000)
     participant_map = {p["id"]: p for p in participants}
