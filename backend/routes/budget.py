@@ -1137,9 +1137,13 @@ async def get_payment_summary(user: dict = Depends(require_finance_access())):
          "email": 1, "cadet_parent_email": 1, "unit_cc_email": 1, "wing": 1, "unit": 1,
          "payment_last_synced": 1}
     ).to_list(2000)
-    
+
+    # Phase 6: use canonical helper for the encampment-wide total so this
+    # number always matches dashboard/roster/check-in.
+    total = await get_active_participant_count()
+
     summary = {
-        "total": len(participants),
+        "total": total,
         "paid": 0,
         "unpaid": 0,
         "total_collected": 0.0,

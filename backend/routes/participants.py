@@ -153,13 +153,24 @@ async def get_participant_stats(user: dict = Depends(get_current_user)):
     """Get participant statistics for dashboard.
     Visibility filter is applied so cadre/squadron-level callers only see counts
     for participants they're allowed to view. Finance fields (`total_collected`)
-    are zeroed out for non-finance callers."""
+    are zeroed out for non-finance callers.
+
+    Phase 6: surfaces two totals:
+      • `total`        — count of rows the CALLER can see (post visibility filter)
+      • `total_active` — canonical encampment-wide active count from
+                         `get_active_participant_count()`. Same number for full
+                         admins; distinct for cadre/squadron-scoped callers.
+    """
     query = {"is_removed": {"$ne": True}}
     apply_participant_visibility(query, user)
     participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
-    
+
+    # Phase 6: encampment-wide canonical total (single source of truth)
+    total_active = await get_active_participant_count()
+
     stats = {
         'total': len(participants),
+        'total_active': total_active,
         'seniors': 0,
         'cadets': 0,
         'staff': 0,
@@ -244,6 +255,7 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
     if not participants:
         return {
             'total_count': 0,
+            'total_active': await get_active_participant_count(),
             'by_role': {
                 'seniors': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
                 'staff': {'count': 0, 'male': 0, 'female': 0, 'male_pct': 0, 'female_pct': 0, 'avg_age': None},
@@ -265,9 +277,11 @@ async def get_detailed_analytics(user: dict = Depends(get_current_user)):
             'pending_payments': [],
         }
     
-    # Initialize analytics structure
+    # Initialize analytics structure (Phase 6: total_count is the user-visible
+    # count, total_active is the canonical encampment-wide active count)
     analytics = {
         'total_count': len(participants),
+        'total_active': await get_active_participant_count(),
         'by_role': {
             'seniors': {'count': 0, 'male': 0, 'female': 0, 'ages': []},
             'staff': {'count': 0, 'male': 0, 'female': 0, 'ages': []},

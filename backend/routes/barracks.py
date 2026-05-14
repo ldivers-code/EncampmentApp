@@ -2,7 +2,7 @@
 from fastapi import Depends, HTTPException
 from datetime import datetime, timezone
 
-from database import db, api_router
+from database import db, api_router, get_active_participant_count
 from models import BunkAssignRequest
 from permissions import get_current_user
 
@@ -81,7 +81,7 @@ FACILITY_BUILDINGS = [
 
 @api_router.get("/barracks")
 async def get_barracks(user: dict = Depends(get_current_user)):
-    """Get all barracks with occupancy stats"""
+    """Get all barracks with occupancy stats (list shape, backwards-compatible)."""
     result = []
     for b in BARRACKS_CONFIG:
         assigned = await db.bunk_assignments.count_documents({"barracks_id": b["barracks_id"]})
@@ -91,6 +91,30 @@ async def get_barracks(user: dict = Depends(get_current_user)):
             "available": b["capacity"] - assigned
         })
     return result
+
+
+@api_router.get("/barracks/summary")
+async def get_barracks_summary(user: dict = Depends(get_current_user)):
+    """Phase 6: canonical barracks summary that pairs bunk capacity with the
+    canonical encampment headcount. `active_participants` comes from
+    `get_active_participant_count()` — same number the dashboard, roster,
+    check-in, and food-planning screens show."""
+    rows = []
+    for b in BARRACKS_CONFIG:
+        assigned = await db.bunk_assignments.count_documents({"barracks_id": b["barracks_id"]})
+        rows.append({**b, "assigned": assigned, "available": b["capacity"] - assigned})
+    total_capacity = sum(b["capacity"] for b in BARRACKS_CONFIG)
+    total_assigned = sum(b["assigned"] for b in rows)
+    return {
+        "barracks": rows,
+        "active_participants": await get_active_participant_count(),
+        "total_capacity": total_capacity,
+        "total_assigned": total_assigned,
+        "total_available": total_capacity - total_assigned,
+        "unassigned_participants": (
+            await get_active_participant_count() - total_assigned
+        ),
+    }
 
 
 @api_router.get("/barracks/unassigned-participants")
