@@ -51,6 +51,38 @@ import {
   Printer
 } from 'lucide-react';
 
+// ── Canonical Participant Type taxonomy (Phase 2 backend migration) ─────────
+// The backend now uses `student`, `cadre`, `senior_staff` (with `is_exec_cadre`
+// flag) and `needs_review`. Legacy literals (`basic_student`, `advanced_student`,
+// `staff`, `senior_member`) may still exist on unmigrated rows, so the
+// recognized sets below include both new and legacy values. The
+// canonical_value() helper returns the value we want to STORE on writes.
+const STUDENT_TYPES = ['student', 'basic_student', 'advanced_student'];
+const CADRE_TYPES = ['cadre', 'exec_cadre'];
+const STAFF_TYPES = ['senior_staff', 'staff', 'senior_member'];
+const NEEDS_REVIEW_TYPES = ['needs_review'];
+
+const isStudentType = (t) => STUDENT_TYPES.includes(t);
+const isCadreType = (t) => CADRE_TYPES.includes(t);
+const isStaffType = (t) => STAFF_TYPES.includes(t);
+const isNeedsReviewType = (t) => NEEDS_REVIEW_TYPES.includes(t);
+
+// Human-readable labels — match the backend's canonical vocabulary.
+// "Senior Staff" — never "Cadet Staff" or just "Staff" for cadets.
+// "Executive Cadre" — never "Exec Cadre" in user-facing copy.
+const TYPE_LABELS = {
+  student: 'Student',
+  basic_student: 'Student',
+  advanced_student: 'Student',
+  cadre: 'Cadre',
+  exec_cadre: 'Executive Cadre',
+  senior_staff: 'Senior Staff',
+  staff: 'Senior Staff',
+  senior_member: 'Senior Staff',
+  needs_review: 'Needs Review',
+};
+const labelForType = (t) => TYPE_LABELS[t] || t;
+
 // Simple avatar component that shows photo or initials
 const CadetAvatar = ({ participant, size = 'sm' }) => {
   const [hasPhoto, setHasPhoto] = React.useState(!!participant?.photo_path);
@@ -159,7 +191,7 @@ const RosterPage = () => {
     email: '',
     phone: '',
     shirt_size: '',
-    participant_type: 'basic_student',
+    participant_type: 'student',
     squadron: '',
     flight: '',
     position: '',
@@ -250,13 +282,15 @@ const RosterPage = () => {
       if (!showRemoved && p.is_removed) return false;
       if (showRemoved && !p.is_removed) return false;
       
-      // Category tab filter (Staff | Cadre | Students)
+      // Category tab filter (Senior Staff | Cadre | Students)
       if (categoryTab === 'students') {
-        if (p.participant_type !== 'basic_student' && p.participant_type !== 'advanced_student') return false;
+        if (!isStudentType(p.participant_type)) return false;
       } else if (categoryTab === 'cadre') {
-        if (p.participant_type !== 'cadre') return false;
+        if (!isCadreType(p.participant_type)) return false;
       } else if (categoryTab === 'staff') {
-        if (p.participant_type !== 'staff' && p.participant_type !== 'senior_member') return false;
+        if (!isStaffType(p.participant_type)) return false;
+      } else if (categoryTab === 'needs_review') {
+        if (!isNeedsReviewType(p.participant_type)) return false;
       }
       
       // Master vs Full roster view
@@ -310,9 +344,10 @@ const RosterPage = () => {
   const categoryCounts = useMemo(() => {
     const active = participants.filter(p => !p.is_removed);
     return {
-      students: active.filter(p => p.participant_type === 'basic_student' || p.participant_type === 'advanced_student').length,
-      cadre: active.filter(p => p.participant_type === 'cadre').length,
-      staff: active.filter(p => p.participant_type === 'staff' || p.participant_type === 'senior_member').length
+      students: active.filter(p => isStudentType(p.participant_type)).length,
+      cadre: active.filter(p => isCadreType(p.participant_type)).length,
+      staff: active.filter(p => isStaffType(p.participant_type)).length,
+      needs_review: active.filter(p => isNeedsReviewType(p.participant_type)).length,
     };
   }, [participants]);
 
@@ -400,8 +435,8 @@ const RosterPage = () => {
     if (!user) return false;
     
     const participantType = participant?.participant_type || '';
-    const isStudent = participantType === 'basic_student' || participantType === 'advanced_student';
-    const isCadre = participantType === 'cadre';
+    const isStudent = isStudentType(participantType);
+    const isCadre = isCadreType(participantType);
     
     // Full access roles - can edit both students and cadre
     const fullAccessRoles = ['dcp', 'commander', 'executive_staff', 'plans_programs', 'staff'];
@@ -623,12 +658,7 @@ const RosterPage = () => {
       toast.warning('No participants selected');
       return;
     }
-    const typeLabel = {
-      basic_student: 'Student',
-      cadre: 'Cadre',
-      staff: 'Staff (Senior Member)',
-      senior_member: 'Senior Member',
-    }[newType] || newType;
+    const typeLabel = labelForType(newType);
     if (!window.confirm(`Change ${ids.length} participant(s) to ${typeLabel}?`)) return;
     setBulkActionLoading(true);
     setBulkTypeMenuOpen(false);
@@ -712,7 +742,7 @@ const RosterPage = () => {
       email: '',
       phone: '',
       shirt_size: '',
-      participant_type: 'basic_student',
+      participant_type: 'student',
       squadron: '',
       flight: '',
       position: '',
@@ -725,22 +755,25 @@ const RosterPage = () => {
   };
 
   const participantTypes = [
-    { value: 'basic_student', label: 'Basic Student' },
-    { value: 'advanced_student', label: 'Advanced Student' },
+    { value: 'student', label: 'Student' },
     { value: 'cadre', label: 'Cadre' },
-    { value: 'staff', label: 'Staff' },
-    { value: 'senior_member', label: 'Senior Member' }
+    { value: 'senior_staff', label: 'Senior Staff' },
+    { value: 'needs_review', label: 'Needs Review' },
   ];
 
   const getTypeBadgeColor = (type) => {
     const colors = {
+      student: 'bg-blue-100 text-blue-800 border-blue-200',
       basic_student: 'bg-blue-100 text-blue-800 border-blue-200',
-      advanced_student: 'bg-purple-100 text-purple-800 border-purple-200',
+      advanced_student: 'bg-blue-100 text-blue-800 border-blue-200',
       cadre: 'bg-amber-100 text-amber-800 border-amber-200',
+      exec_cadre: 'bg-amber-200 text-amber-900 border-amber-300',
+      senior_staff: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       staff: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      senior_member: 'bg-slate-100 text-slate-800 border-slate-200'
+      senior_member: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      needs_review: 'bg-orange-100 text-orange-800 border-orange-200',
     };
-    return colors[type] || colors.basic_student;
+    return colors[type] || colors.student;
   };
 
   // Flight/Squadron colors matching the master roster spreadsheet
@@ -1263,7 +1296,7 @@ const RosterPage = () => {
           data-testid="staff-tab"
         >
           <Briefcase className="w-4 h-4" />
-          Staff
+          Senior Staff
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${
             categoryTab === 'staff' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
           }`}>{categoryCounts.staff}</span>
@@ -1731,7 +1764,7 @@ const RosterPage = () => {
                   data-testid="bulk-change-type-menu"
                 >
                   <button
-                    onClick={() => handleBulkChangeType('basic_student')}
+                    onClick={() => handleBulkChangeType('student')}
                     className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
                     data-testid="bulk-set-student"
                   >
@@ -1747,28 +1780,20 @@ const RosterPage = () => {
                     Set as Cadre
                   </button>
                   <button
-                    onClick={() => handleBulkChangeType('staff')}
+                    onClick={() => handleBulkChangeType('senior_staff')}
                     className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    data-testid="bulk-set-staff"
+                    data-testid="bulk-set-senior-staff"
                   >
                     <Briefcase className="w-4 h-4 text-emerald-700" />
-                    Set as Staff (Senior Member)
+                    Set as Senior Staff
                   </button>
                   <button
-                    onClick={() => handleBulkChangeType('senior_member')}
+                    onClick={() => handleBulkChangeType('needs_review')}
                     className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    data-testid="bulk-set-senior-member"
+                    data-testid="bulk-set-needs-review"
                   >
-                    <Shield className="w-4 h-4 text-slate-700" />
-                    Set as Senior Member
-                  </button>
-                  <button
-                    onClick={() => handleBulkChangeType('advanced_student')}
-                    className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    data-testid="bulk-set-advanced-student"
-                  >
-                    <GraduationCap className="w-4 h-4 text-violet-600" />
-                    Set as Advanced Student
+                    <Shield className="w-4 h-4 text-orange-600" />
+                    Set as Needs Review
                   </button>
                 </div>
               )}
@@ -2039,7 +2064,7 @@ const RosterPage = () => {
                     {canViewSensitiveData() && <td className="text-sm text-slate-500">{p.wing || '-'}</td>}
                     <td>
                       <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm border ${getTypeBadgeColor(p.participant_type)}`}>
-                        {p.participant_type?.replace(/_/g, ' ')}
+                        {labelForType(p.participant_type)}
                       </span>
                     </td>
                     {canViewSensitiveData() && (
@@ -2133,7 +2158,7 @@ const RosterPage = () => {
                                       startInlineEdit(p);
                                     }}
                                     className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                    title={`Edit Assignment${user?.role === 'exec_cadre' && (p.participant_type === 'basic_student' || p.participant_type === 'advanced_student') ? ' (Students: Contact Plans & Programs)' : ''}`}
+                                    title={`Edit Assignment${user?.role === 'exec_cadre' && isStudentType(p.participant_type) ? ' (Students: Contact Plans & Programs)' : ''}`}
                                     data-testid={`edit-assignment-${p.capid}`}
                                   >
                                     <Edit3 className="w-4 h-4" />
@@ -2339,7 +2364,7 @@ const RosterPage = () => {
                     <div className="flex justify-between">
                       <span className="text-slate-500">Student Type:</span>
                       <span className={`px-2 py-0.5 text-xs uppercase font-bold rounded-sm border ${getTypeBadgeColor(selectedParticipant.participant_type)}`}>
-                        {selectedParticipant.student_type || selectedParticipant.participant_type?.replace(/_/g, ' ')}
+                        {labelForType(selectedParticipant.participant_type)}
                       </span>
                     </div>
                     <div className="flex justify-between">
