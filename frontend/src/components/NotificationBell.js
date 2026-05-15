@@ -103,7 +103,10 @@ const NotificationBell = () => {
       </button>
 
       {open && (
-        <div className="fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-full sm:right-0 sm:left-auto sm:mt-2 sm:w-96 bg-white border border-slate-200 rounded-lg sm:rounded-sm shadow-xl z-[100] max-h-[480px] flex flex-col" data-testid="notification-panel">
+        <div
+          className="absolute top-full right-0 mt-2 w-[min(22rem,calc(100vw-1rem))] bg-white border border-slate-200 rounded-sm shadow-xl z-[100] max-h-[min(70vh,32rem)] flex flex-col"
+          data-testid="notification-panel"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="font-bold text-sm text-[#00205B] uppercase tracking-wide">Notifications</h3>
@@ -124,7 +127,7 @@ const NotificationBell = () => {
           </div>
 
           {/* Notification List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {loading ? (
               <div className="p-8 text-center text-slate-400 text-sm">Loading...</div>
             ) : notifications.length === 0 ? (
@@ -150,14 +153,14 @@ const NotificationBell = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-sm ${!notif.is_read ? 'font-semibold text-slate-900' : 'text-slate-700'} truncate`}>
+                        <p className={`text-sm ${!notif.is_read ? 'font-semibold text-slate-900' : 'text-slate-700'} break-words`}>
                           {notif.title}
                         </p>
                         {!notif.is_read && (
                           <span className="w-2 h-2 rounded-full bg-[#00205B] flex-shrink-0 mt-1.5" />
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 break-words">{notif.message}</p>
                       <p className="text-[10px] text-slate-400 mt-1">{timeAgo(notif.created_at)}</p>
                     </div>
                   </button>
