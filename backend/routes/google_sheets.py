@@ -3,8 +3,10 @@ from fastapi import Depends, HTTPException, BackgroundTasks
 from typing import Optional
 from datetime import datetime, timezone
 from io import BytesIO
+import csv
 import logging
 import os
+import re
 import uuid
 import hashlib
 
@@ -13,59 +15,113 @@ import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database import db, api_router
-from models import UserRole, GoogleSheetsSyncRequest, GoogleSheetsSettings
+from models import (
+    UserRole,
+    GoogleSheetsSyncRequest,
+    GoogleSheetsSettings,
+    ScheduleSheetConfig,
+)
 from permissions import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
 # ================= GOOGLE SHEETS SYNC ENDPOINTS =================
 
+# Phase 8: roles that can configure / trigger sheet sync.
+_GSHEET_ADMIN_ROLES = ('commander', 'executive_staff', 'plans_programs', 'dcp', 'staff')
+
+
+def _parse_spreadsheet_url(url_or_id: str) -> tuple[str, Optional[str]]:
+    """Accept either a raw spreadsheet ID or a full Google Sheets URL.
+    Returns (spreadsheet_id, gid_or_None)."""
+    if not url_or_id:
+        return "", None
+    s = url_or_id.strip()
+    # Raw id (no slashes)
+    if "/" not in s:
+        return s, None
+    sid_match = re.search(r"/d/([a-zA-Z0-9_-]+)", s)
+    gid_match = re.search(r"[?&#]gid=(\d+)", s)
+    return (sid_match.group(1) if sid_match else s,
+            gid_match.group(1) if gid_match else None)
+
+
+def _slugify(name: str) -> str:
+    """Stable id derived from a label."""
+    s = (name or "schedule").lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s or "schedule"
+
+
 @api_router.get("/google-sheets/settings")
 async def get_google_sheets_settings(user: dict = Depends(get_current_user)):
     """Get Google Sheets sync settings"""
-    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs']:
+    if user.get('role') not in _GSHEET_ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     settings = await db.google_sheets_settings.find_one({'_id': 'settings'})
     if not settings:
         return {
-            "roster_sheet": None,
+            "schedules": [],
             "org_chart_sheets": [],
             "sync_interval_hours": 1,
             "last_sync_at": None,
             "last_sync_status": None,
             "last_sync_message": None,
-            "auto_sync_enabled": True
+            "auto_sync_enabled": True,
         }
-    
-    # Remove MongoDB _id
+
     settings.pop('_id', None)
+    # Phase 8 migration: legacy docs may still carry roster_sheet —
+    # strip it from the response and queue a quiet cleanup.
+    if 'roster_sheet' in settings:
+        settings.pop('roster_sheet', None)
+        await db.google_sheets_settings.update_one(
+            {'_id': 'settings'}, {'$unset': {'roster_sheet': ''}}
+        )
     return settings
+
 
 @api_router.post("/google-sheets/settings")
 async def update_google_sheets_settings(
     request: GoogleSheetsSyncRequest,
     user: dict = Depends(get_current_user)
 ):
-    """Update Google Sheets sync settings"""
-    if user.get('role') not in ['commander', 'executive_staff', 'plans_programs']:
+    """Update Google Sheets sync settings — schedules + org chart only."""
+    if user.get('role') not in _GSHEET_ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    settings = {
+
+    settings: dict = {
         '_id': 'settings',
         'sync_interval_hours': request.sync_interval_hours,
         'auto_sync_enabled': request.auto_sync_enabled,
     }
-    
-    if request.roster_spreadsheet_id and request.roster_gid:
-        settings['roster_sheet'] = {
-            'sheet_type': 'roster',
-            'spreadsheet_id': request.roster_spreadsheet_id,
-            'gid': request.roster_gid,
-            'name': 'Roster',
-            'enabled': True
-        }
-    
+
+    # Phase 8: schedules — preserve existing telemetry when the caller
+    # only updates the URL/label/enabled flag.
+    if request.schedules is not None:
+        existing = await db.google_sheets_settings.find_one(
+            {'_id': 'settings'}, {'schedules': 1}
+        ) or {}
+        existing_by_id = {s['id']: s for s in (existing.get('schedules') or [])}
+        cleaned: list[dict] = []
+        for s in request.schedules:
+            # Accept a URL pasted into spreadsheet_id and split it apart.
+            sid, gid_from_url = _parse_spreadsheet_url(s.spreadsheet_id)
+            row = s.model_dump()
+            row['spreadsheet_id'] = sid
+            row['gid'] = s.gid or gid_from_url
+            if not row.get('id'):
+                row['id'] = _slugify(s.label)
+            # Preserve telemetry from the prior doc if it exists.
+            prior = existing_by_id.get(row['id'], {})
+            for k in ('last_sync_at', 'last_sync_status',
+                      'last_sync_message', 'last_event_count'):
+                if row.get(k) is None and prior.get(k) is not None:
+                    row[k] = prior[k]
+            cleaned.append(row)
+        settings['schedules'] = cleaned
+
     if request.org_chart_spreadsheet_id and request.org_chart_gids:
         settings['org_chart_sheets'] = [
             {
@@ -77,13 +133,17 @@ async def update_google_sheets_settings(
             }
             for i, gid in enumerate(request.org_chart_gids)
         ]
-    
+
+    # Phase 8 migration safety: never re-introduce roster_sheet.
     await db.google_sheets_settings.replace_one(
         {'_id': 'settings'},
         settings,
-        upsert=True
+        upsert=True,
     )
-    
+    await db.google_sheets_settings.update_one(
+        {'_id': 'settings'}, {'$unset': {'roster_sheet': ''}}
+    )
+
     return {"message": "Settings updated successfully", "settings": settings}
 
 @api_router.post("/google-sheets/sync")
@@ -133,9 +193,13 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
 # Global scheduler instance
 scheduler = AsyncIOScheduler()
 
-async def fetch_google_sheet_csv(spreadsheet_id: str, gid: str) -> Optional[str]:
-    """Fetch a Google Sheet as CSV data"""
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+async def fetch_google_sheet_csv(spreadsheet_id: str, gid: Optional[str] = None) -> Optional[str]:
+    """Fetch a Google Sheet as CSV data. If gid is None/empty, fetches the
+    default first tab."""
+    if gid:
+        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    else:
+        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv"
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
             response = await client.get(url)
@@ -152,6 +216,245 @@ async def fetch_google_sheet_csv(spreadsheet_id: str, gid: str) -> Optional[str]
     except Exception as e:
         logger.error(f"Error fetching Google Sheet: {e}")
         return None
+
+
+# ── Phase 8: schedule sync from Google Sheets ────────────────────────────
+
+# Column header aliases — case-insensitive. The flat parser expects a sheet
+# with these columns (in any order); extra columns are ignored.
+SCHEDULE_COLUMN_ALIASES = {
+    "date":         {"date", "day"},
+    "start_time":   {"start", "start time", "begin", "begin time", "start_time"},
+    "end_time":     {"end", "end time", "finish", "end_time"},
+    "title":        {"title", "activity", "event", "name"},
+    "location":     {"location", "place", "venue"},
+    "event_type":   {"type", "event type", "category", "event_type"},
+    "target_groups": {"target", "target groups", "audience", "group", "groups", "target_groups"},
+    "uniform":      {"uniform", "uod", "uniform of the day"},
+    "description":  {"description", "notes", "details"},
+}
+
+
+def _find_schedule_columns(header_row: list[str]) -> dict:
+    """Map our canonical column keys to the indexes found in the sheet header.
+    Returns a dict like {"date": 0, "start_time": 1, ...} for the columns
+    that ARE present. Missing optional columns simply don't appear in the dict.
+    """
+    out: dict[str, int] = {}
+    normalised = [(i, (h or "").strip().lower()) for i, h in enumerate(header_row)]
+    for canonical, aliases in SCHEDULE_COLUMN_ALIASES.items():
+        for i, h in normalised:
+            if h in aliases:
+                out[canonical] = i
+                break
+    return out
+
+
+def _norm_time(value: str) -> Optional[str]:
+    """Accept 'HHMM', 'HH:MM', 'H:MM AM/PM' → return 'HH:MM' (24h)."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # HHMM (military)
+    if re.fullmatch(r"\d{3,4}", s):
+        s = s.zfill(4)
+        return f"{s[:2]}:{s[2:]}"
+    # HH:MM with optional AM/PM
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})\s*(AM|PM)?", s, re.IGNORECASE)
+    if m:
+        h = int(m.group(1))
+        mm = int(m.group(2))
+        ampm = (m.group(3) or "").upper()
+        if ampm == "PM" and h < 12:
+            h += 12
+        elif ampm == "AM" and h == 12:
+            h = 0
+        return f"{h:02d}:{mm:02d}"
+    return None
+
+
+def _norm_date(value: str) -> Optional[str]:
+    """Best-effort date normaliser. Returns 'YYYY-MM-DD' or None."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # ISO already
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    # Common US formats — let pandas do the heavy lifting
+    try:
+        return pd.to_datetime(s).strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+async def sync_schedule_from_gsheet(schedule_id: str, label: str,
+                                    spreadsheet_id: str,
+                                    gid: Optional[str]) -> dict:
+    """Sync one configured schedule from Google Sheets.
+
+    Events imported from this schedule are tagged with
+    `source_schedule_id=schedule_id` so re-syncing one configured schedule
+    DOES NOT delete events from another (CAST and Encampment stay
+    independent). Manually-created events without `source_schedule_id` are
+    never touched.
+
+    Parser format expected: flat table with one row per event and columns
+    Date / Start Time / End Time / Title (+optional Location, Event Type,
+    Target Groups, Uniform, Description / Notes). The grid format used by
+    the CAST sheet is NOT yet supported — it falls through with a clear
+    error message.
+    """
+    csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid)
+    if not csv_data:
+        return {"success": False, "message": "Could not fetch the sheet. Is it shared as 'Anyone with the link'?"}
+
+    rows = list(csv.reader(csv_data.splitlines()))
+    if not rows:
+        return {"success": False, "message": "Sheet is empty."}
+
+    # Locate the header row — scan the first ~6 rows for one we recognise.
+    header_idx = None
+    header_cols: dict = {}
+    for i in range(min(6, len(rows))):
+        cols = _find_schedule_columns(rows[i])
+        # Must have at least Date + Start Time + Title to be a usable header.
+        if "date" in cols and "start_time" in cols and "title" in cols:
+            header_idx = i
+            header_cols = cols
+            break
+
+    if header_idx is None:
+        return {
+            "success": False,
+            "message": (
+                "Could not find a recognisable header row. Expected columns: "
+                "Date, Start Time, End Time, Title (and optionally Location, "
+                "Event Type, Target Groups, Uniform, Notes). Note: the per-"
+                "squadron grid format used by the CAST sheet is not yet "
+                "supported — please reformat as a flat table, or ask the "
+                "admin to add grid-format parsing."
+            ),
+        }
+
+    parsed_events = []
+    skipped_rows = 0
+    for row in rows[header_idx + 1:]:
+        date = _norm_date(row[header_cols["date"]] if len(row) > header_cols["date"] else "")
+        start = _norm_time(row[header_cols["start_time"]] if len(row) > header_cols["start_time"] else "")
+        title = (row[header_cols["title"]] if len(row) > header_cols["title"] else "").strip()
+        if not (date and start and title):
+            skipped_rows += 1
+            continue
+        end = None
+        if "end_time" in header_cols and len(row) > header_cols["end_time"]:
+            end = _norm_time(row[header_cols["end_time"]])
+        # Default: 15-minute block if no end time given.
+        if not end:
+            h, m = map(int, start.split(":"))
+            total = h * 60 + m + 15
+            eh, em = divmod(total, 60)
+            end = f"{eh:02d}:{em:02d}"
+
+        def _cell(key):
+            return (row[header_cols[key]].strip()
+                    if (key in header_cols and len(row) > header_cols[key])
+                    else "")
+
+        target_groups_raw = _cell("target_groups")
+        if target_groups_raw:
+            target_groups = [t.strip().lower() for t in re.split(r"[,;|]", target_groups_raw) if t.strip()]
+        else:
+            target_groups = ["all"]
+
+        parsed_events.append({
+            "date": date,
+            "start_time": start,
+            "end_time": end,
+            "title": title,
+            "description": _cell("description") or None,
+            "location": _cell("location") or None,
+            "event_type": (_cell("event_type") or "general").lower() or "general",
+            "target_groups": target_groups,
+            "uniform": _cell("uniform") or None,
+        })
+
+    if not parsed_events:
+        return {
+            "success": False,
+            "message": f"No valid rows found. Skipped {skipped_rows} rows missing Date/Start Time/Title.",
+        }
+
+    now = datetime.now(timezone.utc).isoformat()
+    # Replace just the events tagged to THIS schedule — leave manual events
+    # and OTHER schedule events alone.
+    await db.schedule.delete_many({"source_schedule_id": schedule_id})
+    docs = []
+    for e in parsed_events:
+        docs.append({
+            "id": str(uuid.uuid4()),
+            "source_schedule_id": schedule_id,
+            "source_schedule_label": label,
+            "is_published": False,
+            "created_at": now,
+            "updated_at": now,
+            **e,
+        })
+    await db.schedule.insert_many(docs)
+
+    # Bump the schedule version for any clients watching for changes.
+    await db.schedule_settings.update_one(
+        {"_id": "settings"},
+        {"$inc": {"version": 1},
+         "$set": {"last_modified_at": now}},
+        upsert=True,
+    )
+
+    return {
+        "success": True,
+        "message": f"{label}: synced {len(parsed_events)} events ({skipped_rows} rows skipped).",
+        "event_count": len(parsed_events),
+        "skipped": skipped_rows,
+    }
+
+
+async def _persist_schedule_telemetry(schedule_id: str, result: dict) -> None:
+    """Update the per-schedule sync status fields inside settings."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.google_sheets_settings.update_one(
+        {"_id": "settings", "schedules.id": schedule_id},
+        {"$set": {
+            "schedules.$.last_sync_at": now,
+            "schedules.$.last_sync_status": "success" if result.get("success") else "error",
+            "schedules.$.last_sync_message": result.get("message"),
+            "schedules.$.last_event_count": result.get("event_count"),
+        }},
+    )
+
+
+@api_router.post("/google-sheets/schedules/{schedule_id}/sync")
+async def sync_one_schedule(schedule_id: str,
+                            user: dict = Depends(get_current_user)):
+    """Phase 8: manually trigger sync of a single configured schedule."""
+    if user.get("role") not in _GSHEET_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    settings = await db.google_sheets_settings.find_one({"_id": "settings"})
+    if not settings:
+        raise HTTPException(status_code=404, detail="No schedules configured.")
+    schedules = settings.get("schedules") or []
+    cfg = next((s for s in schedules if s.get("id") == schedule_id), None)
+    if not cfg:
+        raise HTTPException(status_code=404, detail=f"Schedule '{schedule_id}' not configured.")
+    result = await sync_schedule_from_gsheet(
+        cfg["id"], cfg.get("label") or cfg["id"],
+        cfg["spreadsheet_id"], cfg.get("gid"),
+    )
+    await _persist_schedule_telemetry(schedule_id, result)
+    return result
 
 async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
     """Sync roster data from Google Sheet"""
@@ -787,16 +1090,18 @@ async def perform_scheduled_sync():
     
     try:
         results = []
-        
-        # Sync roster sheet
-        roster_config = settings.get('roster_sheet')
-        if roster_config and roster_config.get('enabled'):
-            roster_result = await sync_roster_from_gsheet(
-                roster_config['spreadsheet_id'],
-                roster_config['gid']
+
+        # Phase 8: sync configured schedules (CAST, Encampment, etc.)
+        for cfg in (settings.get("schedules") or []):
+            if not cfg.get("enabled"):
+                continue
+            sched_result = await sync_schedule_from_gsheet(
+                cfg["id"], cfg.get("label") or cfg["id"],
+                cfg["spreadsheet_id"], cfg.get("gid"),
             )
-            results.append(f"Roster: {roster_result.get('message', 'unknown')}")
-        
+            await _persist_schedule_telemetry(cfg["id"], sched_result)
+            results.append(sched_result.get("message", "unknown"))
+
         # Sync org chart sheets
         org_chart_sheets = settings.get('org_chart_sheets', [])
         for org_config in org_chart_sheets:

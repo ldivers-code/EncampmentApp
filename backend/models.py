@@ -715,7 +715,10 @@ class DailySettingsUpdate(BaseModel):
     weather_flag: Optional[WeatherFlagUpdate] = None
 
 class GoogleSheetsSettings(BaseModel):
-    roster_sheet: Optional[GoogleSheetConfig] = None
+    # Roster sheet sync was REMOVED in Phase 8 (Feb 2026). The roster is now
+    # the source-of-truth on the backend; uploads go via the spreadsheet
+    # upload flow (Sync Mode). The field is intentionally absent here.
+    schedules: List["ScheduleSheetConfig"] = []
     org_chart_sheets: List[GoogleSheetConfig] = []
     sync_interval_hours: int = 1
     last_sync_at: Optional[str] = None
@@ -723,13 +726,36 @@ class GoogleSheetsSettings(BaseModel):
     last_sync_message: Optional[str] = None
     auto_sync_enabled: bool = True
 
+
+class ScheduleSheetConfig(BaseModel):
+    """A named Google Sheet that auto-syncs into the schedule.
+
+    Multiple schedules can be configured (e.g. CAST weekend + main Encampment
+    week) and synced independently — events imported from one configured
+    schedule are tagged with `source_schedule_id` so re-syncing one doesn't
+    touch the other.
+    """
+    id: str                              # stable key, e.g. "cast" or "encampment"
+    label: str                           # human display name
+    spreadsheet_id: str                  # Google Sheets doc id
+    gid: Optional[str] = None            # optional tab gid (default: first tab)
+    enabled: bool = True
+    # Last-sync telemetry written by the scheduler:
+    last_sync_at: Optional[str] = None
+    last_sync_status: Optional[str] = None   # "success" | "error" | "running"
+    last_sync_message: Optional[str] = None
+    last_event_count: Optional[int] = None
+
+
 class GoogleSheetsSyncRequest(BaseModel):
-    roster_spreadsheet_id: Optional[str] = None
-    roster_gid: Optional[str] = None
+    # Phase 8: only schedule + org-chart sheets are managed here.
+    schedules: Optional[List[ScheduleSheetConfig]] = None
     org_chart_spreadsheet_id: Optional[str] = None
     org_chart_gids: Optional[List[str]] = None
     sync_interval_hours: int = 1
     auto_sync_enabled: bool = True
+
+GoogleSheetsSettings.model_rebuild()
 
 class BunkAssignRequest(BaseModel):
     participant_id: str

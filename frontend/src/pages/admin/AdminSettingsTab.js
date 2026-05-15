@@ -4,12 +4,25 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { 
-  Shield, UserCog, DollarSign, Users, Plane, 
+import {
+  Shield, UserCog, DollarSign, Users, Plane,
   Cloud, CheckCircle, AlertTriangle, RefreshCw, Clock,
-  FileSpreadsheet, ExternalLink, XCircle
+  FileSpreadsheet, ExternalLink, XCircle, Calendar, Plus, Trash2
 } from 'lucide-react';
 import { getHonorAgreementStatus, sendHonorAgreementReminders } from '../../services/api';
+
+// Phase 8: accept a full Google Sheets URL OR a raw spreadsheet id.
+const parseSheetField = (input) => {
+  if (!input) return { spreadsheet_id: '', gid: '' };
+  const trimmed = input.trim();
+  if (!trimmed.includes('/')) return { spreadsheet_id: trimmed, gid: '' };
+  const idMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const gidMatch = trimmed.match(/[?&#]gid=(\d+)/);
+  return {
+    spreadsheet_id: idMatch ? idMatch[1] : trimmed,
+    gid: gidMatch ? gidMatch[1] : '',
+  };
+};
 
 const AdminSettingsTab = ({
   gsheetSettings,
@@ -19,9 +32,57 @@ const AdminSettingsTab = ({
   savingGsheetSettings,
   handleSaveGsheetSettings,
   handleManualSync,
+  handleSyncSchedule,
   syncingParticipants,
   handleSyncUsersToRoster
 }) => {
+  // Phase 8: per-schedule helpers.
+  const schedules = gsheetSettings.schedules || [];
+
+  const updateScheduleField = (index, field, value) => {
+    setGsheetSettings((prev) => {
+      const next = [...(prev.schedules || [])];
+      next[index] = { ...next[index], [field]: value };
+      return { ...prev, schedules: next };
+    });
+  };
+
+  const updateScheduleUrl = (index, urlValue) => {
+    const parsed = parseSheetField(urlValue);
+    setGsheetSettings((prev) => {
+      const next = [...(prev.schedules || [])];
+      next[index] = {
+        ...next[index],
+        spreadsheet_id: parsed.spreadsheet_id,
+        gid: parsed.gid || next[index].gid || '',
+      };
+      return { ...prev, schedules: next };
+    });
+  };
+
+  const addSchedule = () => {
+    setGsheetSettings((prev) => ({
+      ...prev,
+      schedules: [
+        ...(prev.schedules || []),
+        {
+          id: `schedule_${(prev.schedules || []).length + 1}`,
+          label: 'New Schedule',
+          spreadsheet_id: '',
+          gid: '',
+          enabled: true,
+        },
+      ],
+    }));
+  };
+
+  const removeSchedule = (index) => {
+    setGsheetSettings((prev) => ({
+      ...prev,
+      schedules: (prev.schedules || []).filter((_, i) => i !== index),
+    }));
+  };
+
   return (
     <div className="space-y-6">
       {/* Role Permissions Info */}
@@ -195,36 +256,159 @@ const AdminSettingsTab = ({
             </div>
           )}
 
-          {/* Roster Sheet Config */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <Label className="text-sm font-bold uppercase text-slate-700">Roster Sheet</Label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-slate-500 mb-1 block">Spreadsheet ID</Label>
-                <Input
-                  value={gsheetSettings.rosterSpreadsheetId}
-                  onChange={(e) => setGsheetSettings(prev => ({ ...prev, rosterSpreadsheetId: e.target.value }))}
-                  placeholder="1-HbkFiABYG3fIsF41crkD-T5aCRJ-Zq7"
-                  className="rounded-sm text-sm font-mono"
-                  data-testid="roster-spreadsheet-id"
-                />
+          {/* Schedules — Phase 8: multiple named schedules, each sync'd independently */}
+          <div className="space-y-3" data-testid="schedules-config">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-600" />
+                <Label className="text-sm font-bold uppercase text-slate-700">Schedules</Label>
               </div>
-              <div>
-                <Label className="text-xs text-slate-500 mb-1 block">Sheet Tab (gid)</Label>
-                <Input
-                  value={gsheetSettings.rosterGid}
-                  onChange={(e) => setGsheetSettings(prev => ({ ...prev, rosterGid: e.target.value }))}
-                  placeholder="345615746"
-                  className="rounded-sm text-sm font-mono"
-                  data-testid="roster-gid"
-                />
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addSchedule}
+                className="rounded-sm"
+                data-testid="add-schedule-btn"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add Schedule
+              </Button>
             </div>
-            <p className="text-xs text-slate-400">
-              Find these in your Google Sheets URL: docs.google.com/spreadsheets/d/<strong>[SPREADSHEET_ID]</strong>/edit?gid=<strong>[GID]</strong>
+            <p className="text-xs text-slate-500">
+              Each schedule syncs to its own Google Sheet. Events imported from one
+              schedule are tagged separately, so syncing CAST does not touch
+              Encampment events. Change a sheet link anytime (e.g. draft → final).
+            </p>
+
+            {schedules.length === 0 && (
+              <div className="text-sm text-slate-400 italic py-3 px-2 border border-dashed border-slate-200 rounded-sm text-center">
+                No schedules configured. Click "Add Schedule" to start.
+              </div>
+            )}
+
+            {schedules.map((s, idx) => {
+              const fullUrl = s.spreadsheet_id
+                ? `https://docs.google.com/spreadsheets/d/${s.spreadsheet_id}/edit${s.gid ? `#gid=${s.gid}` : ''}`
+                : '';
+              return (
+                <div
+                  key={s.id || idx}
+                  className="border border-slate-200 rounded-sm p-3 space-y-2 bg-slate-50/40"
+                  data-testid={`schedule-row-${s.id || idx}`}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs text-slate-500 mb-1 block">Schedule Name</Label>
+                      <Input
+                        value={s.label || ''}
+                        onChange={(e) => updateScheduleField(idx, 'label', e.target.value)}
+                        placeholder="CAST Weekend (May 29-31)"
+                        className="rounded-sm text-sm"
+                        data-testid={`schedule-label-${idx}`}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-500 mb-1 block">Sheet Tab (gid, optional)</Label>
+                      <Input
+                        value={s.gid || ''}
+                        onChange={(e) => updateScheduleField(idx, 'gid', e.target.value)}
+                        placeholder="(leave blank for first tab)"
+                        className="rounded-sm text-sm font-mono"
+                        data-testid={`schedule-gid-${idx}`}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500 mb-1 block">
+                      Google Sheet URL or Spreadsheet ID
+                    </Label>
+                    <Input
+                      value={fullUrl || s.spreadsheet_id || ''}
+                      onChange={(e) => updateScheduleUrl(idx, e.target.value)}
+                      placeholder="https://docs.google.com/spreadsheets/d/{ID}/edit?usp=drive_link"
+                      className="rounded-sm text-sm font-mono"
+                      data-testid={`schedule-url-${idx}`}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Paste a full Google Sheets URL — we'll extract the ID and tab automatically.
+                    </p>
+                  </div>
+
+                  {/* Telemetry + per-row controls */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200">
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!s.enabled}
+                          onChange={(e) => updateScheduleField(idx, 'enabled', e.target.checked)}
+                          className="rounded"
+                          data-testid={`schedule-enabled-${idx}`}
+                        />
+                        <span>Auto-sync enabled</span>
+                      </label>
+                      {s.last_sync_status === 'success' && (
+                        <span className="flex items-center gap-1 text-emerald-600">
+                          <CheckCircle className="w-3 h-3" />
+                          {s.last_event_count ?? '—'} events
+                          {s.last_sync_at && ` · ${new Date(s.last_sync_at).toLocaleString()}`}
+                        </span>
+                      )}
+                      {s.last_sync_status === 'error' && (
+                        <span className="flex items-center gap-1 text-rose-600" title={s.last_sync_message || ''}>
+                          <AlertTriangle className="w-3 h-3" />
+                          {s.last_sync_message ? `Error: ${s.last_sync_message.slice(0, 80)}` : 'Sync failed'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {fullUrl && (
+                        <a
+                          href={fullUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-slate-500 hover:text-[#00205B] flex items-center gap-1"
+                          data-testid={`schedule-open-${idx}`}
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Open
+                        </a>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSyncSchedule(s.id)}
+                        disabled={!s.id || !s.spreadsheet_id}
+                        className="rounded-sm h-7 text-xs"
+                        data-testid={`schedule-sync-now-${idx}`}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" />
+                        Sync now
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeSchedule(idx)}
+                        className="rounded-sm h-7 text-xs text-rose-600 hover:bg-rose-50"
+                        data-testid={`schedule-remove-${idx}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              <strong>Expected sheet format:</strong> a flat table with columns <code>Date</code>,{' '}
+              <code>Start Time</code>, <code>End Time</code>, <code>Title</code> (and optionally{' '}
+              <code>Location</code>, <code>Event Type</code>, <code>Target Groups</code>,{' '}
+              <code>Uniform</code>, <code>Notes</code>). Grid layouts with per-squadron columns
+              (like the current CAST sheet) are not yet supported — flatten or ask to add a custom parser.
             </p>
           </div>
 

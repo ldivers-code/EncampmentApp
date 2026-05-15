@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncUsersToParticipants, previewBulkReset, executeBulkReset, clearAllParticipants, resetOrgChart } from '../services/api';
+import { getUsers, updateUserRole, assignUserUnit, deleteUser, getPendingUsers, approveUser, findMatchingParticipants, linkUserToParticipant, updateUserPermissions, resetUserPermissions, adminResetPassword, getGoogleSheetsSettings, updateGoogleSheetsSettings, triggerGoogleSheetsSync, getGoogleSheetsSyncStatus, syncOneSchedule, syncUsersToParticipants, previewBulkReset, executeBulkReset, clearAllParticipants, resetOrgChart } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -276,14 +276,32 @@ const AdminPage = () => {
   // User-Participant sync state
   const [syncingParticipants, setSyncingParticipants] = useState(false);
 
-  // Google Sheets sync state
+  // Google Sheets sync state — Phase 8: roster sync removed, schedules added.
+  // `schedules` is an array of {id, label, spreadsheet_id, gid, enabled,
+  // last_sync_at, last_sync_status, last_sync_message, last_event_count}.
   const [gsheetSettings, setGsheetSettings] = useState({
-    rosterSpreadsheetId: '',
-    rosterGid: '',
+    schedules: [
+      // Pre-seed with the two schedules requested in the original ask;
+      // these can be edited or removed by the admin.
+      {
+        id: 'cast',
+        label: 'CAST Weekend (May 29-31)',
+        spreadsheet_id: '16rG0RaIzVKjWc0TJe8f4ET7Nxpro8SGJkjOrJbdeaGM',
+        gid: '',
+        enabled: true,
+      },
+      {
+        id: 'encampment',
+        label: 'Encampment (July 17-24)',
+        spreadsheet_id: '1b__hJ8_tjMtRwrEmqbB_Y39TIalmtGKaV13Q7cohzfA',
+        gid: '',
+        enabled: true,
+      },
+    ],
     orgChartSpreadsheetId: '',
     orgChartGids: '',
     syncIntervalHours: 1,
-    autoSyncEnabled: true
+    autoSyncEnabled: true,
   });
   const [syncStatus, setSyncStatus] = useState(null);
   const [savingGsheetSettings, setSavingGsheetSettings] = useState(false);
@@ -410,16 +428,20 @@ const AdminPage = () => {
     try {
       const settings = await getGoogleSheetsSettings();
       if (settings) {
-        setGsheetSettings({
-          rosterSpreadsheetId: settings.roster_sheet?.spreadsheet_id || '',
-          rosterGid: settings.roster_sheet?.gid || '',
+        setGsheetSettings((prev) => ({
+          ...prev,
+          // Use server-stored schedules when present; fall back to the seed.
+          schedules:
+            settings.schedules && settings.schedules.length > 0
+              ? settings.schedules
+              : prev.schedules,
           orgChartSpreadsheetId: settings.org_chart_sheets?.[0]?.spreadsheet_id || '',
-          orgChartGids: settings.org_chart_sheets?.map(s => s.gid).join(',') || '',
+          orgChartGids: settings.org_chart_sheets?.map((s) => s.gid).join(',') || '',
           syncIntervalHours: settings.sync_interval_hours || 1,
-          autoSyncEnabled: settings.auto_sync_enabled !== false
-        });
+          autoSyncEnabled: settings.auto_sync_enabled !== false,
+        }));
       }
-      
+
       const status = await getGoogleSheetsSyncStatus();
       setSyncStatus(status);
     } catch (error) {
@@ -432,19 +454,35 @@ const AdminPage = () => {
     setSavingGsheetSettings(true);
     try {
       await updateGoogleSheetsSettings({
-        roster_spreadsheet_id: gsheetSettings.rosterSpreadsheetId || null,
-        roster_gid: gsheetSettings.rosterGid || null,
+        schedules: gsheetSettings.schedules || [],
         org_chart_spreadsheet_id: gsheetSettings.orgChartSpreadsheetId || null,
-        org_chart_gids: gsheetSettings.orgChartGids ? gsheetSettings.orgChartGids.split(',').map(g => g.trim()) : null,
+        org_chart_gids: gsheetSettings.orgChartGids
+          ? gsheetSettings.orgChartGids.split(',').map((g) => g.trim())
+          : null,
         sync_interval_hours: gsheetSettings.syncIntervalHours,
-        auto_sync_enabled: gsheetSettings.autoSyncEnabled
+        auto_sync_enabled: gsheetSettings.autoSyncEnabled,
       });
       toast.success('Google Sheets settings saved');
       loadGoogleSheetsSettings();
     } catch (error) {
-      toast.error('Failed to save settings');
+      toast.error(error.response?.data?.detail || 'Failed to save settings');
     } finally {
       setSavingGsheetSettings(false);
+    }
+  };
+
+  // Phase 8: per-schedule manual sync
+  const handleSyncSchedule = async (scheduleId) => {
+    try {
+      const result = await syncOneSchedule(scheduleId);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+      loadGoogleSheetsSettings();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to sync schedule');
     }
   };
 
@@ -1287,6 +1325,7 @@ const AdminPage = () => {
           savingGsheetSettings={savingGsheetSettings}
           handleSaveGsheetSettings={handleSaveGsheetSettings}
           handleManualSync={handleManualSync}
+          handleSyncSchedule={handleSyncSchedule}
           syncingParticipants={syncingParticipants}
           handleSyncUsersToRoster={handleSyncUsersToRoster}
         />

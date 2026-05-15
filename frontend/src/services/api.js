@@ -917,6 +917,16 @@ export const triggerGoogleSheetsSync = async () => {
   return response.data;
 };
 
+// Phase 8: sync a single configured schedule by its id.
+export const syncOneSchedule = async (scheduleId) => {
+  const response = await axios.post(
+    `${API}/google-sheets/schedules/${scheduleId}/sync`,
+    {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
 export const getGoogleSheetsSyncStatus = async () => {
   const response = await axios.get(`${API}/google-sheets/sync-status`, { headers: getAuthHeaders() });
   return response.data;
