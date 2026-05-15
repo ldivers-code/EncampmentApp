@@ -17,13 +17,19 @@ logger = logging.getLogger(__name__)
 
 # ================= SHARED IMPORT HELPERS =================
 
-async def find_existing_participant(capid, email, first_name, last_name):
+async def find_existing_participant(capid, email, first_name, last_name, include_removed=False):
     """Cascading match: CAPID → email → first+last name.
-    Returns the existing participant doc or None."""
+    Returns the existing participant doc or None.
+
+    When `include_removed=True` (used by Sync Mode), soft-removed rows are
+    also considered — so a previously-removed participant can be recovered
+    rather than duplicated when they reappear in the upload.
+    """
+    removed_clause = {} if include_removed else {"is_removed": {"$ne": True}}
     # 1. Match by CAPID
     if capid and capid not in ('', 'nan'):
         existing = await db.participants.find_one(
-            {"capid": str(capid), "is_removed": {"$ne": True}}, {"_id": 0}
+            {"capid": str(capid), **removed_clause}, {"_id": 0}
         )
         if existing:
             return existing
@@ -32,7 +38,7 @@ async def find_existing_participant(capid, email, first_name, last_name):
     if email and email not in ('', 'nan'):
         existing = await db.participants.find_one(
             {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"},
-             "is_removed": {"$ne": True}}, {"_id": 0}
+             **removed_clause}, {"_id": 0}
         )
         if existing:
             return existing
@@ -42,7 +48,7 @@ async def find_existing_participant(capid, email, first_name, last_name):
         existing = await db.participants.find_one(
             {"first_name": {"$regex": f"^{re.escape(first_name)}$", "$options": "i"},
              "last_name": {"$regex": f"^{re.escape(last_name)}$", "$options": "i"},
-             "is_removed": {"$ne": True}}, {"_id": 0}
+             **removed_clause}, {"_id": 0}
         )
         if existing:
             return existing
@@ -450,17 +456,126 @@ async def auto_assign_flights(students: list) -> dict:
     }
 
 
+@api_router.post("/students/upload/preview")
+async def upload_students_preview(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
+):
+    """Phase 7 Sync Mode preview — analyse the file WITHOUT mutating the DB.
+
+    Returns the counts the admin will see in their confirmation dialog:
+      - file_rows: rows in the uploaded file (cleaned)
+      - matches_existing: rows that will UPDATE an existing active row
+      - recovers: rows that will RECOVER a soft-removed row
+      - new_inserts: rows that will be inserted as net-new
+      - soft_removes: existing active participants that will be soft-removed
+                      because they're NOT in the uploaded file
+      - soft_remove_sample: first 10 names that will be soft-removed (for UX)
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported")
+
+    contents = await file.read()
+    try:
+        df = pd.read_excel(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Excel file: {e}")
+    df.columns = df.columns.str.strip()
+
+    # Reuse the same column map as the upload endpoint.
+    column_map = {
+        'RegistrantsCAPID': 'capid', 'CAPID': 'capid',
+        'EventName': 'event_name', 'SubEvents': 'event_name',
+        'NameLast': 'last_name', 'NameFirst': 'first_name',
+        'Email': 'email',
+    }
+    df = df.rename(columns=column_map)
+
+    def get_str(row, key):
+        v = row.get(key)
+        if pd.isna(v) or v == '' or v == 'nan':
+            return ''
+        return str(v).strip()
+
+    matches = recovers = new_inserts = 0
+    seen_existing_ids: set[str] = set()
+
+    for _, row in df.iterrows():
+        rd = row.to_dict()
+        capid = get_str(rd, 'capid')
+        if capid.endswith('.0') and capid[:-2].isdigit():
+            capid = capid[:-2]
+        email = get_str(rd, 'email')
+        fn = get_str(rd, 'first_name')
+        ln = get_str(rd, 'last_name')
+        if not capid and not (fn and ln):
+            continue
+        # Look in BOTH active and soft-removed rows so we can show the
+        # recoverable count.
+        existing = await find_existing_participant(capid, email, fn, ln, include_removed=True)
+        if existing:
+            seen_existing_ids.add(existing["id"])
+            if existing.get("is_removed"):
+                recovers += 1
+            else:
+                matches += 1
+        else:
+            new_inserts += 1
+
+    # Stragglers that will be soft-removed (active rows not touched by file)
+    stragglers = await db.participants.find(
+        {"is_removed": {"$ne": True}, "id": {"$nin": list(seen_existing_ids)}},
+        {"_id": 0, "id": 1, "capid": 1, "first_name": 1, "last_name": 1,
+         "rank": 1, "participant_type": 1, "flight": 1}
+    ).to_list(2000)
+
+    sample = stragglers[:10]
+    sample_payload = [
+        {
+            "capid": s.get("capid"),
+            "name": f"{s.get('rank', '')} {s.get('last_name', '')}, {s.get('first_name', '')}".strip(", "),
+            "participant_type": s.get("participant_type"),
+            "flight": s.get("flight"),
+        }
+        for s in sample
+    ]
+
+    return {
+        "mode": "sync",
+        "file_rows": int(matches + recovers + new_inserts),
+        "matches_existing": matches,
+        "recovers": recovers,
+        "new_inserts": new_inserts,
+        "soft_removes": len(stragglers),
+        "soft_remove_sample": sample_payload,
+        "current_active_total": await db.participants.count_documents({"is_removed": {"$ne": True}}),
+    }
+
+
 @api_router.post("/students/upload")
 async def upload_students(
     file: UploadFile = File(...),
     auto_assign: bool = True,
+    sync: bool = True,
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.STAFF, UserRole.PLANS_PROGRAMS]))
 ):
     """
     Upload student roster from Excel file.
-    - Creates student records (NOT user accounts)
-    - Optionally auto-assigns flights using balanced distribution
-    - All uploaded students are marked as "First-Time Student"
+
+    Default behavior is **SYNC MODE** (`sync=true`): the uploaded file is
+    treated as the new source of truth.
+      - Rows matching an existing participant by CAPID/email/name update it.
+      - Rows whose CAPID is NOT in the file are SOFT-REMOVED
+        (`is_removed=true`). Their participant `id` is preserved, so any
+        linked user account keeps its `linked_participant_id` reference
+        intact and the row can be recovered just by re-uploading them in
+        a future file.
+      - Previously soft-removed participants who reappear in the file are
+        RECOVERED (un-soft-removed) rather than duplicated.
+
+    Pass `sync=false` to use additive mode (no soft-removal of stragglers).
+
+    All uploaded students are marked as "First-Time Student".
     """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
@@ -613,46 +728,63 @@ async def upload_students(
         # Insert/update students with cascading match + user linking
         imported_count = 0
         updated_count = 0
+        recovered_count = 0
         linked_count = 0
-        
+
+        # Phase 7 Sync Mode: collect the participant ids touched by this
+        # upload so we can soft-remove everyone else at the end.
+        touched_ids: set[str] = set()
+
         for student in students_to_process:
             capid = student["capid"]
             email = student.get("email")
             first_name = student.get("first_name", "")
             last_name = student.get("last_name", "")
-            
+
             # Apply flight assignment if available (only for students)
             if student.get("participant_type") == "basic_student" and capid in flight_assignments:
                 student["flight"] = flight_assignments[capid]["flight"]
                 student["squadron"] = flight_assignments[capid]["squadron"]
-            
+
             student["updated_at"] = now
-            
-            # Cascading match: CAPID → email → first+last name
-            existing = await find_existing_participant(capid, email, first_name, last_name)
-            
+
+            # In sync mode, we ALSO look at soft-removed rows so we can
+            # recover them instead of creating a duplicate.
+            existing = await find_existing_participant(
+                capid, email, first_name, last_name, include_removed=sync
+            )
+
             if existing:
                 # Don't override manual squadron/flight assignments
                 if existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
-                
+
                 # If spreadsheet didn't specify a participant_type (blank SubEvents/EventName),
                 # keep the existing type entirely — don't change what's already set
                 if student.get("participant_type") is None:
                     student.pop("participant_type", None)
                     student.pop("student_type", None)
                 # If spreadsheet DID specify a type, trust it (the SubEvents column is authoritative)
-                
+
                 # Only update fields that have actual values — don't wipe existing data with blanks
                 update_doc = {k: v for k, v in student.items() if v is not None}
                 update_doc["updated_at"] = now
-                
+
+                # If the existing row was soft-removed, recover it.
+                was_removed = bool(existing.get("is_removed"))
+                if was_removed:
+                    update_doc["is_removed"] = False
+                    update_doc["removed_at"] = None
+                    update_doc["removed_by"] = None
+                    recovered_count += 1
+                else:
+                    updated_count += 1
+
                 await db.participants.update_one(
                     {"id": existing["id"]},
                     {"$set": update_doc}
                 )
-                updated_count += 1
                 pid = existing["id"]
             else:
                 # New record — if no participant_type was determined, default to basic_student
@@ -664,10 +796,29 @@ async def upload_students(
                 student["created_at"] = now
                 await db.participants.insert_one(student)
                 imported_count += 1
-            
+
+            touched_ids.add(pid)
+
             # Link to existing user account if one exists
             if await link_to_user_account(pid, capid, email):
                 linked_count += 1
+
+        # Phase 7 Sync Mode: soft-remove any active participant whose id was
+        # NOT touched by this upload. Their user-account linkage is preserved
+        # (we never null `linked_participant_id` on the user doc) so they can
+        # be recovered automatically by a future upload that re-includes them.
+        soft_removed_count = 0
+        if sync and touched_ids:
+            res = await db.participants.update_many(
+                {"is_removed": {"$ne": True}, "id": {"$nin": list(touched_ids)}},
+                {"$set": {
+                    "is_removed": True,
+                    "removed_at": now,
+                    "removed_by": user.get("id"),
+                    "removed_reason": "Not present in latest master roster upload",
+                }}
+            )
+            soft_removed_count = res.modified_count
         
         # Get final counts
         total_students = await db.participants.count_documents({"participant_type": "basic_student", "is_removed": {"$ne": True}})
@@ -683,9 +834,18 @@ async def upload_students(
             flight_distribution[flight] = count
         
         return {
-            "message": f"Student upload complete: {imported_count} new, {updated_count} updated, {linked_count} linked to accounts",
+            "message": (
+                f"Roster sync complete: {imported_count} new, {updated_count} updated, "
+                f"{recovered_count} recovered, {soft_removed_count} removed (not in file), "
+                f"{linked_count} linked to accounts"
+                if sync else
+                f"Student upload complete: {imported_count} new, {updated_count} updated, {linked_count} linked to accounts"
+            ),
+            "mode": "sync" if sync else "additive",
             "imported": imported_count,
             "updated": updated_count,
+            "recovered": recovered_count,
+            "soft_removed": soft_removed_count,
             "linked": linked_count,
             "total_students": total_students,
             "auto_assigned": len(flight_assignments),

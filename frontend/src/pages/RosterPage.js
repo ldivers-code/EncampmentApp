@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents, bulkChangeParticipantType, bulkDeleteParticipants, bulkChangeParticipantAssignment } from '../services/api';
+import { getParticipants, createParticipant, updateParticipant, deleteParticipant, importParticipants, getParticipantStats, removeParticipantFromEncampment, reinstateParticipant, uploadStudents, previewStudentUpload, getFlightDistribution, updateParticipantAssignment, uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto, autoAssignUnassignedStudents, bulkChangeParticipantType, bulkDeleteParticipants, bulkChangeParticipantAssignment } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -135,6 +135,10 @@ const RosterPage = () => {
   // Student upload state
   const [uploadingStudents, setUploadingStudents] = useState(false);
   const [flightDistribution, setFlightDistribution] = useState(null);
+  // Phase 7 Sync Mode upload preview (confirm-before-destruction)
+  const [syncPreview, setSyncPreview] = useState(null);
+  const [syncFile, setSyncFile] = useState(null);
+  const [syncPreviewLoading, setSyncPreviewLoading] = useState(false);
   // Inline editing state
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditFlight, setInlineEditFlight] = useState('');
@@ -250,21 +254,44 @@ const RosterPage = () => {
     if (viewMode === 'flight') loadFlightGrouped();
   }, [viewMode]);
 
-  // Handle student roster upload
+  // Phase 7 Sync Mode: pick file → preview → admin confirms → run sync upload.
+  // The confirmation modal renders from `syncPreview` state below.
   const handleStudentUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    e.target.value = ''; // allow re-selection of the same file
 
+    setSyncPreviewLoading(true);
+    try {
+      const preview = await previewStudentUpload(file);
+      setSyncFile(file);
+      setSyncPreview(preview);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to preview upload');
+    } finally {
+      setSyncPreviewLoading(false);
+    }
+  };
+
+  const cancelSyncUpload = () => {
+    setSyncFile(null);
+    setSyncPreview(null);
+  };
+
+  const confirmSyncUpload = async () => {
+    if (!syncFile) return;
     setUploadingStudents(true);
     try {
-      const result = await uploadStudents(file, true);
-      toast.success(`${result.message}`);
+      const result = await uploadStudents(syncFile, true, true);
+      toast.success(result.message);
       if (result.flight_distribution) {
         const flightCounts = Object.entries(result.flight_distribution)
           .map(([f, c]) => `${f.charAt(0).toUpperCase() + f.slice(1)}: ${c}`)
           .join(', ');
         toast.info(`Flight distribution: ${flightCounts}`);
       }
+      setSyncFile(null);
+      setSyncPreview(null);
       loadParticipants();
       loadStats();
       loadFlightDistribution();
@@ -272,7 +299,6 @@ const RosterPage = () => {
       toast.error(error.response?.data?.detail || 'Failed to upload student roster');
     } finally {
       setUploadingStudents(false);
-      e.target.value = '';
     }
   };
 
@@ -866,15 +892,15 @@ const RosterPage = () => {
                   variant="outline" 
                   className="rounded-sm border-emerald-600 text-emerald-600 hover:bg-emerald-50" 
                   asChild
-                  disabled={uploadingStudents}
+                  disabled={uploadingStudents || syncPreviewLoading}
                 >
                   <span>
-                    {uploadingStudents ? (
+                    {(uploadingStudents || syncPreviewLoading) ? (
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <GraduationCap className="w-4 h-4 mr-2" />
                     )}
-                    {uploadingStudents ? 'Uploading...' : 'Upload Students'}
+                    {syncPreviewLoading ? 'Analyzing…' : uploadingStudents ? 'Uploading…' : 'Upload Students'}
                   </span>
                 </Button>
               </label>
@@ -2572,6 +2598,103 @@ const RosterPage = () => {
                 >
                   <UserX className="w-4 h-4 mr-2" />
                   Remove Participant
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Phase 7 Sync Mode — confirmation modal shown BEFORE the upload writes */}
+      <Dialog open={!!syncPreview} onOpenChange={(open) => { if (!open) cancelSyncUpload(); }}>
+        <DialogContent className="max-w-2xl" data-testid="sync-upload-confirm-modal">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#00205B]">
+              <Upload className="w-5 h-5" />
+              Confirm Roster Replace
+            </DialogTitle>
+          </DialogHeader>
+          {syncPreview && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                This upload runs in <span className="font-semibold">Sync Mode</span>. The
+                file you selected will be treated as the new source of truth for the
+                roster. Linked user accounts are preserved — removed participants can
+                be recovered just by re-uploading them in a future file.
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                <div className="bg-blue-50 border border-blue-200 rounded-sm py-2 px-2">
+                  <div className="text-2xl font-bold text-blue-700" data-testid="sync-preview-file-rows">{syncPreview.file_rows}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-600">In File</div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-sm py-2 px-2">
+                  <div className="text-2xl font-bold text-slate-700" data-testid="sync-preview-matches">{syncPreview.matches_existing}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-600">Updated</div>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-sm py-2 px-2">
+                  <div className="text-2xl font-bold text-emerald-700" data-testid="sync-preview-recovers">{syncPreview.recovers}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-600">Recovered</div>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-200 rounded-sm py-2 px-2">
+                  <div className="text-2xl font-bold text-indigo-700" data-testid="sync-preview-inserts">{syncPreview.new_inserts}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-600">Added</div>
+                </div>
+                <div className="bg-rose-50 border border-rose-200 rounded-sm py-2 px-2">
+                  <div className="text-2xl font-bold text-rose-700" data-testid="sync-preview-soft-removes">{syncPreview.soft_removes}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-600">Removed</div>
+                </div>
+              </div>
+
+              {syncPreview.soft_removes > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-sm p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-700 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-amber-900">
+                      <p className="font-semibold mb-1">
+                        {syncPreview.soft_removes} participant{syncPreview.soft_removes === 1 ? '' : 's'} will be soft-removed
+                      </p>
+                      <p>They are currently active but not present in the file you selected. Their user-account links stay intact and they can be recovered by re-uploading them. Showing the first {Math.min(10, syncPreview.soft_removes)}:</p>
+                      <ul className="mt-2 space-y-0.5 font-mono text-[11px]">
+                        {(syncPreview.soft_remove_sample || []).map((p) => (
+                          <li key={p.capid}>
+                            {p.capid} — {p.name}{p.flight ? ` · ${p.flight}` : ''} <span className="text-amber-700">[{labelForType(p.participant_type)}]</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {syncPreview.soft_removes === 0 && (
+                <div className="bg-emerald-50 border border-emerald-300 rounded-sm p-3 text-xs text-emerald-900 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  No active participants will be removed by this upload.
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="rounded-sm"
+                  onClick={cancelSyncUpload}
+                  disabled={uploadingStudents}
+                  data-testid="sync-upload-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="rounded-sm bg-[#00205B] hover:bg-[#001640]"
+                  onClick={confirmSyncUpload}
+                  disabled={uploadingStudents}
+                  data-testid="sync-upload-confirm"
+                >
+                  {uploadingStudents ? (
+                    <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Applying…</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-2" />Apply Roster Replace</>
+                  )}
                 </Button>
               </div>
             </div>

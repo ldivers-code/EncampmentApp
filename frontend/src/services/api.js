@@ -161,11 +161,26 @@ export const applyImportParticipants = async (stagingId, resolutions) => {
   return response.data;
 };
 
-// Student-specific upload (separate from staff/cadre)
-export const uploadStudents = async (file, autoAssign = true) => {
+// Student-specific upload (separate from staff/cadre).
+// Phase 7: defaults to Sync Mode (replaces what's there with what you uploaded).
+// Pass `sync=false` for additive mode.
+export const uploadStudents = async (file, autoAssign = true, sync = true) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await axios.post(`${API}/students/upload?auto_assign=${autoAssign}`, formData, {
+  const response = await axios.post(
+    `${API}/students/upload?auto_assign=${autoAssign}&sync=${sync}`,
+    formData,
+    { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
+// Phase 7: Preview a student upload to find out what Sync Mode will do
+// (matches/recovers/inserts/soft-removes) before touching the database.
+export const previewStudentUpload = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(`${API}/students/upload/preview`, formData, {
     headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
   });
   return response.data;
