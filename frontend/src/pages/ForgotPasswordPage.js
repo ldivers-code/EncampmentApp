@@ -23,15 +23,9 @@ const ForgotPasswordPage = () => {
 
     setLoading(true);
     try {
-      const result = await forgotPassword(email, capid);
+      await forgotPassword(email, capid);
       setSubmitted(true);
       toast.success('If the information matches, you will receive a reset email.');
-      
-      // For testing when SendGrid is not configured
-      if (result.debug_token) {
-        console.log('Debug reset token:', result.debug_token);
-        toast.info('Email service not configured. Check console for debug token.', { duration: 10000 });
-      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to process request');
     } finally {

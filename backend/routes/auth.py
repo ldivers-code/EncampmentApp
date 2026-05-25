@@ -400,15 +400,22 @@ async def forgot_password(email: str, capid: str):
     )
     
     email_sent = await send_password_reset_email(user["email"], reset_token, user.get("name", "User"))
-    
-    if email_sent:
-        return {"message": "If an account with this email exists and the CAPID matches, you will receive a reset link."}
-    else:
-        logging.warning("SendGrid not configured - returning token directly for testing")
-        return {
-            "message": "Email service not configured. Please contact your commander to reset your password.",
-            "debug_token": reset_token
-        }
+
+    # Phase 9 hardening: always return the same enumeration-safe response,
+    # whether email service is configured or not. NEVER leak the reset token
+    # in the HTTP response (was a security hole when SendGrid was misconfigured).
+    # When email service IS broken on this environment, log it loudly so the
+    # admin notices via /var/log/supervisor/backend.err.log and can either
+    # configure SENDGRID_API_KEY / SENDGRID_SENDER_EMAIL, or reset the user
+    # manually via the admin panel.
+    if not email_sent:
+        logging.error(
+            "[forgot-password] email NOT sent to %s — check SENDGRID_API_KEY and "
+            "SENDGRID_SENDER_EMAIL on this environment. User must be reset manually "
+            "via the admin panel. reset_token=%s (preserved server-side, expires %s).",
+            user["email"], reset_token, expiry.isoformat(),
+        )
+    return {"message": "If an account with this email exists and the CAPID matches, you will receive a reset link."}
 
 @api_router.post("/auth/reset-password")
 async def reset_password(token: str, new_password: str):
