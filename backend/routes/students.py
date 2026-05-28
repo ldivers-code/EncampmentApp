@@ -760,12 +760,35 @@ async def upload_students(
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
 
+                # Phase 9: PRESERVE manually-set Cadre / Exec Cadre / Senior
+                # Staff classifications across re-uploads. The master roster
+                # frequently lists cadre members as "Student Application"
+                # because the cadet registered for the encampment as a
+                # participant before being recruited onto staff — re-importing
+                # would otherwise demote them back to Student every time.
+                # If the existing row is already classified as cadre / exec_cadre
+                # / senior_staff (or legacy aliases) AND the spreadsheet says
+                # "student", IGNORE the spreadsheet's classification.
+                existing_ptype = (existing.get("participant_type") or "").lower()
+                spreadsheet_ptype = (student.get("participant_type") or "").lower()
+                CADRE_OR_STAFF = {
+                    "cadre", "exec_cadre",
+                    "senior_staff", "staff", "senior_member",
+                }
+                SPREADSHEET_STUDENT_LIKE = {
+                    "basic_student", "advanced_student", "student",
+                }
+                if existing_ptype in CADRE_OR_STAFF and spreadsheet_ptype in SPREADSHEET_STUDENT_LIKE:
+                    # Strip the would-be demotion so the existing classification stays.
+                    student.pop("participant_type", None)
+                    student.pop("student_type", None)
                 # If spreadsheet didn't specify a participant_type (blank SubEvents/EventName),
                 # keep the existing type entirely — don't change what's already set
                 if student.get("participant_type") is None:
                     student.pop("participant_type", None)
                     student.pop("student_type", None)
-                # If spreadsheet DID specify a type, trust it (the SubEvents column is authoritative)
+                # Otherwise the spreadsheet's type is authoritative (e.g. moving
+                # an existing student to "Cadet Application" sub-event).
 
                 # Only update fields that have actual values — don't wipe existing data with blanks
                 update_doc = {k: v for k, v in student.items() if v is not None}
@@ -787,10 +810,13 @@ async def upload_students(
                 )
                 pid = existing["id"]
             else:
-                # New record — if no participant_type was determined, default to basic_student
+                # Phase 9: New row with BLANK SubEvents → mark as needs_review
+                # so admins can see and classify them. Previously these were
+                # silently defaulted to `basic_student` which hid the fact
+                # that the spreadsheet didn't actually tell us what they are.
                 if student.get("participant_type") is None:
-                    student["participant_type"] = "basic_student"
-                    student["student_type"] = "First-Time Student"
+                    student["participant_type"] = "needs_review"
+                    student["student_type"] = None
                 pid = str(uuid.uuid4())
                 student["id"] = pid
                 student["created_at"] = now

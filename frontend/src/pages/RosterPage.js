@@ -1327,6 +1327,24 @@ const RosterPage = () => {
             categoryTab === 'staff' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
           }`}>{categoryCounts.staff}</span>
         </button>
+
+        {/* Needs Review — surfaces uploads with blank SubEvents so admins can
+            manually classify them. Phase 2 canonical bucket. */}
+        <button
+          onClick={() => { setCategoryTab('needs_review'); setCurrentPage(1); }}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            categoryTab === 'needs_review'
+              ? 'border-orange-600 text-orange-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          data-testid="needs-review-tab"
+        >
+          <AlertCircle className="w-4 h-4" />
+          Needs Review
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            categoryTab === 'needs_review' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-700'
+          }`}>{categoryCounts.needs_review}</span>
+        </button>
         
         {/* Roster View Toggle - moved here */}
         <div className="ml-auto flex items-center gap-2">
