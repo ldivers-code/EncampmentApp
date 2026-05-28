@@ -1328,4 +1328,91 @@ async def trigger_roster_budget_sync(
     return result
 
 
+# ── Phase 10 widget: pending finance review (paid + ambiguous SubEvent) ──
+
+async def _list_pending_finance_review() -> list[dict]:
+    """Return the paid rows the finance officer needs to classify manually.
+
+    Same query the upload uses — keeps the widget and the email in lock-step.
+    Rows are paid (any of paid / paid_in_full / amount_paid > 0) AND in an
+    ambiguous bucket (needs_review type, blank type, OR a Parent-event
+    SubEvent regardless of type).
+    """
+    rows = await db.participants.find(
+        {
+            "is_removed": {"$ne": True},
+            "$or": [
+                {"paid": True}, {"paid_in_full": True},
+                {"amount_paid": {"$gt": 0}},
+            ],
+            "$and": [{"$or": [
+                {"participant_type": "needs_review"},
+                {"participant_type": {"$in": [None, ""]}},
+                {"event_name": {"$regex": "parent", "$options": "i"}},
+            ]}],
+        },
+        {
+            "_id": 0, "id": 1, "capid": 1, "first_name": 1, "last_name": 1,
+            "rank": 1, "member_type": 1, "event_name": 1, "amount_paid": 1,
+            "participant_type": 1, "email": 1, "cadet_parent_email": 1,
+            "updated_at": 1,
+        },
+    ).sort([("updated_at", -1)]).to_list(500)
+    return [
+        {
+            "id": r.get("id"),
+            "capid": r.get("capid"),
+            "name": f"{r.get('rank','')} {r.get('last_name','')}, {r.get('first_name','')}".strip(", "),
+            "member_type": r.get("member_type"),
+            "event_name": r.get("event_name"),
+            "amount_paid": r.get("amount_paid") or 0,
+            "participant_type": r.get("participant_type"),
+            "email": r.get("email"),
+            "parent_email": r.get("cadet_parent_email"),
+            "updated_at": r.get("updated_at"),
+        }
+        for r in rows
+    ]
+
+
+@api_router.get("/finance/needs-review")
+async def get_finance_needs_review(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE])),
+):
+    """List paid rows whose SubEvent is blank, a Parent event, or that landed
+    in needs_review — these are the rows the finance officer must classify
+    manually before they auto-bucket on the next budget sync."""
+    rows = await _list_pending_finance_review()
+    to_emails, cc_emails = await _finance_notify_recipients()
+    return {
+        "count": len(rows),
+        "rows": rows,
+        "notify_to": to_emails,
+        "notify_cc": cc_emails,
+    }
+
+
+@api_router.post("/finance/notify-review")
+async def trigger_finance_review_notification(
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.FINANCE])),
+):
+    """Manual re-send of the finance-review email. Useful when SendGrid was
+    misconfigured during the upload that produced the list, or when the
+    finance officer asks for a fresh copy."""
+    rows = await _list_pending_finance_review()
+    if not rows:
+        return {"sent": False, "count": 0,
+                "message": "No paid rows currently need review — nothing to send."}
+    sent = await send_finance_review_email(rows)
+    return {
+        "sent": sent,
+        "count": len(rows),
+        "message": (
+            f"Notification sent to finance officer(s) — {len(rows)} row(s) flagged for review."
+            if sent
+            else "Could not send notification — verify SENDGRID_API_KEY and SENDGRID_SENDER_EMAIL on this environment."
+        ),
+    }
+
+
 

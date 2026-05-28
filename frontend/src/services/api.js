@@ -927,6 +927,19 @@ export const syncOneSchedule = async (scheduleId) => {
   return response.data;
 };
 
+// Phase 10: paid rows whose SubEvent was blank or a Parent event — these
+// need the finance officer to manually classify them before the next
+// budget sync.
+export const getFinanceNeedsReview = async () => {
+  const response = await axios.get(`${API}/finance/needs-review`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const notifyFinanceReview = async () => {
+  const response = await axios.post(`${API}/finance/notify-review`, {}, { headers: getAuthHeaders() });
+  return response.data;
+};
+
 export const getGoogleSheetsSyncStatus = async () => {
   const response = await axios.get(`${API}/google-sheets/sync-status`, { headers: getAuthHeaders() });
   return response.data;
