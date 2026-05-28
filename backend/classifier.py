@@ -60,15 +60,16 @@ def classify_from_subevent(member_type: Optional[str], sub_event: Optional[str])
         # No sub-event signal at all → needs_review (do NOT guess from member_type alone)
         return ParticipantType.NEEDS_REVIEW
 
-    # Identify which sub-event the row is in. "senior staff" must be checked
-    # before "staff"-substring matches so a generic Staff Application doesn't
-    # silently claim a senior-staff classification.
+    # Identify which sub-event the row is in. Order matters — check the
+    # most-specific tokens first so e.g. "Senior Member Staff Application"
+    # doesn't silently claim a generic Staff classification or get demoted
+    # to needs_review.
     detected: Optional[str] = None
-    if "senior staff" in se:
+    if "senior staff" in se or "senior member staff" in se or ("senior" in se and "staff" in se):
         detected = ParticipantType.SENIOR_STAFF
     elif "cadre" in se:
         detected = ParticipantType.CADRE
-    elif "student" in se:
+    elif "student" in se or "basic student" in se:
         detected = ParticipantType.STUDENT
     else:
         # Sub-event present but not one of the three canonical applications.

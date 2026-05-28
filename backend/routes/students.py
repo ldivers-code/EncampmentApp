@@ -1,4 +1,5 @@
 """Student Upload with Auto-Assignment and Budget Sync"""
+import os
 from fastapi import Depends, HTTPException, UploadFile, File
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -13,6 +14,163 @@ from models import UserRole
 from permissions import get_current_user, require_role
 
 logger = logging.getLogger(__name__)
+
+
+# ================= PHASE 10: FINANCE OFFICER NOTIFICATION =================
+
+# Sub-event tokens that should NEVER be auto-bucketed in the budget — paid
+# rows with these markers go on the finance officer's manual-review list.
+# Anything blank also gets flagged.
+_AMBIGUOUS_SUBEVENT_TOKENS = ("parent",)
+
+
+def _is_ambiguous_subevent(event_name: Optional[str]) -> bool:
+    """True if the SubEvent value (a) is blank, or (b) names a parent event
+    or any other category we deliberately don't auto-bucket."""
+    if not event_name:
+        return True
+    norm = str(event_name).strip().lower()
+    if not norm:
+        return True
+    return any(tok in norm for tok in _AMBIGUOUS_SUBEVENT_TOKENS)
+
+
+async def _finance_notify_recipients() -> tuple[list[str], list[str]]:
+    """Option D from the audit — return (to, cc) email lists.
+
+      TO: finance officer(s) — every approved user with role 'finance'.
+      CC: full admins — DCP / Commander / Executive Staff (approved only).
+    """
+    to_rows = await db.users.find(
+        {"role": "finance", "is_approved": True,
+         "email": {"$nin": [None, ""]}},
+        {"_id": 0, "email": 1, "name": 1},
+    ).to_list(50)
+    cc_rows = await db.users.find(
+        {"role": {"$in": ["dcp", "commander", "executive_staff"]},
+         "is_approved": True,
+         "email": {"$nin": [None, ""]}},
+        {"_id": 0, "email": 1, "name": 1},
+    ).to_list(50)
+    return (
+        [r["email"] for r in to_rows if r.get("email")],
+        [r["email"] for r in cc_rows if r.get("email")],
+    )
+
+
+async def send_finance_review_email(rows: list[dict]) -> bool:
+    """Notify the finance officer (TO) and admins (CC) about paid roster
+    rows whose SubEvent is blank or names a Parent event. Returns True if
+    the email was sent successfully.
+
+    `rows` is a list of plain dicts. Each row should have at minimum
+    `capid`, `name`, `amount_paid`, and `event_name`."""
+    # Lazy import — re-use the same SendGrid pattern as the rest of the app.
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+    except Exception as e:
+        logger.error("[finance-notify] sendgrid import failed: %s", e)
+        return False
+
+    SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
+    SENDGRID_SENDER_EMAIL = os.environ.get("SENDGRID_SENDER_EMAIL", "")
+    if not SENDGRID_API_KEY or SENDGRID_API_KEY in ("", "your_sendgrid_api_key_here"):
+        # Don't crash the upload — finance review is a notification, not a hard dep.
+        # Log loudly so the admin sees the row list in the supervisor logs.
+        logger.warning(
+            "[finance-notify] SendGrid not configured — review list NOT emailed. "
+            "Names: %s",
+            ", ".join(f"{r.get('name')} (CAPID {r.get('capid')})" for r in rows),
+        )
+        return False
+    if not SENDGRID_SENDER_EMAIL:
+        logger.warning("[finance-notify] SENDGRID_SENDER_EMAIL not set — skipping email.")
+        return False
+
+    to_emails, cc_emails = await _finance_notify_recipients()
+    if not to_emails:
+        # Nobody has the finance role — fall back to the admin CC list so
+        # SOMEONE sees this.
+        to_emails, cc_emails = cc_emails, []
+    if not to_emails:
+        logger.warning(
+            "[finance-notify] No finance / admin recipients found — review list NOT emailed. "
+            "Names: %s",
+            ", ".join(f"{r.get('name')} (CAPID {r.get('capid')})" for r in rows),
+        )
+        return False
+
+    row_html = "".join(
+        f"<tr>"
+        f"<td style='border:1px solid #ccc;padding:4px 8px;font-family:monospace'>{r.get('capid','')}</td>"
+        f"<td style='border:1px solid #ccc;padding:4px 8px'>{r.get('name','')}</td>"
+        f"<td style='border:1px solid #ccc;padding:4px 8px'>{r.get('member_type','') or '—'}</td>"
+        f"<td style='border:1px solid #ccc;padding:4px 8px'>{r.get('event_name','') or '<i>blank</i>'}</td>"
+        f"<td style='border:1px solid #ccc;padding:4px 8px;text-align:right'>${float(r.get('amount_paid') or 0):,.2f}</td>"
+        f"</tr>"
+        for r in rows
+    )
+    subject = f"[Encampment Finance] {len(rows)} payment(s) need manual classification"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html><body style="font-family:Arial,sans-serif;line-height:1.45;color:#222">
+      <div style="max-width:720px;margin:0 auto;padding:16px">
+        <div style="background:#00205B;color:#fff;padding:14px 18px">
+          <h2 style="margin:0">Tennessee Wing Encampment</h2>
+          <p style="margin:6px 0 0;opacity:.85">Finance — Manual Review Required</p>
+        </div>
+        <div style="padding:18px;background:#f7f7f8">
+          <p>The most recent roster upload found <strong>{len(rows)}</strong> participant(s)
+            who have paid but whose registration sub-event is either blank or a Parent event.
+            These payments cannot be auto-assigned to a budget category and need to be
+            classified manually.</p>
+          <table style="border-collapse:collapse;width:100%;background:#fff;font-size:13px">
+            <thead>
+              <tr style="background:#eee">
+                <th style="border:1px solid #ccc;padding:6px 8px;text-align:left">CAPID</th>
+                <th style="border:1px solid #ccc;padding:6px 8px;text-align:left">Name</th>
+                <th style="border:1px solid #ccc;padding:6px 8px;text-align:left">Member Type</th>
+                <th style="border:1px solid #ccc;padding:6px 8px;text-align:left">Sub-Event</th>
+                <th style="border:1px solid #ccc;padding:6px 8px;text-align:right">Amount Paid</th>
+              </tr>
+            </thead>
+            <tbody>{row_html}</tbody>
+          </table>
+          <p style="margin-top:18px">Open the <strong>Roster</strong> page in the Encampment
+            app, switch to the <strong>Needs Review</strong> tab, and classify each row as
+            Student / Cadre / Senior Staff. The budget will sync automatically on the next
+            upload (or by clicking "Sync to Budget").</p>
+        </div>
+        <p style="text-align:center;color:#666;font-size:11px;margin-top:14px">
+          Civil Air Patrol · United States Air Force Auxiliary
+        </p>
+      </div>
+    </body></html>
+    """
+    message = Mail(
+        from_email=SENDGRID_SENDER_EMAIL,
+        to_emails=to_emails,
+        subject=subject,
+        html_content=html_content,
+    )
+    if cc_emails:
+        for cc in cc_emails:
+            try:
+                message.add_cc(cc)
+            except Exception as e:
+                logger.warning("[finance-notify] could not add cc=%s: %s", cc, e)
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        resp = sg.send(message)
+        logger.info(
+            "[finance-notify] sent to=%s cc=%s status=%s rows=%d",
+            to_emails, cc_emails, resp.status_code, len(rows),
+        )
+        return resp.status_code == 202
+    except Exception as e:
+        logger.error("[finance-notify] send failed: %s", e)
+        return False
 
 
 # ================= SHARED IMPORT HELPERS =================
@@ -681,6 +839,27 @@ async def upload_students(
             # member_type: use spreadsheet value
             m_type = member_type_val.upper() if member_type_val else ''
 
+            # Phase 10 — payment fields from the spreadsheet.
+            # The CAP Report includes `AmountPaid` (number) and `PaidInFull`
+            # (boolean text). Convert and store both, plus a normalized
+            # `paid` flag so the budget sync can read it consistently.
+            amount_paid_raw = row_dict.get('amount_paid')
+            try:
+                amount_paid_val = (
+                    float(amount_paid_raw)
+                    if amount_paid_raw not in (None, '', 'nan') and not pd.isna(amount_paid_raw)
+                    else 0.0
+                )
+            except (TypeError, ValueError):
+                amount_paid_val = 0.0
+            paid_in_full_raw = row_dict.get('paid_in_full')
+            paid_in_full_val = False
+            if paid_in_full_raw is not None and not pd.isna(paid_in_full_raw):
+                paid_in_full_val = (
+                    str(paid_in_full_raw).strip().lower() in ('true', '1', 'yes', 'y', 'paid')
+                )
+            paid_val = bool(paid_in_full_val or amount_paid_val > 0)
+
             students_to_process.append({
                 "capid": capid,
                 "rank": get_str(row_dict, 'rank'),
@@ -717,6 +896,14 @@ async def upload_students(
                 "student_type": "First-Time Student" if p_type == 'basic_student' else None,
                 "member_type": m_type,
                 "staff_member": staff_flag,
+                # Phase 10 payment fields — store on every upload so the
+                # budget sync can stay in lock-step with the master roster.
+                "amount_paid": amount_paid_val,
+                "paid_in_full": paid_in_full_val,
+                "paid": paid_val,
+                # Stash the raw sub-event so we can flag ambiguous-but-paid
+                # rows for the finance officer.
+                "event_name": event_name or None,
             })
         
         # Auto-assign flights if enabled
@@ -845,6 +1032,49 @@ async def upload_students(
                 }}
             )
             soft_removed_count = res.modified_count
+
+        # Phase 10: AUTO-SYNC roster payment totals to the finance budget AND
+        # notify the finance officer about any paid rows we couldn't auto-
+        # bucket (needs_review / blank SubEvent / Parent event).
+        budget_sync_result = None
+        finance_review_rows: list[dict] = []
+        finance_notified = False
+        try:
+            budget_sync_result = await sync_roster_to_budget()
+        except Exception as e:
+            logger.error("[upload] budget sync failed after upload: %s", e)
+        try:
+            paid_ambiguous_query = {
+                "is_removed": {"$ne": True},
+                "$or": [{"paid": True}, {"paid_in_full": True},
+                        {"amount_paid": {"$gt": 0}}],
+                "$and": [{"$or": [
+                    {"participant_type": "needs_review"},
+                    {"participant_type": {"$in": [None, ""]}},
+                    {"event_name": {"$regex": "parent", "$options": "i"}},
+                ]}],
+            }
+            ambiguous_rows = await db.participants.find(
+                paid_ambiguous_query,
+                {"_id": 0, "capid": 1, "first_name": 1, "last_name": 1,
+                 "rank": 1, "member_type": 1, "event_name": 1, "amount_paid": 1,
+                 "participant_type": 1},
+            ).to_list(500)
+            finance_review_rows = [
+                {
+                    "capid": r.get("capid"),
+                    "name": f"{r.get('rank','')} {r.get('last_name','')}, {r.get('first_name','')}".strip(", "),
+                    "member_type": r.get("member_type"),
+                    "event_name": r.get("event_name"),
+                    "amount_paid": r.get("amount_paid") or 0,
+                    "participant_type": r.get("participant_type"),
+                }
+                for r in ambiguous_rows
+            ]
+            if finance_review_rows:
+                finance_notified = await send_finance_review_email(finance_review_rows)
+        except Exception as e:
+            logger.error("[upload] finance review notification failed: %s", e)
         
         # Get final counts
         total_students = await db.participants.count_documents({"participant_type": "basic_student", "is_removed": {"$ne": True}})
@@ -875,7 +1105,11 @@ async def upload_students(
             "linked": linked_count,
             "total_students": total_students,
             "auto_assigned": len(flight_assignments),
-            "flight_distribution": flight_distribution
+            "flight_distribution": flight_distribution,
+            # Phase 10 — finance auto-sync results.
+            "budget_sync": budget_sync_result,
+            "finance_review_count": len(finance_review_rows),
+            "finance_notified": finance_notified,
         }
     
     except Exception as e:
@@ -978,43 +1212,66 @@ async def auto_assign_unassigned_students(
 
 
 async def sync_roster_to_budget():
-    """Sync roster payment data to budget income items"""
+    """Sync roster payment data to budget income items.
+
+    Phase 10 — bucketing is driven STRICTLY by the canonical
+    `participant_type` (which is set by the SubEvents column at upload
+    time). Mapping:
+
+      participant_type == 'senior_staff'   → "Senior Members Staff" budget item
+      participant_type == 'cadre'          → "Cadet Cadre"            budget item
+      participant_type == 'student'        → "Basic Students"         budget item
+      participant_type == 'needs_review'   → NOT auto-bucketed; finance officer
+                                              is notified separately so they can
+                                              manually input (CEAP, Parent
+                                              event, blank SubEvent, etc.)
+
+    Legacy values (`basic_student`, `advanced_student`, `staff`,
+    `senior_member`, `exec_cadre`) are accepted so re-syncing works against
+    unmigrated rows.
+    """
     now = datetime.now(timezone.utc).isoformat()
-    
-    # Get all participants
-    participants = await db.participants.find({}, {"_id": 0}).to_list(1000)
-    
-    # Calculate totals by participant type
+
+    participants = await db.participants.find(
+        {"is_removed": {"$ne": True}}, {"_id": 0}
+    ).to_list(2000)
+
+    # Canonical buckets (+ legacy aliases that map onto them)
     senior_staff_count = 0
     senior_staff_collected = 0.0
     cadet_cadre_count = 0
     cadet_cadre_collected = 0.0
     basic_student_count = 0
     basic_student_collected = 0.0
-    
+    needs_review_paid_count = 0
+    needs_review_paid_collected = 0.0
+
     for p in participants:
-        member_type = (p.get('member_type') or '').upper()
-        ptype = p.get('participant_type', '')
+        ptype = (p.get('participant_type') or '').lower()
         amount = float(p.get('amount_paid') or 0)
-        is_paid = p.get('paid') or p.get('paid_in_full')
-        
-        if member_type == 'SENIOR':
+        is_paid = bool(p.get('paid') or p.get('paid_in_full') or amount > 0)
+
+        if ptype in ('senior_staff', 'staff', 'senior_member'):
             senior_staff_count += 1
-            if is_paid or amount > 0:
+            if is_paid:
                 senior_staff_collected += amount
-        elif ptype == 'cadre':
+        elif ptype in ('cadre', 'exec_cadre'):
             cadet_cadre_count += 1
-            if is_paid or amount > 0:
+            if is_paid:
                 cadet_cadre_collected += amount
-        else:  # basic_student or advanced_student
+        elif ptype in ('student', 'basic_student', 'advanced_student'):
             basic_student_count += 1
-            if is_paid or amount > 0:
+            if is_paid:
                 basic_student_collected += amount
-    
-    # Update or create budget items for each category
+        else:
+            # `needs_review` or any other unrecognized value — NEVER auto-bucket.
+            # Paid rows in this group go on the finance officer's review list.
+            if is_paid:
+                needs_review_paid_count += 1
+                needs_review_paid_collected += amount
+
     updates = []
-    
-    # Senior Members Staff
+
     senior_item = await db.budget.find_one({"item_name": "Senior Members Staff", "category": "Participant Fees"})
     if senior_item:
         await db.budget.update_one(
@@ -1022,12 +1279,11 @@ async def sync_roster_to_budget():
             {"$set": {
                 "actual": senior_staff_collected,
                 "notes": f"{senior_staff_count} SM @ varies",
-                "updated_at": now
-            }}
+                "updated_at": now,
+            }},
         )
         updates.append({"item": "Senior Members Staff", "actual": senior_staff_collected, "count": senior_staff_count})
-    
-    # Cadet Cadre
+
     cadre_item = await db.budget.find_one({"item_name": "Cadet Cadre", "category": "Participant Fees"})
     if cadre_item:
         await db.budget.update_one(
@@ -1035,12 +1291,11 @@ async def sync_roster_to_budget():
             {"$set": {
                 "actual": cadet_cadre_collected,
                 "notes": f"{cadet_cadre_count} Cadre @ $250",
-                "updated_at": now
-            }}
+                "updated_at": now,
+            }},
         )
         updates.append({"item": "Cadet Cadre", "actual": cadet_cadre_collected, "count": cadet_cadre_count})
-    
-    # Basic Students
+
     student_item = await db.budget.find_one({"item_name": "Basic Students", "category": "Participant Fees"})
     if student_item:
         await db.budget.update_one(
@@ -1048,17 +1303,19 @@ async def sync_roster_to_budget():
             {"$set": {
                 "actual": basic_student_collected,
                 "notes": f"{basic_student_count} Students @ $250",
-                "updated_at": now
-            }}
+                "updated_at": now,
+            }},
         )
         updates.append({"item": "Basic Students", "actual": basic_student_collected, "count": basic_student_count})
-    
+
     total_collected = senior_staff_collected + cadet_cadre_collected + basic_student_collected
-    
+
     return {
         "synced": True,
         "total_collected": total_collected,
-        "updates": updates
+        "needs_review_paid_count": needs_review_paid_count,
+        "needs_review_paid_collected": needs_review_paid_collected,
+        "updates": updates,
     }
 
 
