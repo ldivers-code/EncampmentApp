@@ -292,6 +292,312 @@ def _norm_date(value: str) -> Optional[str]:
         return None
 
 
+# ── Phase 8: GRID-FORMAT parser (CAST / Encampment day-tab schedules) ────
+#
+# Sheet layout expected:
+#   Row 0: Day title in A1, e.g. "Friday | Day 1 CADRE Arrival | May 29th"
+#   Row 1: optional banner ("Training Cadre", "Support", ...) — ignored.
+#   Row N: column header row containing one or more START/END pairs
+#          plus squadron/flight columns and (optionally) a Notes column.
+#          Example: START, END, 6th CTS, 21st CTS, 22nd CTS, 16th CTS,
+#                   START, END, Notes
+#   Rows >N: one row per time slot. A cell under a squadron column is the
+#          activity title for that squadron in that slot. A "merged"
+#          activity that applies to all squadrons in a block typically
+#          appears in only the FIRST squadron column (CSV merge artefact).
+
+_SQUADRON_HEADER_RE = re.compile(
+    r"^\s*(\d+(?:st|nd|rd|th))\s*CTS\s*$", re.IGNORECASE
+)
+_FLIGHT_HEADER_RE = re.compile(
+    r"^\s*(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel)"
+    r"(?:\s*(?:flt|flight))?\s*$",
+    re.IGNORECASE,
+)
+_MONTH_DAY_RE = re.compile(
+    r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?"
+    r"(?:[,\s]+(\d{4}))?\b",
+    re.IGNORECASE,
+)
+_FOOTER_YEAR_RE = re.compile(r"\b(20\d{2})\b")
+
+
+def _classify_grid_header_cell(text: str) -> Optional[tuple[str, str]]:
+    """Return (kind, label) for a grid header cell.
+
+    kind ∈ {"start", "end", "notes", "group"}.
+    For "group" the label is the canonical slug (e.g. "6th_cts", "alpha").
+    Returns None if the cell is not recognised.
+    """
+    if not text:
+        return None
+    t = text.strip()
+    if not t:
+        return None
+    tU = t.upper()
+    if tU == "START":
+        return ("start", "")
+    if tU == "END":
+        return ("end", "")
+    if tU in ("NOTES", "NOTE"):
+        return ("notes", "")
+    sm = _SQUADRON_HEADER_RE.match(t)
+    if sm:
+        return ("group", f"{sm.group(1).lower()}_cts")
+    fm = _FLIGHT_HEADER_RE.match(t)
+    if fm:
+        return ("group", fm.group(1).lower())
+    return None
+
+
+def _detect_grid_header(rows: list[list[str]]) -> Optional[int]:
+    """Find the index of the column-header row that has START/END + at least
+    one squadron/flight column. Scan the first 10 rows."""
+    for i in range(min(10, len(rows))):
+        row = rows[i]
+        has_start = False
+        has_group = False
+        for cell in row:
+            kind = _classify_grid_header_cell(cell or "")
+            if not kind:
+                continue
+            if kind[0] == "start":
+                has_start = True
+            elif kind[0] == "group":
+                has_group = True
+        if has_start and has_group:
+            return i
+    return None
+
+
+def _parse_grid_header(header_row: list[str]) -> list[dict]:
+    """Walk the header row and return a list of column blocks.
+
+    Each block is {start_col, end_col, group_cols: [{col, label}], notes_col}.
+    A new block begins at each "START" header. The notes column attaches to
+    whichever block it falls inside (the last open block).
+    """
+    blocks: list[dict] = []
+    cur: Optional[dict] = None
+    for i, cell in enumerate(header_row):
+        kind = _classify_grid_header_cell(cell or "")
+        if not kind:
+            continue
+        k, label = kind
+        if k == "start":
+            cur = {"start_col": i, "end_col": None,
+                   "group_cols": [], "notes_col": None}
+            blocks.append(cur)
+        elif k == "end" and cur and cur["end_col"] is None:
+            cur["end_col"] = i
+        elif k == "group" and cur and cur["end_col"] is not None:
+            cur["group_cols"].append({"col": i, "label": label})
+        elif k == "notes" and cur:
+            cur["notes_col"] = i
+    # Keep only well-formed blocks (start+end present)
+    return [b for b in blocks if b["start_col"] is not None
+            and b["end_col"] is not None]
+
+
+def _extract_grid_date(title_cell: str,
+                       footer_year: Optional[int]) -> Optional[str]:
+    """Pull a YYYY-MM-DD out of a title like
+    'Friday | Day 1 CADRE Arrival | May 29th'."""
+    if not title_cell:
+        return None
+    m = _MONTH_DAY_RE.search(title_cell)
+    if not m:
+        return None
+    month_str = m.group(1)
+    day = int(m.group(2))
+    year_in_title = m.group(3)
+    if year_in_title:
+        year = int(year_in_title)
+    elif footer_year:
+        year = footer_year
+    else:
+        year = datetime.now(timezone.utc).year
+    # Try full month, then abbreviated
+    for fmt in ("%B %d %Y", "%b %d %Y"):
+        try:
+            return datetime.strptime(
+                f"{month_str.title()} {day} {year}", fmt
+            ).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_footer_year(rows: list[list[str]]) -> Optional[int]:
+    """Look at the last ~5 rows for 'LAST UPDATED: MM/DD/YYYY' or any year."""
+    for row in rows[-5:]:
+        for cell in row:
+            if not cell:
+                continue
+            m = _FOOTER_YEAR_RE.search(str(cell))
+            if m:
+                return int(m.group(1))
+    return None
+
+
+def _grid_rows_to_events(rows: list[list[str]],
+                         header_idx: int,
+                         blocks: list[dict],
+                         date: str) -> tuple[list[dict], int]:
+    """Walk data rows under the header and emit events per block.
+
+    Adjacent rows that carry the same (block, label, title) get merged into
+    one longer event (handles vertically-merged cells lost in the CSV
+    export). Returns (events, skipped_row_count).
+    """
+    events: list[dict] = []
+    skipped = 0
+
+    # Open events keyed by (block_index, group_label) → event dict that we
+    # may still extend with subsequent rows.
+    open_per_label: dict[tuple[int, str], dict] = {}
+
+    for row in rows[header_idx + 1:]:
+        # Footer rows like "LAST UPDATED: ..." → stop processing
+        if row and row[0] and "LAST UPDATED" in str(row[0]).upper():
+            break
+
+        # Notes columns may live in any block, but their text applies to
+        # the whole row visually. Collect them once per row.
+        row_notes_parts: list[str] = []
+        for block in blocks:
+            nc = block.get("notes_col")
+            if nc is not None and len(row) > nc:
+                txt = (row[nc] or "").strip()
+                if txt:
+                    row_notes_parts.append(txt)
+        row_notes = " | ".join(row_notes_parts) if row_notes_parts else ""
+
+        any_emit_this_row = False
+        for bi, block in enumerate(blocks):
+            sc, ec = block["start_col"], block["end_col"]
+            start_raw = row[sc] if len(row) > sc else ""
+            end_raw = row[ec] if len(row) > ec else ""
+            start = _norm_time(start_raw)
+            end = _norm_time(end_raw)
+            if not (start and end):
+                # Close any open events for this block — time block ended.
+                for key in list(open_per_label.keys()):
+                    if key[0] == bi:
+                        open_per_label.pop(key, None)
+                continue
+
+            group_cols = block["group_cols"]
+            if not group_cols:
+                continue
+
+            # Gather cell values for each group column.
+            cell_values: list[tuple[str, str]] = []  # [(label, text)]
+            for gc in group_cols:
+                txt = ""
+                if len(row) > gc["col"]:
+                    txt = (row[gc["col"]] or "").strip()
+                cell_values.append((gc["label"], txt))
+
+            filled = [(lbl, txt) for lbl, txt in cell_values if txt]
+            notes = row_notes
+
+            # Decide event shape for this row.
+            row_events_to_open: list[dict] = []
+            if not filled:
+                # Empty activity row — extend any currently-open events
+                # within this block to this row's end_time.
+                for key, ev in list(open_per_label.items()):
+                    if key[0] == bi:
+                        ev["end_time"] = end
+                continue
+
+            # Heuristic: if only the FIRST squadron-column has content, treat
+            # it as a horizontally-merged cell that applies to every group
+            # in the block.
+            only_first_filled = (
+                len(filled) == 1
+                and filled[0][0] == cell_values[0][0]
+                and len(cell_values) > 1
+            )
+            all_filled_same = (
+                len(filled) == len(cell_values)
+                and len({t for _, t in filled}) == 1
+            )
+
+            if only_first_filled or all_filled_same:
+                title = filled[0][1]
+                targets = [lbl for lbl, _ in cell_values]
+                # Use a synthetic group key so all groups share one open ev.
+                key = (bi, "__ALL__")
+                open_ev = open_per_label.get(key)
+                if open_ev and open_ev["title"] == title \
+                        and open_ev["end_time"] == start:
+                    # Extend
+                    open_ev["end_time"] = end
+                    any_emit_this_row = True
+                else:
+                    # Close any prior __ALL__ for this block
+                    open_per_label.pop(key, None)
+                    # Close any per-label opens for this block too (different shape)
+                    for k2 in list(open_per_label.keys()):
+                        if k2[0] == bi:
+                            open_per_label.pop(k2, None)
+                    ev = {
+                        "date": date,
+                        "start_time": start,
+                        "end_time": end,
+                        "title": title,
+                        "description": notes or None,
+                        "location": None,
+                        "event_type": "general",
+                        "target_groups": targets,
+                        "uniform": None,
+                    }
+                    events.append(ev)
+                    open_per_label[key] = ev
+                    any_emit_this_row = True
+            else:
+                # Per-label events. Close __ALL__ if any.
+                open_per_label.pop((bi, "__ALL__"), None)
+                seen_labels_this_row = set()
+                for lbl, txt in filled:
+                    seen_labels_this_row.add(lbl)
+                    key = (bi, lbl)
+                    open_ev = open_per_label.get(key)
+                    if open_ev and open_ev["title"] == txt \
+                            and open_ev["end_time"] == start:
+                        open_ev["end_time"] = end
+                    else:
+                        open_per_label.pop(key, None)
+                        ev = {
+                            "date": date,
+                            "start_time": start,
+                            "end_time": end,
+                            "title": txt,
+                            "description": notes or None,
+                            "location": None,
+                            "event_type": "general",
+                            "target_groups": [lbl],
+                            "uniform": None,
+                        }
+                        events.append(ev)
+                        open_per_label[key] = ev
+                # Close opens for labels that were not seen on this row.
+                for key in list(open_per_label.keys()):
+                    if key[0] == bi and key[1] != "__ALL__" \
+                            and key[1] not in seen_labels_this_row:
+                        open_per_label.pop(key, None)
+                any_emit_this_row = True
+
+        if not any_emit_this_row:
+            skipped += 1
+
+    return events, skipped
+
+
 async def sync_schedule_from_gsheet(schedule_id: str, label: str,
                                     spreadsheet_id: str,
                                     gid: Optional[str]) -> dict:
@@ -303,11 +609,14 @@ async def sync_schedule_from_gsheet(schedule_id: str, label: str,
     independent). Manually-created events without `source_schedule_id` are
     never touched.
 
-    Parser format expected: flat table with one row per event and columns
-    Date / Start Time / End Time / Title (+optional Location, Event Type,
-    Target Groups, Uniform, Description / Notes). The grid format used by
-    the CAST sheet is NOT yet supported — it falls through with a clear
-    error message.
+    Two sheet formats are supported:
+      1. Flat table — one row per event with columns Date, Start Time,
+         End Time, Title (+optional Location, Event Type, Target Groups,
+         Uniform, Notes).
+      2. Grid layout — A1 carries the day title (containing a Month + Day),
+         then a row with START / END / <squadron columns> / Notes, and
+         each subsequent row is a time slot with per-squadron activities.
+         Used by the CAST and Encampment day-tab schedules.
     """
     csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid)
     if not csv_data:
@@ -317,7 +626,68 @@ async def sync_schedule_from_gsheet(schedule_id: str, label: str,
     if not rows:
         return {"success": False, "message": "Sheet is empty."}
 
-    # Locate the header row — scan the first ~6 rows for one we recognise.
+    # ── Try GRID format first (CAST / Encampment day tabs) ─────────────
+    grid_header_idx = _detect_grid_header(rows)
+    if grid_header_idx is not None:
+        blocks = _parse_grid_header(rows[grid_header_idx])
+        if blocks and any(b["group_cols"] for b in blocks):
+            title_cell = rows[0][0] if rows and rows[0] else ""
+            footer_year = _extract_footer_year(rows)
+            date = _extract_grid_date(title_cell, footer_year)
+            if not date:
+                return {
+                    "success": False,
+                    "message": (
+                        f"Detected grid format but could not parse a date "
+                        f"from the title row: '{title_cell[:80]}'. "
+                        f"Add a Month + Day (e.g. 'May 29th') to cell A1."
+                    ),
+                }
+            parsed_events, skipped_rows = _grid_rows_to_events(
+                rows, grid_header_idx, blocks, date
+            )
+            if not parsed_events:
+                return {
+                    "success": False,
+                    "message": (
+                        f"Grid parsed but no events found. Skipped "
+                        f"{skipped_rows} empty rows."
+                    ),
+                }
+
+            now = datetime.now(timezone.utc).isoformat()
+            await db.schedule.delete_many({"source_schedule_id": schedule_id})
+            docs = []
+            for e in parsed_events:
+                docs.append({
+                    "id": str(uuid.uuid4()),
+                    "source_schedule_id": schedule_id,
+                    "source_schedule_label": label,
+                    "is_published": False,
+                    "created_at": now,
+                    "updated_at": now,
+                    **e,
+                })
+            await db.schedule.insert_many(docs)
+            await db.schedule_settings.update_one(
+                {"_id": "settings"},
+                {"$inc": {"version": 1},
+                 "$set": {"last_modified_at": now}},
+                upsert=True,
+            )
+            return {
+                "success": True,
+                "message": (
+                    f"{label}: synced {len(parsed_events)} events "
+                    f"(grid format, date={date})."
+                ),
+                "event_count": len(parsed_events),
+                "skipped": skipped_rows,
+                "format": "grid",
+                "date": date,
+            }
+
+    # ── Fall back to FLAT table parser ─────────────────────────────────
     header_idx = None
     header_cols: dict = {}
     for i in range(min(6, len(rows))):
@@ -332,12 +702,10 @@ async def sync_schedule_from_gsheet(schedule_id: str, label: str,
         return {
             "success": False,
             "message": (
-                "Could not find a recognisable header row. Expected columns: "
-                "Date, Start Time, End Time, Title (and optionally Location, "
-                "Event Type, Target Groups, Uniform, Notes). Note: the per-"
-                "squadron grid format used by the CAST sheet is not yet "
-                "supported — please reformat as a flat table, or ask the "
-                "admin to add grid-format parsing."
+                "Could not find a recognisable header row. Expected either a "
+                "flat table (columns: Date, Start Time, End Time, Title, …) "
+                "or a grid (cell A1 with a date like 'May 29th', then a row "
+                "with START/END/<squadron columns>/Notes)."
             ),
         }
 
