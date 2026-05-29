@@ -193,13 +193,32 @@ async def get_sync_status(user: dict = Depends(get_current_user)):
 # Global scheduler instance
 scheduler = AsyncIOScheduler()
 
-async def fetch_google_sheet_csv(spreadsheet_id: str, gid: Optional[str] = None) -> Optional[str]:
-    """Fetch a Google Sheet as CSV data. If gid is None/empty, fetches the
-    default first tab."""
+async def fetch_google_sheet_csv(spreadsheet_id: str,
+                                 gid: Optional[str] = None,
+                                 sheet_name: Optional[str] = None) -> Optional[str]:
+    """Fetch a Google Sheet tab as CSV data.
+
+    Tab resolution order:
+      1. `gid` if provided → /export?format=csv&gid=<gid>
+      2. `sheet_name` if provided → /gviz/tq?tqx=out:csv&sheet=<name>
+      3. Neither → first tab via /export?format=csv
+    """
     if gid:
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+        url = (
+            f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+            f"/export?format=csv&gid={gid}"
+        )
+    elif sheet_name:
+        from urllib.parse import quote
+        url = (
+            f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+            f"/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
+        )
     else:
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv"
+        url = (
+            f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+            f"/export?format=csv"
+        )
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
             response = await client.get(url)
@@ -207,7 +226,7 @@ async def fetch_google_sheet_csv(spreadsheet_id: str, gid: Optional[str] = None)
                 content = response.text
                 # Check if it's an error page
                 if "Page Not Found" in content or "<!DOCTYPE html>" in content[:100]:
-                    logger.error(f"Sheet not accessible: {spreadsheet_id}/{gid}")
+                    logger.error(f"Sheet not accessible: {spreadsheet_id}/{gid or sheet_name}")
                     return None
                 return content
             else:
@@ -505,7 +524,6 @@ def _grid_rows_to_events(rows: list[list[str]],
             notes = row_notes
 
             # Decide event shape for this row.
-            row_events_to_open: list[dict] = []
             if not filled:
                 # Empty activity row — extend any currently-open events
                 # within this block to this row's end_time.
@@ -600,7 +618,8 @@ def _grid_rows_to_events(rows: list[list[str]],
 
 async def sync_schedule_from_gsheet(schedule_id: str, label: str,
                                     spreadsheet_id: str,
-                                    gid: Optional[str]) -> dict:
+                                    gid: Optional[str],
+                                    sheet_name: Optional[str] = None) -> dict:
     """Sync one configured schedule from Google Sheets.
 
     Events imported from this schedule are tagged with
@@ -618,7 +637,7 @@ async def sync_schedule_from_gsheet(schedule_id: str, label: str,
          each subsequent row is a time slot with per-squadron activities.
          Used by the CAST and Encampment day-tab schedules.
     """
-    csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid)
+    csv_data = await fetch_google_sheet_csv(spreadsheet_id, gid, sheet_name)
     if not csv_data:
         return {"success": False, "message": "Could not fetch the sheet. Is it shared as 'Anyone with the link'?"}
 
@@ -820,9 +839,168 @@ async def sync_one_schedule(schedule_id: str,
     result = await sync_schedule_from_gsheet(
         cfg["id"], cfg.get("label") or cfg["id"],
         cfg["spreadsheet_id"], cfg.get("gid"),
+        cfg.get("sheet_name"),
     )
     await _persist_schedule_telemetry(schedule_id, result)
     return result
+
+
+# ── Tab auto-discovery (one URL → many day-tabs) ─────────────────────────
+
+from pydantic import BaseModel as _BM
+
+
+class DiscoverTabsRequest(_BM):
+    spreadsheet_id: str   # raw id OR full Sheets URL
+
+
+class BulkAddSchedulesRequest(_BM):
+    spreadsheet_id: str
+    tabs: list[dict]   # each: {sheet_name, label, enabled?}
+
+
+async def _fetch_xlsx_workbook(spreadsheet_id: str):
+    """Download a public Google Sheet as XLSX and return an openpyxl workbook.
+    Returns None if the sheet is not shared publicly or the download fails.
+    """
+    from io import BytesIO
+    url = (
+        f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        f"/export?format=xlsx"
+    )
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            resp = await client.get(url)
+        if resp.status_code != 200:
+            logger.error(f"XLSX export failed: HTTP {resp.status_code}")
+            return None
+        # Reject HTML error pages
+        ctype = resp.headers.get("content-type", "")
+        if ctype.startswith("text/html") or resp.content[:4] != b"PK\x03\x04":
+            logger.error(f"XLSX export returned non-xlsx content-type: {ctype}")
+            return None
+        from openpyxl import load_workbook
+        return load_workbook(BytesIO(resp.content), read_only=True, data_only=True)
+    except Exception as e:
+        logger.error(f"Error downloading XLSX: {e}")
+        return None
+
+
+@api_router.post("/google-sheets/discover-tabs")
+async def discover_tabs(req: DiscoverTabsRequest,
+                        user: dict = Depends(get_current_user)):
+    """Download a public Google Sheet, enumerate all tabs and return their
+    name + A1 title + a flag for whether the tab looks like a schedule
+    (its A1 cell parses as a Month + Day)."""
+    if user.get("role") not in _GSHEET_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    sid, _gid = _parse_spreadsheet_url(req.spreadsheet_id)
+    if not sid:
+        raise HTTPException(status_code=400, detail="Invalid spreadsheet id/URL.")
+
+    wb = await _fetch_xlsx_workbook(sid)
+    if wb is None:
+        raise HTTPException(
+            status_code=400,
+            detail=("Could not download the spreadsheet. Make sure it is shared "
+                    "as 'Anyone with the link – Viewer' and the URL/ID is correct."),
+        )
+
+    tabs = []
+    for name in wb.sheetnames:
+        ws = wb[name]
+        a1 = ws["A1"].value
+        a1_str = "" if a1 is None else str(a1).strip()
+        parsed_date = _extract_grid_date(a1_str, None) if a1_str else None
+        # Suggested label: prefer A1 (it's already the day title); else tab name.
+        suggested_label = a1_str if (a1_str and parsed_date) else name
+        tabs.append({
+            "sheet_name": name,
+            "a1": a1_str,
+            "parsed_date": parsed_date,
+            "looks_like_schedule": bool(parsed_date),
+            "suggested_label": suggested_label,
+        })
+
+    return {
+        "spreadsheet_id": sid,
+        "tabs": tabs,
+        "schedule_tab_count": sum(1 for t in tabs if t["looks_like_schedule"]),
+    }
+
+
+@api_router.post("/google-sheets/schedules/bulk-add")
+async def bulk_add_schedules(req: BulkAddSchedulesRequest,
+                             user: dict = Depends(get_current_user)):
+    """Append a list of {sheet_name, label} entries to the saved schedules
+    config — used by the "Discover & Add Tabs" workflow in the Admin UI."""
+    if user.get("role") not in _GSHEET_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if not req.tabs:
+        raise HTTPException(status_code=400, detail="No tabs provided.")
+    sid, _gid = _parse_spreadsheet_url(req.spreadsheet_id)
+    if not sid:
+        raise HTTPException(status_code=400, detail="Invalid spreadsheet id/URL.")
+
+    settings = await db.google_sheets_settings.find_one(
+        {"_id": "settings"}
+    ) or {}
+    existing = list(settings.get("schedules") or [])
+    existing_ids = {s.get("id") for s in existing}
+    # Deduplicate by (spreadsheet_id, sheet_name) — never add the same tab twice.
+    existing_keys = {(s.get("spreadsheet_id"), s.get("sheet_name") or s.get("gid") or "")
+                     for s in existing}
+
+    added = 0
+    skipped = 0
+    for tab in req.tabs:
+        sheet_name = (tab.get("sheet_name") or "").strip()
+        label = (tab.get("label") or sheet_name).strip()
+        if not sheet_name:
+            skipped += 1
+            continue
+        key = (sid, sheet_name)
+        if key in existing_keys:
+            skipped += 1
+            continue
+
+        # Generate stable id from spreadsheet_id + sheet_name.
+        base = _slugify(f"{label or sheet_name}")
+        sched_id = base
+        i = 1
+        while sched_id in existing_ids:
+            i += 1
+            sched_id = f"{base}_{i}"
+        existing_ids.add(sched_id)
+        existing_keys.add(key)
+
+        existing.append({
+            "id": sched_id,
+            "label": label,
+            "spreadsheet_id": sid,
+            "gid": None,
+            "sheet_name": sheet_name,
+            "enabled": bool(tab.get("enabled", True)),
+            "last_sync_at": None,
+            "last_sync_status": None,
+            "last_sync_message": None,
+            "last_event_count": None,
+        })
+        added += 1
+
+    await db.google_sheets_settings.update_one(
+        {"_id": "settings"},
+        {"$set": {"schedules": existing}},
+        upsert=True,
+    )
+
+    return {
+        "added": added,
+        "skipped": skipped,
+        "total_schedules": len(existing),
+    }
+
 
 async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
     """Sync roster data from Google Sheet"""
@@ -1466,6 +1644,7 @@ async def perform_scheduled_sync():
             sched_result = await sync_schedule_from_gsheet(
                 cfg["id"], cfg.get("label") or cfg["id"],
                 cfg["spreadsheet_id"], cfg.get("gid"),
+                cfg.get("sheet_name"),
             )
             await _persist_schedule_telemetry(cfg["id"], sched_result)
             results.append(sched_result.get("message", "unknown"))

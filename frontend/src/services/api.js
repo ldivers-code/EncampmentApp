@@ -927,6 +927,26 @@ export const syncOneSchedule = async (scheduleId) => {
   return response.data;
 };
 
+// Phase 8b: enumerate all tabs from a public Google Sheets URL/id.
+export const discoverGoogleSheetTabs = async (spreadsheet_id) => {
+  const response = await axios.post(
+    `${API}/google-sheets/discover-tabs`,
+    { spreadsheet_id },
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+// Phase 8b: bulk-append schedule configs (one per selected tab).
+export const bulkAddSchedules = async (spreadsheet_id, tabs) => {
+  const response = await axios.post(
+    `${API}/google-sheets/schedules/bulk-add`,
+    { spreadsheet_id, tabs },
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
 // Phase 10: paid rows whose SubEvent was blank or a Parent event — these
 // need the finance officer to manually classify them before the next
 // budget sync.

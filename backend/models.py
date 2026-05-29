@@ -734,11 +734,17 @@ class ScheduleSheetConfig(BaseModel):
     week) and synced independently — events imported from one configured
     schedule are tagged with `source_schedule_id` so re-syncing one doesn't
     touch the other.
+
+    Tab resolution: when both `gid` and `sheet_name` are blank, the first
+    tab is used. When `gid` is set, it takes priority. Otherwise `sheet_name`
+    (resolved via the gviz CSV endpoint) is used. `sheet_name` is set by the
+    "Discover tabs" auto-import flow.
     """
     id: str                              # stable key, e.g. "cast" or "encampment"
     label: str                           # human display name
     spreadsheet_id: str                  # Google Sheets doc id
     gid: Optional[str] = None            # optional tab gid (default: first tab)
+    sheet_name: Optional[str] = None     # alternative to gid — exact tab name
     enabled: bool = True
     # Last-sync telemetry written by the scheduler:
     last_sync_at: Optional[str] = None

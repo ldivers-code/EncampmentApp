@@ -9,7 +9,7 @@ import {
   Cloud, CheckCircle, AlertTriangle, RefreshCw, Clock,
   FileSpreadsheet, ExternalLink, XCircle, Calendar, Plus, Trash2
 } from 'lucide-react';
-import { getHonorAgreementStatus, sendHonorAgreementReminders } from '../../services/api';
+import { getHonorAgreementStatus, sendHonorAgreementReminders, discoverGoogleSheetTabs, bulkAddSchedules, getGoogleSheetsSettings } from '../../services/api';
 
 // Phase 8: accept a full Google Sheets URL OR a raw spreadsheet id.
 const parseSheetField = (input) => {
@@ -81,6 +81,82 @@ const AdminSettingsTab = ({
       ...prev,
       schedules: (prev.schedules || []).filter((_, i) => i !== index),
     }));
+  };
+
+  // ── Tab Discovery Modal state ────────────────────────────────────────
+  const [discoverOpen, setDiscoverOpen] = useState(false);
+  const [discoverUrl, setDiscoverUrl] = useState('');
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoveredTabs, setDiscoveredTabs] = useState(null); // {spreadsheet_id, tabs: [...]}
+  const [tabSelections, setTabSelections] = useState({});    // {sheet_name: bool}
+  const [tabLabels, setTabLabels] = useState({});            // {sheet_name: label}
+  const [adding, setAdding] = useState(false);
+
+  const openDiscover = () => {
+    setDiscoverUrl('');
+    setDiscoveredTabs(null);
+    setTabSelections({});
+    setTabLabels({});
+    setDiscoverOpen(true);
+  };
+
+  const runDiscover = async () => {
+    if (!discoverUrl.trim()) {
+      toast.error('Paste a Google Sheets URL or spreadsheet ID');
+      return;
+    }
+    setDiscoverLoading(true);
+    try {
+      const res = await discoverGoogleSheetTabs(discoverUrl.trim());
+      setDiscoveredTabs(res);
+      // Default: pre-select tabs whose A1 looks like a schedule day.
+      const sel = {}, lbl = {};
+      (res.tabs || []).forEach((t) => {
+        sel[t.sheet_name] = !!t.looks_like_schedule;
+        lbl[t.sheet_name] = t.suggested_label || t.sheet_name;
+      });
+      setTabSelections(sel);
+      setTabLabels(lbl);
+      if (!res.schedule_tab_count) {
+        toast.info('Sheet downloaded — no tab looks like a schedule day. You can still add any tab manually.');
+      } else {
+        toast.success(`Found ${res.schedule_tab_count} schedule tab(s) out of ${res.tabs.length}`);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to discover tabs');
+    } finally {
+      setDiscoverLoading(false);
+    }
+  };
+
+  const confirmBulkAdd = async () => {
+    if (!discoveredTabs) return;
+    const picks = (discoveredTabs.tabs || [])
+      .filter((t) => tabSelections[t.sheet_name])
+      .map((t) => ({
+        sheet_name: t.sheet_name,
+        label: (tabLabels[t.sheet_name] || t.sheet_name).trim(),
+      }));
+    if (!picks.length) {
+      toast.error('Pick at least one tab to add');
+      return;
+    }
+    setAdding(true);
+    try {
+      const res = await bulkAddSchedules(discoveredTabs.spreadsheet_id, picks);
+      toast.success(`Added ${res.added}; skipped ${res.skipped} (already configured)`);
+      // Refresh settings so the new rows appear in the UI immediately.
+      const fresh = await getGoogleSheetsSettings();
+      setGsheetSettings((prev) => ({
+        ...prev,
+        schedules: fresh.schedules || [],
+      }));
+      setDiscoverOpen(false);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Bulk add failed');
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -263,17 +339,30 @@ const AdminSettingsTab = ({
                 <Calendar className="w-4 h-4 text-emerald-600" />
                 <Label className="text-sm font-bold uppercase text-slate-700">Schedules</Label>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addSchedule}
-                className="rounded-sm"
-                data-testid="add-schedule-btn"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                Add Schedule
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openDiscover}
+                  className="rounded-sm border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  data-testid="discover-tabs-btn"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />
+                  Discover Tabs
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSchedule}
+                  className="rounded-sm"
+                  data-testid="add-schedule-btn"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Add Schedule
+                </Button>
+              </div>
             </div>
             <p className="text-xs text-slate-500">
               Each schedule syncs to its own Google Sheet. Events imported from one
@@ -420,10 +509,199 @@ const AdminSettingsTab = ({
                 <em>“Friday | Day 1 CADRE Arrival | May 29th”</em>), then a header row with{' '}
                 <code>START</code>, <code>END</code>, one column per squadron (e.g.{' '}
                 <code>6th CTS</code>, <code>21st CTS</code>) and an optional{' '}
-                <code>Notes</code> column. Use one Schedule entry per day tab — paste the URL with{' '}
-                <code>?gid=...</code> for the tab. Horizontally-merged cells apply to all squadrons in the block; vertically-merged cells extend the event end time automatically.
+                <code>Notes</code> column. Horizontally-merged cells apply to all squadrons in the block; vertically-merged cells extend the event end time automatically.
+              </p>
+              <p className="pt-1 border-t border-slate-200 text-slate-600">
+                💡 <strong>Tip:</strong> paste a spreadsheet URL into{' '}
+                <strong>Discover Tabs</strong> above and we'll auto-list every day tab — pick the ones to import and we'll create one Schedule per tab for you.
               </p>
             </div>
+
+            {/* ── Discover Tabs modal ──────────────────────────────── */}
+            {discoverOpen && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => !discoverLoading && !adding && setDiscoverOpen(false)}
+                data-testid="discover-modal"
+              >
+                <div
+                  className="bg-white rounded-sm shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                      <div>
+                        <h3 className="font-bold text-[#00205B] text-sm">Discover &amp; Add Tabs</h3>
+                        <p className="text-[11px] text-slate-500">
+                          Paste a Google Sheets URL — we'll list every tab and add one Schedule entry per pick.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => !discoverLoading && !adding && setDiscoverOpen(false)}
+                      className="text-slate-400 hover:text-slate-700"
+                      data-testid="discover-modal-close"
+                      aria-label="Close"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Step 1: URL input */}
+                  <div className="px-5 py-4 space-y-2 border-b border-slate-200">
+                    <Label className="text-xs text-slate-500">Spreadsheet URL or ID</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={discoverUrl}
+                        onChange={(e) => setDiscoverUrl(e.target.value)}
+                        placeholder="https://docs.google.com/spreadsheets/d/{ID}/edit?usp=sharing"
+                        className="rounded-sm text-sm font-mono"
+                        disabled={discoverLoading}
+                        data-testid="discover-url-input"
+                      />
+                      <Button
+                        type="button"
+                        onClick={runDiscover}
+                        disabled={discoverLoading || !discoverUrl.trim()}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm whitespace-nowrap"
+                        data-testid="discover-fetch-btn"
+                      >
+                        {discoverLoading ? (
+                          <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Scanning…</>
+                        ) : (
+                          <><Cloud className="w-3.5 h-3.5 mr-1" />Scan Tabs</>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      The sheet must be shared as <em>"Anyone with the link – Viewer"</em>.
+                    </p>
+                  </div>
+
+                  {/* Step 2: tab list */}
+                  <div className="flex-1 overflow-y-auto px-5 py-3">
+                    {!discoveredTabs && (
+                      <p className="text-sm text-slate-400 italic py-8 text-center">
+                        Scan a sheet to see its tabs.
+                      </p>
+                    )}
+                    {discoveredTabs && discoveredTabs.tabs.length === 0 && (
+                      <p className="text-sm text-slate-500 italic py-8 text-center">
+                        Sheet has no tabs.
+                      </p>
+                    )}
+                    {discoveredTabs && discoveredTabs.tabs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          {discoveredTabs.schedule_tab_count} of {discoveredTabs.tabs.length} tabs look like schedule days (✓ pre-checked).
+                          Edit the label or uncheck to skip.
+                        </p>
+                        {discoveredTabs.tabs.map((t) => (
+                          <div
+                            key={t.sheet_name}
+                            className={`border rounded-sm p-2.5 ${
+                              tabSelections[t.sheet_name]
+                                ? 'border-emerald-300 bg-emerald-50/50'
+                                : 'border-slate-200 bg-slate-50/40'
+                            }`}
+                            data-testid={`discover-tab-${t.sheet_name}`}
+                          >
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!!tabSelections[t.sheet_name]}
+                                onChange={(e) =>
+                                  setTabSelections((prev) => ({
+                                    ...prev,
+                                    [t.sheet_name]: e.target.checked,
+                                  }))
+                                }
+                                className="mt-1 rounded"
+                                data-testid={`discover-tab-check-${t.sheet_name}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-xs font-bold text-slate-700">
+                                    {t.sheet_name}
+                                  </span>
+                                  {t.parsed_date && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
+                                      {t.parsed_date}
+                                    </span>
+                                  )}
+                                  {!t.looks_like_schedule && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                                      no date in A1
+                                    </span>
+                                  )}
+                                </div>
+                                {t.a1 && (
+                                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                                    A1: <em>{t.a1}</em>
+                                  </p>
+                                )}
+                                <Input
+                                  value={tabLabels[t.sheet_name] || ''}
+                                  onChange={(e) =>
+                                    setTabLabels((prev) => ({
+                                      ...prev,
+                                      [t.sheet_name]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Schedule label shown in the app"
+                                  className="rounded-sm text-xs h-7 mt-1.5"
+                                  disabled={!tabSelections[t.sheet_name]}
+                                  data-testid={`discover-tab-label-${t.sheet_name}`}
+                                />
+                              </div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
+                    <p className="text-xs text-slate-500">
+                      {discoveredTabs && (
+                        <span>
+                          {Object.values(tabSelections).filter(Boolean).length} selected
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDiscoverOpen(false)}
+                        disabled={discoverLoading || adding}
+                        className="rounded-sm"
+                        data-testid="discover-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={confirmBulkAdd}
+                        disabled={
+                          adding ||
+                          !discoveredTabs ||
+                          !Object.values(tabSelections).some(Boolean)
+                        }
+                        className="bg-[#00205B] hover:bg-[#001845] text-white rounded-sm"
+                        data-testid="discover-confirm"
+                      >
+                        {adding ? 'Adding…' : 'Add Selected Tabs'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Org Chart Sheet Config */}

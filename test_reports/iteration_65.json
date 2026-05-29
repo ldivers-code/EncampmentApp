@@ -1,0 +1,32 @@
+{
+  "summary": "Full backend + frontend testing of Phase 8 Google Sheets tab auto-discovery (Discover Tabs modal + bulk-add). All 7 new backend tests + 12 grid-parser regression tests pass. Frontend E2E flow works: scan returns 4 tabs with green date chips, unchecking CADRE tab + Add Selected Tabs yields exactly 3 schedules in the Schedules section. DB state cleaned after testing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminSettingsTab — HonorAgreementTracker table", "issues": ["Pre-existing React hydration warnings: a Velt/dynamic wrapper places <span> inside <thead>/<tbody>, breaking <tr> nesting. Not caused by this feature but noisy in console on the Settings tab."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_discover_tabs.py",
+    "/app/test_reports/pytest/discover_tabs_results.xml",
+    "/app/test_reports/pytest/grid_parser_regression.xml"
+  ],
+  "action_items": [
+    "Optional: fix HonorAgreementTracker table hydration warnings (unrelated to this feature) — wrap source uses a <span style='display:contents'> inside <thead>/<tbody> which is invalid HTML."
+  ],
+  "critical_code_review_comments": [
+    "discover_tabs / bulk_add_schedules are clean and well-bounded; XLSX export gate rejects HTML error pages via PK\\x03\\x04 magic — good.",
+    "bulk_add_schedules dedup uses (spreadsheet_id, sheet_name) key — confirmed working; id collision auto-suffix (base, base_2, base_3) verified.",
+    "fetch_google_sheet_csv tab resolution order (gid → sheet_name → first tab) verified end-to-end via /sync."
+  ],
+  "updated_files": ["/app/backend/tests/test_discover_tabs.py"],
+  "success_rate": {"backend": "100% (7/7 new + 12/12 regression)", "frontend": "100% (E2E modal flow)"},
+  "test_credentials": "commander@test.com/test123 (admin) and to@test.com/test123 (training_officer for 403 check) — both verified.",
+  "seed_data_creation": "None. Created and removed transient schedule configs against live public CAST sheet 16rG0RaIzVKjWc0TJe8f4ET7Nxpro8SGJkjOrJbdeaGM. settings.schedules reset to [] and 54 source_schedule_id events deleted at end of run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_discover_tabs.py covers all discover-tabs/bulk-add/sync-via-sheet-name paths. It auto-resets settings.schedules before/after run so it's idempotent. Re-run with `pytest backend/tests/test_discover_tabs.py -v`. End-to-end sync of 'Sat May 30th' yielded 54 events (assertion allows 40–70). Frontend testids: discover-tabs-btn, discover-modal, discover-url-input, discover-fetch-btn, discover-tab-check-<name>, discover-confirm, discover-cancel, schedule-row-<id>.",
+  "rca of the issue": "N/A — no bugs found. Main agent's implementation matches spec exactly: returns 4 tabs from CAST with all 4 parsed_date populated, sheet_name persisted on bulk-add (gid:null), dedup on (sid, sheet_name), id auto-suffix on slug collisions, /sync uses gviz endpoint with sheet_name and emits ~54 grid events for date 2026-05-30."
+}
