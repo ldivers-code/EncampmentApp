@@ -903,7 +903,7 @@ const MedDiaryTab = ({ hasFullAccess }) => {
               <select value={newEntry.participant_id} onChange={e => setNewEntry({ ...newEntry, participant_id: e.target.value })}
                 className="w-full mt-1 h-9 rounded-sm border border-slate-300 text-sm px-2" data-testid="diary-cadet-select">
                 <option value="">Select cadet...</option>
-                {participants.filter(p => ['basic_student','cadre'].includes(p.participant_type)).sort((a,b) => (a.last_name||'').localeCompare(b.last_name||'')).map(p => (
+                {participants.filter(p => ['student','cadre'].includes(p.participant_type)).sort((a,b) => (a.last_name||'').localeCompare(b.last_name||'')).map(p => (
                   <option key={p.id} value={p.id}>{p.rank} {p.last_name}, {p.first_name}</option>
                 ))}
               </select>
@@ -982,7 +982,7 @@ const SupplementsTab = ({ hasFullAccess }) => {
   const loadParticipants = async () => {
     try {
       const data = await getParticipants();
-      setParticipants(data.filter(p => ['basic_student','cadre'].includes(p.participant_type)));
+      setParticipants(data.filter(p => ['student','cadre'].includes(p.participant_type)));
     } catch (e) { console.error(e); }
     setLoading(false);
   };

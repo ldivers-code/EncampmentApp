@@ -118,13 +118,62 @@ POST /api/auth/reset-password      { "token": "abc123", "new_password": "NewPass
 
 ## 3. User Roles & Permissions (19 roles)
 
+> **Important**: The backend separates **seven distinct concerns**.
+> Don't conflate them on mobile — they each have a different field and a
+> different purpose. See `/app/backend/role_groups.py` for the canonical
+> definitions.
+
+### The Seven Concerns
+
+| # | Concern | Field(s) | Purpose |
+|---|---------|----------|---------|
+| 1 | **Account status** | `users.is_approved` | Surfaced via `GET /api/auth/status`. Block app entry until `true`. |
+| 2 | **CAP member type** | `participants.member_type` | `SENIOR`, `CADET`, or `CADET SPONSOR`. Mirrors CAP membership. |
+| 3 | **Encampment participant type** (canonical) | `participants.participant_type` | One of: `student`, `cadre`, `senior_staff`, `needs_review`. **The legacy values `basic_student`, `advanced_student`, `staff`, `senior_member`, and `exec_cadre` are DEPRECATED — never write them.** |
+| 4 | **Cadre role type** | `participants.is_exec_cadre` + `users.cadre_position` | Boolean flag identifying executive cadre. **Not** a `participant_type`. |
+| 5 | **Duty assignment** | `users.flight / squadron / cadre_unit / cadre_position / support_section` | Where the person works during the encampment. |
+| 6 | **Permission role** | `users.role` (UserRole) | One of the 19 roles below. Grouped via `role_groups.py`. |
+| 7 | **Access scope** | enforced by backend `scope.py` (visibility + redaction) | Mobile receives already-redacted payloads — no client-side filtering required. |
+
+### Canonical Participant Types
+
+| Value | Means | Mobile UI Suggestion |
+|-------|-------|----------------------|
+| `student` | A regular encampment student | Blue chip |
+| `cadre` | Cadet cadre (includes flight staff). Combined with `is_exec_cadre=true` → exec cadre. | Emerald chip |
+| `senior_staff` | Adult senior staff working the encampment | Amber chip |
+| `needs_review` | Roster row could not be classified — finance/commander must triage | Rose chip + action prompt |
+
+### `GET /api/auth/status` — canonical 6-field response
+
+Use this as the **single source of truth** when deciding what screen to show after login. Don't re-derive these on mobile.
+
+```json
+{
+  "is_authenticated": true,
+  "is_approved": true,
+  "honor_agreement_signed": true,
+  "linked_participant_id": "uuid-or-null",
+  "participant_type": "cadre",        // canonical value, never legacy
+  "role": "exec_cadre"
+}
+```
+
+| Field returned | If false / missing → mobile should… |
+|----------------|--------------------------------------|
+| `is_authenticated` | Show login screen. |
+| `is_approved` | Show "Awaiting admin approval" screen. Poll `/auth/status` periodically. |
+| `honor_agreement_signed` | Force-modal the Honor Agreement before any other navigation. |
+| `linked_participant_id` is `null` | Show "Pending participant linking" — admin must link via Pending Users tab. |
+| `participant_type === "needs_review"` | Show banner: "Your registration needs review — finance admin will resolve". |
+
 ### Role Groups
 
 | Group | Roles | Access Level |
 |-------|-------|-------------|
 | **Command** | `dcp`, `commander` | Full access to everything |
 | **Senior Staff** | `executive_staff`, `training_officer`, `logistics`, `finance`, `plans_programs`, `health_services`, `dining_facility`, `staff` | Module-specific + general read |
-| **Cadre** | `exec_cadre`, `cadre`, `squadron_commander` | Flight/squadron scope + cadre tools |
+| **Cadre** | `exec_cadre`, `cadre`, `squadron_commander` | Flight/squadron scope + cadre tools. **Cadre roles do NOT inherit senior-staff capabilities by default** (Phase 3 separation). |
 | **Support** | `support_logistics`, `support_comms`, `support_pa`, `support_dining`, `support_health` | Limited to their support area |
 | **Parent** | `parent` | Read-only: own cadet's data only |
 
@@ -517,7 +566,8 @@ Receipt OCR response:
   "first_name": "Lillian",
   "last_name": "Yoder",
   "rank": "C/LtCol",
-  "participant_type": "cadre",       // basic_student | cadre | staff | senior_member
+  "participant_type": "cadre",       // CANONICAL: student | cadre | senior_staff | needs_review
+  "is_exec_cadre": false,            // boolean — true for executive cadre (was the legacy "exec_cadre" participant_type)
   "flight": "alpha",                 // alpha-foxtrot or null
   "squadron": "6th_cts",             // or null
   "position": "Flight Commander",    // or null

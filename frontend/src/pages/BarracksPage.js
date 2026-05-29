@@ -39,7 +39,7 @@ const BunkBed = ({ bunk, onAssign, onUnassign, isHighlighted }) => {
           {occupied ? (
             <div className="min-w-0">
               <p className="font-medium text-[#00205B] truncate text-[11px] leading-tight">{data.participant_name}</p>
-              <p className="text-[9px] text-slate-400 capitalize">{data.participant_type === 'basic_student' ? 'student' : data.participant_type}{data.flight ? ` | ${data.flight}` : ''}</p>
+              <p className="text-[9px] text-slate-400 capitalize">{(data.participant_type || '').replace(/_/g, ' ')}{data.flight ? ` | ${data.flight}` : ''}</p>
             </div>
           ) : (
             <span className="text-slate-400 italic">Empty</span>

@@ -592,11 +592,12 @@ const AnalyticsPage = () => {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`text-xs px-2 py-0.5 rounded ${
-                            p.participant_type === 'staff' ? 'bg-amber-100 text-amber-700' :
+                            p.participant_type === 'senior_staff' ? 'bg-amber-100 text-amber-700' :
                             p.participant_type === 'cadre' ? 'bg-emerald-100 text-emerald-700' :
+                            p.participant_type === 'needs_review' ? 'bg-rose-100 text-rose-700' :
                             'bg-blue-100 text-blue-700'
                           }`}>
-                            {p.participant_type}
+                            {(p.participant_type || '').replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono text-sm">{p.unit}</td>

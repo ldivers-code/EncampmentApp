@@ -49,7 +49,7 @@ const DraggableCard = ({ participant, flightColor }) => {
   };
 
   const pType = participant.participant_type;
-  const isCadre = pType === 'cadre' || pType === 'exec_cadre';
+  const isCadre = pType === 'cadre';
 
   return (
     <div
@@ -92,8 +92,8 @@ const FlightColumn = ({ flightName, participants, color, searchTerm }) => {
     );
   }, [participants, searchTerm]);
 
-  const studentCount = participants.filter(p => p.participant_type === 'basic_student' || p.participant_type === 'student').length;
-  const cadreCount = participants.filter(p => p.participant_type === 'cadre' || p.participant_type === 'exec_cadre').length;
+  const studentCount = participants.filter(p => p.participant_type === 'student').length;
+  const cadreCount = participants.filter(p => p.participant_type === 'cadre').length;
 
   return (
     <div
@@ -138,7 +138,7 @@ const FlightColumn = ({ flightName, participants, color, searchTerm }) => {
 // ─── Drag Overlay Card (follows cursor) ───
 const DragOverlayCard = ({ participant }) => {
   if (!participant) return null;
-  const isCadre = participant.participant_type === 'cadre' || participant.participant_type === 'exec_cadre';
+  const isCadre = participant.participant_type === 'cadre';
   return (
     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-[#00205B] bg-white shadow-xl ring-2 ring-[#00205B]/30 w-[220px]">
       <GripVertical className="w-3.5 h-3.5 text-[#00205B] flex-shrink-0" />
@@ -166,7 +166,7 @@ const FlightManager = ({ participants, onUpdate }) => {
   // Only students and cadre are manageable
   const manageable = useMemo(() =>
     participants.filter(p =>
-      ['basic_student', 'student', 'cadre', 'exec_cadre'].includes(p.participant_type)
+      ['student', 'cadre'].includes(p.participant_type)
     ),
     [participants]
   );

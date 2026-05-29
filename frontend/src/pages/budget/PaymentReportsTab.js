@@ -140,11 +140,10 @@ const PaymentReportsTab = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="basic_student">Students</SelectItem>
-                <SelectItem value="advanced_student">Advanced Students</SelectItem>
+                <SelectItem value="student">Students</SelectItem>
                 <SelectItem value="cadre">Cadre</SelectItem>
-                <SelectItem value="staff">Staff</SelectItem>
-                <SelectItem value="senior_member">Senior Members</SelectItem>
+                <SelectItem value="senior_staff">Senior Staff</SelectItem>
+                <SelectItem value="needs_review">Needs Review</SelectItem>
               </SelectContent>
             </Select>
             <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>

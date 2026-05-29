@@ -46,9 +46,9 @@ const AnnualResetTab = ({ currentUser }) => {
 
   const TYPE_OPTIONS = [
     { value: 'cadre', label: 'Cadre', desc: 'All cadre members' },
-    { value: 'staff', label: 'Senior Staff', desc: 'Staff role participants' },
-    { value: 'senior_member', label: 'Senior Members', desc: 'Non-staff seniors' },
-    { value: 'basic_student', label: 'Students', desc: 'All basic students' },
+    { value: 'senior_staff', label: 'Senior Staff', desc: 'Senior staff participants' },
+    { value: 'student', label: 'Students', desc: 'All students' },
+    { value: 'needs_review', label: 'Needs Review', desc: 'Unclassified participants' },
   ];
 
   const toggleType = (type) => {

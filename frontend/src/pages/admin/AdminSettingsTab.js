@@ -403,13 +403,27 @@ const AdminSettingsTab = ({
               );
             })}
 
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              <strong>Expected sheet format:</strong> a flat table with columns <code>Date</code>,{' '}
-              <code>Start Time</code>, <code>End Time</code>, <code>Title</code> (and optionally{' '}
-              <code>Location</code>, <code>Event Type</code>, <code>Target Groups</code>,{' '}
-              <code>Uniform</code>, <code>Notes</code>). Grid layouts with per-squadron columns
-              (like the current CAST sheet) are not yet supported — flatten or ask to add a custom parser.
-            </p>
+            <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-sm p-2.5 space-y-1.5">
+              <p>
+                <strong className="text-slate-700">Two sheet formats supported</strong> — the parser auto-detects which one your sheet uses:
+              </p>
+              <p>
+                <strong>1. Flat table:</strong> one row per event with columns{' '}
+                <code>Date</code>, <code>Start Time</code>, <code>End Time</code>,{' '}
+                <code>Title</code> (optionally <code>Location</code>,{' '}
+                <code>Event Type</code>, <code>Target Groups</code>,{' '}
+                <code>Uniform</code>, <code>Notes</code>).
+              </p>
+              <p>
+                <strong>2. Grid layout</strong> (CAST / Encampment day tabs): cell{' '}
+                <code>A1</code> contains a Month + Day (e.g.{' '}
+                <em>“Friday | Day 1 CADRE Arrival | May 29th”</em>), then a header row with{' '}
+                <code>START</code>, <code>END</code>, one column per squadron (e.g.{' '}
+                <code>6th CTS</code>, <code>21st CTS</code>) and an optional{' '}
+                <code>Notes</code> column. Use one Schedule entry per day tab — paste the URL with{' '}
+                <code>?gid=...</code> for the tab. Horizontally-merged cells apply to all squadrons in the block; vertically-merged cells extend the event end time automatically.
+              </p>
+            </div>
           </div>
 
           {/* Org Chart Sheet Config */}
