@@ -17,9 +17,15 @@ import {
   ChevronDown, ChevronRight, RefreshCw, Maximize2, Minimize2,
 } from 'lucide-react';
 
-/* ── Category palette ─────────────────────────── */
+/* ── Category palette ───────────────────────────
+ * Strict branch colors per user spec:
+ *   Blue (6th CTS), Yellow/Ginger (21st), Maroon (22nd),
+ *   Emerald (Staff/Executive, Adult Support — DCS branch shares the
+ *   emerald palette), Silver (Cadet Support Squadron).
+ */
 const CAT = {
   staff:          { bg: '#008651', text: '#fff', border: '#006b41', label: 'Staff / Executive' },
+  support:        { bg: '#0F6B45', text: '#fff', border: '#0a5236', label: 'Adult Support (DCS)' },
   '6th_cts':      { bg: '#00205B', text: '#fff', border: '#001540', label: '6th CTS' },
   '21st_cts':     { bg: '#D4A017', text: '#fff', border: '#b08812', label: '21st CTS' },
   '22nd_cts':     { bg: '#9B2335', text: '#fff', border: '#7a1c2a', label: '22nd CTS' },
@@ -233,23 +239,70 @@ const OrgChartPage = () => {
     return { nodeMap: nm, childMap: cm, rootId: rid };
   }, [roles]);
 
+  /* Compute the visible subset when a category filter is active.
+   * Includes:
+   *   - every role whose category matches the filter
+   *   - every ancestor of those roles (so the subtree connects up to root)
+   * When filter='all', returns null (meaning "everything visible"). */
+  const visibleSet = useMemo(() => {
+    if (catFilter === 'all') return null;
+    const want = new Set(
+      roles.filter(r => r.role_category === catFilter).map(r => r.role_id)
+    );
+    if (want.size === 0) return want;
+    // Walk up parents for every matched role
+    const byId = {};
+    roles.forEach(r => { byId[r.role_id] = r; });
+    const visible = new Set();
+    want.forEach(rid => {
+      let cur = rid;
+      while (cur && !visible.has(cur)) {
+        visible.add(cur);
+        cur = byId[cur]?.reports_to;
+      }
+    });
+    return visible;
+  }, [catFilter, roles]);
+
+  /* Child map filtered by visibility — used by the layout engine so
+   * unrelated subtrees don't reserve any canvas space. */
+  const layoutChildMap = useMemo(() => {
+    if (!visibleSet) return childMap;
+    const out = {};
+    Object.entries(childMap).forEach(([pid, kids]) => {
+      if (pid !== '__root__' && !visibleSet.has(pid)) return;
+      const f = kids.filter(k => visibleSet.has(k.role_id));
+      if (f.length) out[pid] = f;
+    });
+    return out;
+  }, [childMap, visibleSet]);
+
+  /* Layout-effective root: when the filter trims the tree above the
+   * filtered branch, prefer the highest still-visible node as root so
+   * the filtered subtree starts at the top of the canvas with no leading
+   * whitespace. */
+  const effectiveRootId = useMemo(() => {
+    if (!visibleSet || !rootId) return rootId;
+    return visibleSet.has(rootId) ? rootId : null;
+  }, [rootId, visibleSet]);
+
   /* Compute positions */
   const positions = useMemo(() => {
-    if (!rootId) return {};
-    const measure = measureTree(rootId, childMap, collapsed);
+    if (!effectiveRootId) return {};
+    const measure = measureTree(effectiveRootId, layoutChildMap, collapsed);
     const pos = {};
     positionTree(measure, measure.w / 2, 20, pos);
     return pos;
-  }, [rootId, childMap, collapsed]);
+  }, [effectiveRootId, layoutChildMap, collapsed]);
 
-  /* Canvas size */
+  /* Canvas size — auto-shrinks because positions only includes visible nodes. */
   const canvasSize = useMemo(() => {
     let maxX = 0, maxY = 0;
     Object.values(positions).forEach(p => {
       if (p.x + NODE_W / 2 > maxX) maxX = p.x + NODE_W / 2;
       if (p.y + NODE_H > maxY) maxY = p.y + NODE_H;
     });
-    return { w: maxX + 40, h: maxY + 60 };
+    return { w: Math.max(maxX + 40, 320), h: maxY + 60 };
   }, [positions]);
 
   /* Search highlight */
@@ -267,11 +320,12 @@ const OrgChartPage = () => {
     );
   }, [search, roles]);
 
-  /* Filter by category */
+  /* Filter by category — now driven by visibleSet so the displayed
+   * node list matches the laid-out subtree exactly. */
   const visibleRoles = useMemo(() => {
-    if (catFilter === 'all') return roles;
-    return roles.filter(r => r.role_category === catFilter);
-  }, [roles, catFilter]);
+    if (!visibleSet) return roles;
+    return roles.filter(r => visibleSet.has(r.role_id));
+  }, [roles, visibleSet]);
 
   const toggle = useCallback((id) => {
     setCollapsed(prev => {
@@ -331,24 +385,45 @@ const OrgChartPage = () => {
   };
 
   const handleReseed = async () => {
-    if (!window.confirm('Wipe and reseed the entire org chart?')) return;
+    if (!window.confirm(
+      'Reconcile the org chart against the canonical template?\n\n' +
+      'This preserves every assigned name. New template positions are added, ' +
+      'metadata (titles / parents) is refreshed, and any orphan positions are removed.'
+    )) return;
     try {
       await seedOrgChart();
-      toast.success('Reseeded');
+      toast.success('Org chart reconciled');
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Reseed failed');
     }
   };
 
-  /* Center scroll on mount */
+  /* When the category filter changes (away from "all"), auto-expand every
+   * node in the visible set so the filtered branch shows in full instead
+   * of remaining collapsed under the default 3-level limit. */
+  useEffect(() => {
+    if (catFilter === 'all' || !visibleSet) return;
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      visibleSet.forEach(id => {
+        if (next.has(id)) { next.delete(id); changed = true; }
+      });
+      return changed ? next : prev;
+    });
+  }, [catFilter, visibleSet]);
+
+  /* Center scroll on mount AND whenever the active filter changes
+   * (so a branch filter selection auto-fits the new tree). */
   useEffect(() => {
     if (!loading && containerRef.current && canvasSize.w > 0) {
       const el = containerRef.current;
       const scrollX = (canvasSize.w - el.clientWidth) / 2;
-      if (scrollX > 0) el.scrollLeft = scrollX;
+      el.scrollLeft = scrollX > 0 ? scrollX : 0;
+      el.scrollTop = 0;
     }
-  }, [loading, canvasSize]);
+  }, [loading, canvasSize, catFilter]);
 
   if (loading) {
     return (
@@ -437,24 +512,22 @@ const OrgChartPage = () => {
           data-testid="org-chart-canvas"
         >
           <div className="relative" style={{ width: canvasSize.w, height: canvasSize.h, minWidth: '100%' }}>
-            {/* SVG connector layer */}
+            {/* SVG connector layer (only draws connectors between visible nodes) */}
             <svg
               className="absolute inset-0 pointer-events-none"
               width={canvasSize.w}
               height={canvasSize.h}
             >
-              <Connectors positions={positions} roles={roles} childMap={childMap} collapsed={collapsed} />
+              <Connectors positions={positions} roles={visibleRoles} childMap={layoutChildMap} collapsed={collapsed} />
             </svg>
 
             {/* Node layer */}
-            {roles.map(r => {
+            {visibleRoles.map(r => {
               const pos = positions[r.role_id];
               if (!pos) return null;
               // search dimming
               const dimmed = matchIds && !matchIds.has(r.role_id);
-              // category filter hiding
-              if (catFilter !== 'all' && r.role_category !== catFilter) return null;
-              const hasKids = (childMap[r.role_id] || []).length > 0;
+              const hasKids = (layoutChildMap[r.role_id] || []).length > 0;
               return (
                 <div key={r.role_id} style={{ opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.2s' }}>
                   <NodeCard

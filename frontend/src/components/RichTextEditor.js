@@ -35,17 +35,34 @@ const RichTextEditor = ({ value, onChange, placeholder, className }) => (
   </div>
 );
 
+// Strict allow-list — matches exactly what the Quill toolbar can emit so
+// that any other tag (script, iframe, on* handlers, style attributes, …)
+// is stripped before the HTML ever reaches React.
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li', 's'],
+  ALLOWED_ATTR: [],
+  ALLOW_DATA_ATTR: false,
+};
+
 // Render stored HTML safely for read-only display
 export const RichTextDisplay = ({ html, className }) => {
   if (!html || html === '<p><br></p>') return null;
   return (
     <div
       className={`rich-text-display prose prose-sm prose-slate max-w-none ${className || ''}`}
-      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html, SANITIZE_CONFIG) }}
       data-testid="rich-text-display"
     />
   );
 };
+
+const escapeHtml = (str) =>
+  String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 // Convert legacy plain text (with "- " bullets) to HTML
 export const plainTextToHtml = (text) => {
@@ -57,10 +74,10 @@ export const plainTextToHtml = (text) => {
   for (const line of lines) {
     if (line.trim().startsWith('- ')) {
       if (!inList) { html += '<ul>'; inList = true; }
-      html += `<li>${line.trim().substring(2)}</li>`;
+      html += `<li>${escapeHtml(line.trim().substring(2))}</li>`;
     } else {
       if (inList) { html += '</ul>'; inList = false; }
-      html += `<p>${line}</p>`;
+      html += `<p>${escapeHtml(line)}</p>`;
     }
   }
   if (inList) html += '</ul>';
