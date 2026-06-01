@@ -831,6 +831,24 @@ export const seedDefaultOrgChart = async () => {
   return response.data;
 };
 
+export const assignUserToOrgPosition = async (roleId, userId, propagate = true) => {
+  const response = await axios.put(
+    `${API}/org-chart/roles/${roleId}/assign-user`,
+    { user_id: userId, propagate },
+    { headers: getAuthHeaders() },
+  );
+  return response.data;
+};
+
+export const clearOrgPositionAssignment = async (roleId) => {
+  const response = await axios.put(
+    `${API}/org-chart/roles/${roleId}/clear-assignment`,
+    {},
+    { headers: getAuthHeaders() },
+  );
+  return response.data;
+};
+
 // ============ Annual Reset ============
 export const previewBulkReset = async (participantTypes) => {
   const response = await axios.post(`${API}/participants/bulk-reset/preview`, { participant_types: participantTypes, confirm: false }, { headers: getAuthHeaders() });

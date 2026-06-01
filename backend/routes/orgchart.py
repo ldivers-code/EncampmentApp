@@ -127,6 +127,176 @@ async def get_org_chart_template(user: dict = Depends(get_current_user)):
     }
 
 
+@api_router.put("/org-chart/roles/{role_id}/assign-user")
+async def assign_user_to_position(
+    role_id: str,
+    body: dict,
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.EXEC_CADRE,
+    ])),
+):
+    """Assign an approved user to an org-chart position.
+
+    Body: `{user_id: str, propagate: bool=true}`.
+
+    * `propagate=True` (default) — applies the **inverse mapping** for this
+      position to the target user's `role` + `flight` + `squadron` +
+      `cadre_position` + `support_section`, then the same auto-sync that
+      fires on `PUT /users/{id}/role` writes the chart row. This is the
+      one true "single source of truth" path; the users table and the
+      org chart stay aligned.
+
+    * `propagate=False` — manual override: just sets `assigned_name` (and
+      `assigned_user_id`) on the chart row without touching the user. Use
+      sparingly — the next time the user's role/unit changes, the live
+      sync may overwrite this manual entry.
+
+    Exec Cadre scoping (same rules as `PUT /users/{id}/role`):
+      * may only assign cadre-bucket users (current role ∈
+        EXEC_CADRE_MANAGEABLE_ROLES) and into cadre-bucket positions.
+      * may NOT grant protected/system roles.
+    """
+    from org_chart_template import derive_user_updates_for_position
+    from routes.users import (
+        auto_sync_org_chart,
+        EXEC_CADRE_MANAGEABLE_ROLES,
+        PROTECTED_ROLES,
+        FULL_ADMIN_ROLES_LOCAL,
+        _audit_role_change,
+    )
+
+    user_id = (body or {}).get("user_id")
+    propagate = bool((body or {}).get("propagate", True))
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    position = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not target.get("is_approved"):
+        raise HTTPException(
+            status_code=400,
+            detail="User must be approved before being assigned to an org-chart position.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # ── Manual-override path ──────────────────────────────────────────
+    if not propagate:
+        # Exec Cadre may NOT do raw assigned_name writes — keeps the
+        # users-table the single source of truth for them.
+        if user.get("role") not in FULL_ADMIN_ROLES_LOCAL:
+            raise HTTPException(
+                status_code=403,
+                detail="Manual override requires full-admin privileges. "
+                       "Use propagate=true so role/unit fields stay in sync.",
+            )
+        await db.org_chart_roles.update_one(
+            {"role_id": role_id},
+            {"$set": {
+                "assigned_name": (target.get("name") or "").strip(),
+                "assigned_user_id": target.get("id"),
+                "updated_at": now,
+            }},
+        )
+        updated = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+        return {"position": updated, "user": target, "propagated": False}
+
+    # ── Propagate path ────────────────────────────────────────────────
+    updates = derive_user_updates_for_position(role_id)
+    if updates is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Position '{role_id}' has no canonical inverse mapping. "
+                "Use propagate=false (admins only) to write the name directly."
+            ),
+        )
+
+    actor_role = user.get("role")
+    previous_role = target.get("role")
+    new_role = updates.get("role", previous_role)
+
+    # Exec Cadre scoping
+    if actor_role not in FULL_ADMIN_ROLES_LOCAL:
+        if actor_role != UserRole.EXEC_CADRE:
+            raise HTTPException(status_code=403, detail="Not authorised")
+        if new_role not in EXEC_CADRE_MANAGEABLE_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Exec Cadre cannot assign role '{new_role}' "
+                    f"(position requires a non-cadre role)."
+                ),
+            )
+        if previous_role not in EXEC_CADRE_MANAGEABLE_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Exec Cadre cannot reassign a user whose current role "
+                    f"({previous_role}) is not cadre-managed."
+                ),
+            )
+        if new_role in PROTECTED_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail="Only full admins can grant system-level roles.",
+            )
+
+    # Apply the field deltas
+    from permissions import get_default_permissions
+    set_doc = dict(updates)
+    if "role" in updates and updates["role"] != previous_role:
+        set_doc["permissions"] = get_default_permissions(updates["role"])
+    set_doc["updated_at"] = now
+
+    await db.users.update_one({"id": user_id}, {"$set": set_doc})
+
+    if "role" in updates and updates["role"] != previous_role:
+        await _audit_role_change(user, target, previous_role, updates["role"])
+
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    await auto_sync_org_chart(updated_user)
+
+    position_after = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    return {
+        "position": position_after,
+        "user": updated_user,
+        "propagated": True,
+        "applied_updates": updates,
+    }
+
+
+@api_router.put("/org-chart/roles/{role_id}/clear-assignment")
+async def clear_position_assignment(
+    role_id: str,
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.EXEC_CADRE,
+    ])),
+):
+    """Clear `assigned_name` and `assigned_user_id` on a position.
+
+    Does NOT modify the user's role/unit fields — only blanks the chart
+    slot. The next role/unit change for the previously-assigned user will
+    re-sync them into whatever their current role implies.
+    """
+    position = await db.org_chart_roles.find_one({"role_id": role_id}, {"_id": 0})
+    if not position:
+        raise HTTPException(status_code=404, detail="Position not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.org_chart_roles.update_one(
+        {"role_id": role_id},
+        {"$set": {"assigned_name": "", "assigned_user_id": None, "updated_at": now}},
+    )
+    return {"message": f"Cleared assignment on {role_id}", "role_id": role_id}
+
+
 @api_router.post("/org-chart/resync-from-users")
 async def resync_org_chart_from_users(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))

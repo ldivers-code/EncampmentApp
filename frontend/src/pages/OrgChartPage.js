@@ -4,6 +4,9 @@ import {
   getOrgChartRole,
   updateOrgChartRole,
   seedOrgChart,
+  assignUserToOrgPosition,
+  clearOrgPositionAssignment,
+  getUsers,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -15,6 +18,7 @@ import { toast } from 'sonner';
 import {
   Network, User, Users, Search, X, Edit2,
   ChevronDown, ChevronRight, RefreshCw, Maximize2, Minimize2,
+  UserPlus, UserMinus,
 } from 'lucide-react';
 
 /* ── Category palette ───────────────────────────
@@ -192,9 +196,23 @@ const OrgChartPage = () => {
   const [collapsed, setCollapsed] = useState(new Set());
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
+  const [allUsers, setAllUsers] = useState([]);
+  const [assigning, setAssigning] = useState(false);
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
+  const [userPickerQuery, setUserPickerQuery] = useState('');
   const containerRef = useRef(null);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadUsers(); }, []);
+
+  const loadUsers = async () => {
+    try {
+      const data = await getUsers();
+      // Only approved users are eligible for org-chart assignment
+      setAllUsers((data || []).filter(u => u.is_approved));
+    } catch {
+      // Silent — picker just falls back to empty list (only admins have /users access)
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -365,6 +383,8 @@ const OrgChartPage = () => {
       });
       setSheetOpen(true);
       setEditing(false);
+      setUserPickerOpen(false);
+      setUserPickerQuery('');
     } catch {
       toast.error('Failed to load details');
     }
@@ -383,6 +403,61 @@ const OrgChartPage = () => {
       toast.error(err.response?.data?.detail || 'Save failed');
     }
   };
+
+  const handleAssignUser = async (userId) => {
+    if (!selected || !userId) return;
+    setAssigning(true);
+    try {
+      const result = await assignUserToOrgPosition(selected.role_id, userId, true);
+      const applied = Object.entries(result.applied_updates || {})
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ');
+      toast.success(
+        `Assigned ${result.user?.name || 'user'} to ${selected.position_title}`
+        + (applied ? ` — synced ${applied}` : '')
+      );
+      setUserPickerOpen(false);
+      setUserPickerQuery('');
+      loadData();
+      loadUsers();
+      const updated = await getOrgChartRole(selected.role_id);
+      setSelected(updated);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Assignment failed');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleClearAssignment = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Clear the assignment on "${selected.position_title}"?\n\nThe previously-assigned user's role/unit fields are NOT changed — only the chart slot is blanked.`)) return;
+    setAssigning(true);
+    try {
+      await clearOrgPositionAssignment(selected.role_id);
+      toast.success('Assignment cleared');
+      loadData();
+      const updated = await getOrgChartRole(selected.role_id);
+      setSelected(updated);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Clear failed');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  /* Approved-user candidate list, filtered by the picker query. */
+  const userCandidates = useMemo(() => {
+    const q = userPickerQuery.trim().toLowerCase();
+    if (!q) return allUsers.slice(0, 12);
+    return allUsers
+      .filter(u =>
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.capid || '').toLowerCase().includes(q),
+      )
+      .slice(0, 25);
+  }, [allUsers, userPickerQuery]);
 
   const handleReseed = async () => {
     if (!window.confirm(
@@ -591,6 +666,85 @@ const OrgChartPage = () => {
                         {selected.assigned_name || 'Vacant'}
                       </span>
                     </div>
+                  </div>
+                )}
+
+                {/* Assign-from-users picker (admin/exec-cadre only, non-edit mode) */}
+                {!editing && canEdit() && (
+                  <div className="mt-2">
+                    {!userPickerOpen ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm" variant="outline" className="rounded-sm text-xs h-7 flex-1"
+                          onClick={() => setUserPickerOpen(true)}
+                          data-testid="open-user-picker-btn"
+                          disabled={assigning}
+                        >
+                          <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                          {selected.assigned_name ? 'Reassign user' : 'Assign user'}
+                        </Button>
+                        {selected.assigned_name && (
+                          <Button
+                            size="sm" variant="outline" className="rounded-sm text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                            onClick={handleClearAssignment}
+                            data-testid="clear-assignment-btn"
+                            disabled={assigning}
+                            title="Clear chart assignment (does NOT modify the user's role/unit)"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-sm bg-white shadow-sm">
+                        <div className="p-2 border-b border-slate-100 flex items-center gap-2">
+                          <Search className="w-3.5 h-3.5 text-slate-400" />
+                          <Input
+                            value={userPickerQuery}
+                            onChange={e => setUserPickerQuery(e.target.value)}
+                            placeholder="Search name / email / CAPID"
+                            className="h-7 text-xs border-0 px-0 focus-visible:ring-0"
+                            autoFocus
+                            data-testid="user-picker-search"
+                          />
+                          <button
+                            onClick={() => { setUserPickerOpen(false); setUserPickerQuery(''); }}
+                            className="text-slate-400 hover:text-slate-600"
+                            data-testid="close-user-picker-btn"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto">
+                          {userCandidates.length === 0 ? (
+                            <div className="p-3 text-xs text-slate-500 text-center italic">
+                              No approved users match.
+                            </div>
+                          ) : userCandidates.map(u => (
+                            <button
+                              key={u.id}
+                              onClick={() => handleAssignUser(u.id)}
+                              disabled={assigning}
+                              className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-slate-50 border-b border-slate-50 last:border-b-0 flex items-center gap-2 disabled:opacity-50"
+                              data-testid={`user-picker-row-${u.id}`}
+                            >
+                              <div className="w-2 h-2 rounded-full flex-shrink-0 bg-emerald-500" />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-slate-800 truncate">{u.name || u.email}</div>
+                                <div className="text-[10px] text-slate-500 truncate">
+                                  {u.role} {u.capid ? `· CAPID ${u.capid}` : ''}
+                                  {u.squadron ? ` · ${u.squadron}` : ''}
+                                  {u.flight ? ` · ${u.flight}` : ''}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="px-2 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500">
+                          Selecting a user syncs their role + unit fields to this position.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

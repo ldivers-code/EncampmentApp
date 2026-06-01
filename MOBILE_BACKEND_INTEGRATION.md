@@ -82,7 +82,18 @@ The existing `ScheduleSheetConfig` now carries an optional `sheet_name` field. T
 
 `POST /api/students/upload` now parses the `AmountPaid` and `PaidInFull` columns and auto-buckets payments by sub-event into the finance tracker. Rows that are flagged paid but lack a matching sub-event are written to a "Needs Review" list at `GET /api/budget/finance/needs-review` (used by the Finance Officer dashboard). Mobile finance views should consume this endpoint to mirror the web's `FinanceReviewWidget`.
 
-### 5. Field additions on `Participant`
+### 5. Org Chart Canonical Template + Live Sync (Feb 2026 — Phase 1+2 of 17-point overhaul)
+
+The org chart is now **template-driven**:
+* `GET /api/org-chart/template` returns the canonical 79-position skeleton (read-only, cacheable). 6 branch categories — `staff`, `support` (Adult Support / DCS), `6th_cts`, `21st_cts`, `22nd_cts`, `cadet_support`.
+* `GET /api/org-chart/roles` returns the same positions with live `assigned_name` + `assigned_user_id` overlays.
+* `POST /api/org-chart/seed` defaults to **preserve mode** (template metadata reconciled, assignments retained, orphans pruned). Pass `?reset=true` for the destructive rebuild.
+* **Live sync**: changing a user's role (`PUT /api/users/{user_id}/role`) or unit (`PUT /api/users/{user_id}/unit`) or linking them to a participant now triggers an auto-sync that writes the matching position's `assigned_name` and clears any prior slot the user occupied. Mobile chart views should poll `/roles` after any role-management mutation to pick up the change.
+* **In-panel reassign**: new `PUT /api/org-chart/roles/{role_id}/assign-user` body `{user_id, propagate=true}` is the canonical "drop a name into a slot" endpoint. With `propagate=true` it updates the target user's role+unit so the live-sync helper performs the actual write. Honors Exec Cadre cadre-only scoping.
+* **Hierarchy fixes**: Public Affairs is now `public-affairs-dept` reporting to `dcs` (was under `ctg-ccea`). Squadron enlisted leads are now "First Sergeant" (`6th-sq-1sgt`, `21st-sq-1sgt`, `22nd-sq-1sgt`). Added `sm-superintendent` at the top level.
+* **Branch palette** (must match web): Blue `#00205B` (6th CTS), Yellow `#D4A017` (21st), Maroon `#9B2335` (22nd), Emerald `#008651` (Staff/Executive), Emerald-dark `#0F6B45` (Adult Support), Silver `#8C9298` (Cadet Support).
+
+### 6. Field additions on `Participant`
 
 Added to `ParticipantResponse` (visible in `GET /api/participants` and `GET /api/participants/{id}`):
 
@@ -534,18 +545,29 @@ All secrets (JWT_SECRET, MONGO_URL, SENDGRID, etc.) live server-side only. The m
 | `GET` | `/api/points/awards` | Yes | All awards |
 | `POST` | `/api/points/awards/auto-assign/{date}` | Yes | Auto-assign daily awards |
 
-### Org Chart (7 + 1 endpoints)
+### Org Chart (10 + 1 endpoints)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/org-chart/roles` | Yes | All positions (85 nodes) |
-| `GET` | `/api/org-chart/roles/{id}` | Yes | Single position + children |
-| `POST` | `/api/org-chart/roles` | Yes | Create position |
-| `PUT` | `/api/org-chart/roles/{id}` | Yes | Update position |
-| `DELETE` | `/api/org-chart/roles/{id}` | Yes | Delete position |
-| `POST` | `/api/org-chart/seed` | Yes | Reseed from spreadsheet |
-| `POST` | `/api/org-chart/seed-defaults` | Yes | Seed defaults |
-| `POST` | `/api/org-chart/bulk-reset` | Yes | Clear all (annual reset) |
+| `GET` | `/api/org-chart/template` | Yes | **Read-only canonical template** (79 positions). Returns `{version, categories, positions, count}`. Mobile clients should fetch this on first load to render the chart skeleton (titles, hierarchy, branch colors). |
+| `GET` | `/api/org-chart/roles` | Yes | All positions with **live assignments** merged in. Pass `?raw=true` for a flat list without `children` enrichment. |
+| `GET` | `/api/org-chart/roles/{id}` | Yes | Single position + children list |
+| `POST` | `/api/org-chart/roles` | Yes | Create position (admin) |
+| `PUT` | `/api/org-chart/roles/{id}` | Yes | Update position metadata (admin) |
+| `PUT` | `/api/org-chart/roles/{id}/assign-user` | Yes | **Assign an approved user to a position.** Body: `{user_id: str, propagate?: bool=true}`. With `propagate=true` (default), updates the target user's `role` + `flight` + `squadron` + `cadre_position` to match the position, then the live-sync helper writes the chart. Use `propagate=false` to write only `assigned_name` (rare manual-override case). Returns the updated `org_chart_role` + `user` records. |
+| `DELETE` | `/api/org-chart/roles/{id}` | Yes | Delete position (admin) |
+| `POST` | `/api/org-chart/seed` | Yes | **Preserve-mode reseed** (default). Adds missing template positions, refreshes metadata, prunes orphans — but never clobbers existing `assigned_name`. Pass `?reset=true` for destructive rebuild from `INITIAL_ASSIGNMENTS`. Response: `{mode, inserted, updated, deleted, preserved_assignments, total}`. |
+| `POST` | `/api/org-chart/seed-defaults` | Yes | Destructive reset (alias for `/seed?reset=true`). |
+| `POST` | `/api/org-chart/resync-from-users` | Yes | Wipes every dynamic assignment then walks all approved users to rebuild the chart. Useful after a bulk import. Response: `{synced, skipped, total_users}`. |
+| `POST` | `/api/org-chart/bulk-reset` | Yes | Clear all assignments (annual reset). |
+
+**Mobile parity notes (Feb 2026 — Org Chart Phase 1+2):**
+* The chart skeleton is now driven by a **canonical 79-position template** living at `GET /api/org-chart/template`. Mobile clients SHOULD fetch this first and treat any extra positions returned by `GET /api/org-chart/roles` as live overlays. The template never changes mid-day — it's safe to cache the response (use the `version` field for cache busting).
+* **Live role-change sync**: when an Exec Cadre / admin changes a user's role via `PUT /api/users/{user_id}/role?role=<role>` OR re-assigns their flight/squadron via `PUT /api/users/{user_id}/unit`, the server immediately walks the canonical resolver (`role` > `cadre_position` > `cadre_unit`) to update `org_chart_roles.assigned_name` AND clear any previously-occupied slot. Mobile chart views should subscribe to/poll `/roles` to pick up these changes without prompting the user.
+* **In-panel reassign**: `PUT /api/org-chart/roles/{id}/assign-user` is the canonical entry point for "assign John Smith to 6th CTS Commander". It enforces the same Exec Cadre permission scope as `PUT /api/users/{user_id}/role` — Exec Cadre callers can only assign cadre-bucket users into cadre-bucket positions.
+* **Branch palette** (must match web): Blue `#00205B` (6th CTS), Yellow `#D4A017` (21st), Maroon `#9B2335` (22nd), Emerald `#008651` (Staff/Executive), Emerald-dark `#0F6B45` (Adult Support / DCS), Silver `#8C9298` (Cadet Support).
+* Public Affairs canonically lives under **DCS** (`role_id="public-affairs-dept"`, `reports_to="dcs"`), NOT under CTG/CCEA. Squadron enlisted leads use the title `"First Sergeant"` (`6th-sq-1sgt`, `21st-sq-1sgt`, `22nd-sq-1sgt`).
+* Flight position IDs: `<prefix>-flt-<letter>-cmdr|sgt` where prefix ∈ {6th, 21st, 22nd} and letter ∈ {a,b,c,d,e,f}. Example: `6th-flt-a-cmdr` = "Flight Commander - A" in 6th CTS.
 
 ### Parent Portal (14 + 5 endpoints)
 
@@ -712,13 +734,25 @@ Receipt OCR response:
   "role_id": "6th-sq-cmdr",
   "position_title": "6th CTS Commander",
   "assigned_name": "C/Capt Nhan, V",
+  "assigned_user_id": "user-uuid-or-null",      // populated by live-sync writes; null for manual seed defaults
   "reports_to": "ctg-cc",
-  "secondary_reports_to": "ctg-df",
-  "role_category": "6th_cts",
+  "secondary_reports_to": "ctg-df",             // dashed-line connector in the UI (e.g. squadron → CTG/DF)
+  "role_category": "6th_cts",                   // 6th_cts | 21st_cts | 22nd_cts | staff | support | cadet_support
   "display_label": "6th CTS",
+  "position_code": "6th CTS/CC",
+  "single_occupant": true,
+  "allowed_participant_types": ["cadre"],       // template-level guard: which participant kinds may occupy this slot
+  "job_description": "Commands the 6th Cadet Training Squadron …",
   "children": ["6th-sq-1sgt", "6th-flt-a-cmdr", "6th-flt-b-cmdr"]
 }
 ```
+
+> **Template vs live roles**: `GET /api/org-chart/template` returns the
+> canonical 79-position skeleton (no `assigned_name`, no `assigned_user_id`,
+> no `children` — those are dynamic). `GET /api/org-chart/roles` returns the
+> same positions WITH live overlays. Mobile clients can render the chart
+> from `/roles` alone, OR fetch `/template` once + diff against `/roles` on
+> every refresh to surface "vacant since…" badges efficiently.
 
 ---
 

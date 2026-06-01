@@ -422,6 +422,80 @@ _SUPPORT_ROLE_TO_NODE: dict[str, str] = {
 }
 
 
+# ── Inverse mapping (position → user-field changes) ────────────────
+# Used by `PUT /api/org-chart/roles/{role_id}/assign-user` with
+# `propagate=True`. Maps a canonical position back to the user-field
+# changes needed so `auto_sync_org_chart` then writes the matching slot.
+# Sub-positions (department-member nodes like `pa-member-3`) intentionally
+# have no inverse — callers fall back to a direct `assigned_name` write.
+
+def derive_user_updates_for_position(role_id: str) -> Optional[dict]:
+    """Return the user-field updates needed to make `role_id` the user's
+    canonical position, or `None` if no inverse mapping is defined."""
+    if not role_id:
+        return None
+
+    fixed: dict[str, dict] = {
+        "enc-commander":          {"role": "commander"},
+        "dcs":                    {"role": "dcp"},
+        "sm-superintendent":      {"role": "superintendent"},
+        "commandant":             {"role": "staff",
+                                   "cadre_position": "commandant_of_cadets"},
+        "chief-training-officer": {"role": "chief_training_officer"},
+        "ctg-cc":                 {"role": "exec_cadre",
+                                   "cadre_position": "group_commander"},
+        "ctg-cd":                 {"role": "exec_cadre",
+                                   "cadre_position": "group_deputy_commander"},
+        "ctg-df":                 {"role": "exec_cadre",
+                                   "cadre_position": "cadet_dean_academics"},
+        "ctg-ccea":               {"role": "exec_cadre",
+                                   "cadre_position": "group_superintendent"},
+        "xp-plans":               {"role": "plans_programs"},
+        "lg-logistics":           {"role": "logistics"},
+        "public-affairs-dept":    {"role": "public_affairs"},
+        "finance":                {"role": "finance"},
+        "health-word":            {"role": "health_services"},
+        "css-cc":                 {"role": "exec_cadre",
+                                   "cadre_position": "cadet_squadron_commander",
+                                   "squadron": "support_cadre"},
+        "css-logistics":          {"role": "support_logistics",
+                                   "support_section": "logistics"},
+        "css-comms":              {"role": "support_comms",
+                                   "support_section": "communications"},
+        "css-dining":             {"role": "support_dining",
+                                   "support_section": "dining"},
+        "css-word":               {"role": "support_health",
+                                   "support_section": "health"},
+    }
+    if role_id in fixed:
+        return dict(fixed[role_id])
+
+    prefix_to_sq = {"6th": "6th_cts", "21st": "21st_cts", "22nd": "22nd_cts"}
+    for prefix, squadron in prefix_to_sq.items():
+        if role_id == f"{prefix}-sq-cmdr":
+            return {"role": "squadron_commander", "squadron": squadron}
+        if role_id == f"{prefix}-sq-to":
+            return {"role": "training_officer", "squadron": squadron}
+        if role_id == f"{prefix}-sq-1sgt":
+            return {"role": "cadre", "squadron": squadron,
+                    "cadre_position": "cadet_first_sergeant"}
+
+    letter_to_flight = {"a": "alpha", "b": "bravo",
+                        "c": "charlie", "d": "delta",
+                        "e": "echo",   "f": "foxtrot"}
+    for prefix, squadron in prefix_to_sq.items():
+        for letter, flight in letter_to_flight.items():
+            if role_id == f"{prefix}-flt-{letter}-cmdr":
+                return {"role": "cadre", "squadron": squadron, "flight": flight,
+                        "cadre_position": "flight_commander"}
+            if role_id == f"{prefix}-flt-{letter}-sgt":
+                return {"role": "cadre", "squadron": squadron, "flight": flight,
+                        "cadre_position": "flight_sergeant"}
+
+    return None
+
+
+
 def find_role_id_for_user(user_data: dict) -> Optional[str]:
     """Return the canonical org_chart_template `role_id` this user currently
     occupies, or `None` if no mapping can be inferred.
