@@ -363,6 +363,15 @@ const RosterPage = () => {
         (rankFilter === 'senior' && !p.rank?.startsWith('C/'));
       
       return matchesSearch && matchesType && matchesPaid && matchesFlight && matchesSquadron && matchesGender && matchesWing && matchesRank;
+    }).sort((a, b) => {
+      // When viewing the Waitlist filter, sort by application date asc so the
+      // longest-waiting applicants surface first.
+      if (flightFilter === 'unassigned' && categoryTab === 'students') {
+        const sa = a.app_edit_data || '9999-12-31';
+        const sb = b.app_edit_data || '9999-12-31';
+        if (sa !== sb) return sa < sb ? -1 : 1;
+      }
+      return 0;
     });
   }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved, rosterView, categoryTab]);
 
@@ -375,6 +384,17 @@ const RosterPage = () => {
       staff: active.filter(p => isStaffType(p.participant_type)).length,
       needs_review: active.filter(p => isNeedsReviewType(p.participant_type)).length,
     };
+  }, [participants]);
+
+  // Waitlist count: active students with no flight assigned. These remain
+  // unassigned because the 6×15=90 cap is full — earliest `app_edit_data`
+  // applicants are seated first, late applicants stay here until a seat opens.
+  const waitlistCount = useMemo(() => {
+    return participants.filter(p =>
+      !p.is_removed
+      && isStudentType(p.participant_type)
+      && (!p.flight || p.flight === 'None')
+    ).length;
   }, [participants]);
 
   // Count accepted participants
@@ -880,8 +900,35 @@ const RosterPage = () => {
               Encampment Roster
             </h1>
           </div>
-          <p className="text-slate-500 text-sm mt-1">
-            {filteredParticipants.length} {categoryTab} • {rosterView === 'master' ? 'with assignments' : 'total'}
+          <p className="text-slate-500 text-sm mt-1 flex items-center gap-2 flex-wrap">
+            <span>{filteredParticipants.length} {categoryTab} • {rosterView === 'master' ? 'with assignments' : 'total'}</span>
+            {categoryTab === 'students' && waitlistCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const turningOn = flightFilter !== 'unassigned';
+                  setFlightFilter(turningOn ? 'unassigned' : 'all');
+                  // Waitlisted students have no flight/squadron, so the
+                  // default "Assigned" view hides them. Auto-switch to
+                  // "All" so the user actually sees the waitlist.
+                  if (turningOn) setRosterView('full');
+                  setCurrentPage(1);
+                }}
+                className={`text-[11px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-sm border transition-colors ${
+                  flightFilter === 'unassigned'
+                    ? 'bg-amber-600 text-white border-amber-700'
+                    : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                }`}
+                data-testid="waitlist-chip"
+                title={
+                  flightFilter === 'unassigned'
+                    ? 'Click to clear the waitlist filter'
+                    : 'Click to view only waitlisted students (sorted by application date)'
+                }
+              >
+                Waitlist: {waitlistCount}
+              </button>
+            )}
           </p>
         </div>
         
@@ -1633,7 +1680,7 @@ const RosterPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Flights</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value="unassigned">Waitlist / Unassigned</SelectItem>
                 <SelectItem value="alpha">Alpha</SelectItem>
                 <SelectItem value="bravo">Bravo</SelectItem>
                 <SelectItem value="charlie">Charlie</SelectItem>
@@ -1962,6 +2009,30 @@ const RosterPage = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Waitlist info banner */}
+      {categoryTab === 'students' && flightFilter === 'unassigned' && waitlistCount > 0 && (
+        <div
+          className="mb-3 bg-amber-50 border border-amber-200 rounded-sm px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-2 flex-wrap"
+          data-testid="waitlist-banner"
+        >
+          <div>
+            <strong>Showing {waitlistCount} waitlisted student{waitlistCount > 1 ? 's' : ''}</strong>
+            {' '}— sorted by application date (earliest first).
+            Each flight caps at 3 elements × 5 cadets = 15.
+            Click any flight cell to <em>manually promote</em> a cadet (bypasses application order),
+            or use <strong>Auto-Balance Flights</strong> to fill open seats from the top of the list.
+          </div>
+          <button
+            type="button"
+            onClick={() => { setFlightFilter('all'); setCurrentPage(1); }}
+            className="text-amber-700 hover:text-amber-900 underline"
+            data-testid="waitlist-banner-clear"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -2071,7 +2142,16 @@ const RosterPage = () => {
                               {p.flight}
                             </span>
                           ) : (
-                            <span className="text-slate-300">-</span>
+                            <span className="flex flex-col gap-0.5">
+                              <span className="inline-block px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-sm bg-amber-100 text-amber-800 border border-amber-300 w-fit">
+                                Waitlist
+                              </span>
+                              {p.app_edit_data && (
+                                <span className="text-[9px] text-slate-500" title={`Applied: ${p.app_edit_data}`}>
+                                  {p.app_edit_data}
+                                </span>
+                              )}
+                            </span>
                           )}
                           {canEdit() && (
                             <Edit3 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />

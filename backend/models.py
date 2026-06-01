@@ -430,6 +430,9 @@ class ParticipantBase(BaseModel):
     last_encampment: Optional[str] = None
     cppt_expiration: Optional[str] = None
     first_aid: Optional[str] = None
+    # Application timestamp from eCAP roster column AI (`AppEditData`).
+    # Drives the waitlist sort: earliest application gets the next free seat.
+    app_edit_data: Optional[str] = None
     is100_date: Optional[str] = None
     is700_date: Optional[str] = None
     first_encampment: bool = True
