@@ -14,6 +14,26 @@
 
 All endpoints are prefixed with `/api`. Example: `POST https://tnwing-preview.emergent.host/api/auth/login`
 
+### Live spec endpoint
+
+This document is also served by the backend so your CI can detect updates programmatically:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/mobile/integration-doc/version` | Cheap poll. Returns `{version, sha256, last_modified, doc_url}`. |
+| `GET` | `/api/mobile/integration-doc` | Returns `{version, sha256, last_modified, content, content_length, format}`. |
+| `GET` | `/api/mobile/integration-doc?format=markdown` | Returns the raw markdown body. Response headers include `X-Doc-Version`, `X-Doc-SHA256`, `X-Doc-Last-Modified`. |
+
+No auth required — the document only describes the public API surface and contains no secrets. CI snippet:
+
+```bash
+# Fetch current version
+VER=$(curl -fsS https://tnwing-preview.emergent.host/api/mobile/integration-doc/version | jq -r .version)
+# Compare to the version pinned in the mobile repo
+test "$VER" = "$(cat .mobile-spec-version)" || \
+  curl -fsS "https://tnwing-preview.emergent.host/api/mobile/integration-doc?format=markdown" > docs/BACKEND_INTEGRATION.md
+```
+
 ---
 
 ## 1a. Recent Backend Changes (Mobile-Relevant)
