@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import NotificationManager from '../components/NotificationManager';
 import AdminSettingsTab from './admin/AdminSettingsTab';
+import FinanceReviewWidget from './admin/FinanceReviewWidget';
+import ReviewQueueWidget from './admin/ReviewQueueWidget';
 
 // ─── Annual Reset Tab ───
 const AnnualResetTab = ({ currentUser }) => {
@@ -797,6 +799,15 @@ const AdminPage = () => {
           Manage user roles, permissions, and unit assignments
         </p>
       </div>
+
+      {/* Review widgets — render above tabs so admins notice them
+          immediately. Each widget hides itself when there's nothing to do. */}
+      {isFullAdmin && (
+        <div className="space-y-3 mb-4">
+          <ReviewQueueWidget />
+          <FinanceReviewWidget />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 sm:mb-6 border-b border-slate-200 overflow-x-auto">

@@ -79,6 +79,7 @@ from routes.google_sheets import scheduler, perform_scheduled_sync
 import routes.mobile  # noqa: F401  — registers /api/mobile/integration-doc
 import routes.taxonomy  # noqa: F401  — registers /api/taxonomy/support
 import routes.exports   # noqa: F401  — registers /api/exports/{filename}
+import routes.review_queue  # noqa: F401  — registers /api/review-queue
 import routes.badges
 import routes.reports
 import routes.health_services

@@ -960,6 +960,29 @@ export const notifyFinanceReview = async () => {
   return response.data;
 };
 
+// Review Queue — review-flagged participants (blank SubEvents + app-only rows
+// missing from latest spreadsheet).
+export const getReviewQueue = async () => {
+  const response = await axios.get(`${API}/review-queue`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getReviewQueueStats = async () => {
+  const response = await axios.get(`${API}/review-queue/stats`, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const resolveReviewQueueRow = async (participantId, action, mergeTargetId = null) => {
+  const body = { action };
+  if (mergeTargetId) body.merge_target_id = mergeTargetId;
+  const response = await axios.post(
+    `${API}/review-queue/${participantId}/resolve`,
+    body,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
 export const getGoogleSheetsSyncStatus = async () => {
   const response = await axios.get(`${API}/google-sheets/sync-status`, { headers: getAuthHeaders() });
   return response.data;
