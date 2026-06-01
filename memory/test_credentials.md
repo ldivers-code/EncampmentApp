@@ -27,6 +27,12 @@
 - **Linked CAPID**: 718873 (Athena Hundley, Alpha Flight)
 - **Notes**: Approved, can access My Cadet page only
 
+## Exec Cadre (Test Account — Item #10)
+- **Email**: exec_cadre@test.com
+- **Password**: test123
+- **Role**: exec_cadre
+- **Notes**: Created Feb 2026 to test the new Exec Cadre role-management feature. May edit roles for cadre-bucket users only.
+
 ## Exec Cadre (Alpha Flight)
 - **Email**: commander@cap.us
 - **Password**: test123

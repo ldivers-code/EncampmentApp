@@ -446,6 +446,10 @@ class ParticipantBase(BaseModel):
     removed_at: Optional[str] = None
     removed_by: Optional[str] = None
     removal_reason: Optional[str] = None
+    review_status: Optional[str] = None
+    review_reason: Optional[str] = None
+    review_flagged_at: Optional[str] = None
+    review_flagged_by: Optional[str] = None
 
 class ParticipantCreate(ParticipantBase):
     pass

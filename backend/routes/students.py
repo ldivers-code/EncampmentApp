@@ -306,11 +306,64 @@ FLIGHT_TO_SQUADRON = {
 }
 
 ALL_FLIGHTS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+STUDENT_PARTICIPANT_TYPES = {"student", "basic_student", "advanced_student"}
 # Each flight is 3 elements × 5 cadets = 15 seats. Students beyond this
 # cap stay UNASSIGNED on the waitlist (filled by application order from the
 # eCAP `AppEditData` column — earliest application gets the slot).
 MAX_STUDENTS_PER_FLIGHT = 15
 FLIGHT_TOTAL_CAPACITY = len(ALL_FLIGHTS) * MAX_STUDENTS_PER_FLIGHT  # 90
+
+
+def is_student_participant_type(value: str | None) -> bool:
+    """Accept legacy and canonical student labels while writing only
+    canonical `student` for new uploads."""
+    return (value or "").lower() in STUDENT_PARTICIPANT_TYPES
+
+
+def normalize_flight(value: str | None) -> str | None:
+    if not value:
+        return None
+    f = str(value).strip().lower()
+    return f if f in ALL_FLIGHTS else None
+
+
+async def get_student_count_for_flight(flight: str, exclude_ids: set[str] | None = None) -> int:
+    """Count active students already seated in a flight.  Used by every
+    assignment write path so the 15-student cap is not just an auto-balance
+    rule."""
+    f = normalize_flight(flight)
+    if not f:
+        return 0
+    query = {
+        "participant_type": {"$in": list(STUDENT_PARTICIPANT_TYPES)},
+        "is_removed": {"$ne": True},
+        "flight": {"$regex": f"^{re.escape(f)}$", "$options": "i"},
+    }
+    if exclude_ids:
+        query["id"] = {"$nin": list(exclude_ids)}
+    return await db.participants.count_documents(query)
+
+
+async def assert_student_flight_capacity(
+    flight: str | None,
+    incoming_student_count: int = 1,
+    exclude_ids: set[str] | None = None,
+) -> None:
+    """Raise 409 before a manual, bulk, drag/drop, or upload write would
+    over-seat a student flight."""
+    f = normalize_flight(flight)
+    if not f:
+        return
+    current = await get_student_count_for_flight(f, exclude_ids=exclude_ids)
+    if current + incoming_student_count > MAX_STUDENTS_PER_FLIGHT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Flight {f.capitalize()} is at capacity "
+                f"({current}/{MAX_STUDENTS_PER_FLIGHT}). "
+                "Additional students remain unassigned/waitlisted."
+            ),
+        )
 
 
 def _app_edit_sort_key(value) -> str:
@@ -385,7 +438,7 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     """
     # Only apply to students (canonical participant_type)
     participant_type = student_doc.get("participant_type", "")
-    if participant_type != "student":
+    if not is_student_participant_type(participant_type):
         return student_doc  # Not a student, no auto-assignment
     
     # PROTECTION: Don't change students who already have a valid flight
@@ -407,7 +460,7 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
     existing = await db.participants.find(
-        {"participant_type": "student", "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        {"participant_type": {"$in": list(STUDENT_PARTICIPANT_TYPES)}, "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
         {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
@@ -497,7 +550,7 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     return student_doc
 
 
-async def auto_assign_flights(students: list) -> dict:
+async def auto_assign_flights(students: list, reassign_existing: bool = False) -> dict:
     """
     Automatically assign students to flights using balanced distribution.
 
@@ -521,8 +574,21 @@ async def auto_assign_flights(students: list) -> dict:
     # Build case-insensitive flight list for query
     valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
+    incoming_capids = {str(s.get("capid") or "").strip() for s in students if s.get("capid")}
+    existing_query = {
+        "participant_type": {"$in": list(STUDENT_PARTICIPANT_TYPES)},
+        "is_removed": {"$ne": True},
+        "flight": {"$in": valid_flights_query},
+    }
+    # When processing a new master roster upload, the spreadsheet is the
+    # source of truth for who gets seated.  Exclude those rows from the
+    # current-count seed so bad historical assignments (e.g. Alpha=30) do not
+    # poison the new allocation.
+    if reassign_existing and incoming_capids:
+        existing_query["capid"] = {"$nin": list(incoming_capids)}
+
     existing = await db.participants.find(
-        {"participant_type": "student", "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        existing_query,
         {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
@@ -554,7 +620,9 @@ async def auto_assign_flights(students: list) -> dict:
     students_to_assign = []
     for s in students:
         current_flight = s.get("flight")
-        if not current_flight or (isinstance(current_flight, str) and current_flight.lower() not in ALL_FLIGHTS):
+        if not is_student_participant_type(s.get("participant_type")):
+            continue
+        if reassign_existing or not current_flight or (isinstance(current_flight, str) and current_flight.lower() not in ALL_FLIGHTS):
             gender = (s.get("gender") or "").upper()
             if gender == "M":
                 gender = "MALE"
@@ -658,9 +726,9 @@ async def upload_students_preview(
       - matches_existing: rows that will UPDATE an existing active row
       - recovers: rows that will RECOVER a soft-removed row
       - new_inserts: rows that will be inserted as net-new
-      - soft_removes: existing active participants that will be soft-removed
-                      because they're NOT in the uploaded file
-      - soft_remove_sample: first 10 names that will be soft-removed (for UX)
+      - missing_from_upload: existing active participants that will be flagged
+                             because they're NOT in the uploaded file
+      - missing_from_upload_sample: first 10 names that will be flagged (for UX)
     """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported")
@@ -712,7 +780,7 @@ async def upload_students_preview(
         else:
             new_inserts += 1
 
-    # Stragglers that will be soft-removed (active rows not touched by file)
+    # Stragglers that will be flagged for review (active rows not touched by file)
     stragglers = await db.participants.find(
         {"is_removed": {"$ne": True}, "id": {"$nin": list(seen_existing_ids)}},
         {"_id": 0, "id": 1, "capid": 1, "first_name": 1, "last_name": 1,
@@ -736,8 +804,8 @@ async def upload_students_preview(
         "matches_existing": matches,
         "recovers": recovers,
         "new_inserts": new_inserts,
-        "soft_removes": len(stragglers),
-        "soft_remove_sample": sample_payload,
+        "missing_from_upload": len(stragglers),
+        "missing_from_upload_sample": sample_payload,
         "current_active_total": await db.participants.count_documents({"is_removed": {"$ne": True}}),
     }
 
@@ -949,7 +1017,10 @@ async def upload_students(
         # Auto-assign flights if enabled
         flight_assignments = {}
         if auto_assign:
-            result = await auto_assign_flights(students_to_process)
+            # Rebuild seating for every eligible student in the uploaded
+            # source roster.  This corrects historical over-cap flights and
+            # keeps the waitlist ordered by AppEditDate.
+            result = await auto_assign_flights(students_to_process, reassign_existing=True)
             flight_assignments = result["assignments"]
         
         # Insert/update students with cascading match + user linking
@@ -968,10 +1039,15 @@ async def upload_students(
             first_name = student.get("first_name", "")
             last_name = student.get("last_name", "")
 
-            # Apply flight assignment if available (only for students)
-            if student.get("participant_type") == "basic_student" and capid in flight_assignments:
+            # Apply flight assignment if available (only for eligible students).
+            # Eligible students past the 6×15 capacity remain unassigned and
+            # therefore appear as the waitlist.
+            if is_student_participant_type(student.get("participant_type")) and capid in flight_assignments:
                 student["flight"] = flight_assignments[capid]["flight"]
                 student["squadron"] = flight_assignments[capid]["squadron"]
+            elif is_student_participant_type(student.get("participant_type")) and auto_assign:
+                student["flight"] = None
+                student["squadron"] = None
 
             student["updated_at"] = now
 
@@ -982,8 +1058,11 @@ async def upload_students(
             )
 
             if existing:
-                # Don't override manual squadron/flight assignments
-                if existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
+                # Don't override manual squadron/flight assignments when the
+                # upload is NOT rebuilding seating.  Normal master-roster
+                # uploads do rebuild seating to enforce 15 students per flight
+                # by application date.
+                if (not auto_assign) and existing.get("flight") and existing["flight"] in ALL_FLIGHTS:
                     student["flight"] = existing["flight"]
                     student["squadron"] = existing.get("squadron")
 
@@ -1009,11 +1088,17 @@ async def upload_students(
                     # Strip the would-be demotion so the existing classification stays.
                     student.pop("participant_type", None)
                     student.pop("student_type", None)
-                # If spreadsheet didn't specify a participant_type (blank SubEvents/EventName),
-                # keep the existing type entirely — don't change what's already set
+                # If spreadsheet didn't specify a participant_type (blank
+                # SubEvents/EventName), flag it and keep it out of flights.
+                # These rows require human review before being treated as
+                # students/cadre/senior staff.
                 if student.get("participant_type") is None:
-                    student.pop("participant_type", None)
+                    student["participant_type"] = "needs_review"
                     student.pop("student_type", None)
+                    student["flight"] = None
+                    student["squadron"] = None
+                    student["review_status"] = "needs_review"
+                    student["review_reason"] = "Blank SubEvents/EventName in latest roster upload"
                 # Otherwise the spreadsheet's type is authoritative (e.g. moving
                 # an existing student to "Cadet Application" sub-event).
 
@@ -1056,62 +1141,28 @@ async def upload_students(
             if await link_to_user_account(pid, capid, email):
                 linked_count += 1
 
-        # Phase 7 Sync Mode: soft-remove any active participant whose id was
-        # NOT touched by this upload. Their user-account linkage is preserved
-        # (we never null `linked_participant_id` on the user doc) so they can
-        # be recovered automatically by a future upload that re-includes them.
-        soft_removed_count = 0
+        # Phase 7 Sync Mode update: do NOT delete/change app-only rows that
+        # are not present in the spreadsheet.  Flag them for review instead.
+        # This protects information entered directly into the app while still
+        # making the mismatch visible to staff.
+        flagged_missing_count = 0
         if sync and touched_ids:
             res = await db.participants.update_many(
                 {"is_removed": {"$ne": True}, "id": {"$nin": list(touched_ids)}},
                 {"$set": {
-                    "is_removed": True,
-                    "removed_at": now,
-                    "removed_by": user.get("id"),
-                    "removed_reason": "Not present in latest master roster upload",
+                    "review_status": "needs_review",
+                    "review_reason": "Exists in app but not in latest master roster upload",
+                    "review_flagged_at": now,
+                    "review_flagged_by": user.get("id"),
                 }}
             )
-            soft_removed_count = res.modified_count
+            flagged_missing_count = res.modified_count
 
-        # Phase 7c: when Sync Mode removes someone, promote a waitlisted
-        # applicant to fill the now-empty flight seat. This keeps every
-        # flight as close to its 3×5=15 capacity as possible without
-        # admin intervention.
+        # Waitlist promotion now happens naturally on the next source roster
+        # sync.  App-only rows missing from the spreadsheet are review-flagged,
+        # not removed, so we do not auto-promote into a seat until staff clear
+        # the discrepancy.
         promoted_from_waitlist = 0
-        if sync and soft_removed_count:
-            try:
-                valid_flights_all = (
-                    ALL_FLIGHTS
-                    + [f.capitalize() for f in ALL_FLIGHTS]
-                    + [f.upper() for f in ALL_FLIGHTS]
-                )
-                unassigned_after = await db.participants.find(
-                    {
-                        "participant_type": "student",
-                        "is_removed": {"$ne": True},
-                        "$or": [
-                            {"flight": None},
-                            {"flight": ""},
-                            {"flight": {"$exists": False}},
-                            {"flight": {"$nin": valid_flights_all}},
-                        ],
-                    },
-                    {"_id": 0},
-                ).to_list(1000)
-                if unassigned_after:
-                    promo = await auto_assign_flights(unassigned_after)
-                    for capid, a in (promo.get("assignments") or {}).items():
-                        await db.participants.update_one(
-                            {"capid": capid},
-                            {"$set": {
-                                "flight": a["flight"],
-                                "squadron": a["squadron"],
-                                "updated_at": now,
-                            }},
-                        )
-                        promoted_from_waitlist += 1
-            except Exception as e:
-                logger.error("[upload] waitlist auto-promotion failed: %s", e)
 
         # Phase 10: AUTO-SYNC roster payment totals to the finance budget AND
         # notify the finance officer about any paid rows we couldn't auto-
@@ -1172,8 +1223,7 @@ async def upload_students(
         return {
             "message": (
                 f"Roster sync complete: {imported_count} new, {updated_count} updated, "
-                f"{recovered_count} recovered, {soft_removed_count} removed (not in file), "
-                f"{promoted_from_waitlist} promoted from waitlist, "
+                f"{recovered_count} recovered, {flagged_missing_count} flagged for review (not in file), "
                 f"{linked_count} linked to accounts"
                 if sync else
                 f"Student upload complete: {imported_count} new, {updated_count} updated, {linked_count} linked to accounts"
@@ -1182,7 +1232,7 @@ async def upload_students(
             "imported": imported_count,
             "updated": updated_count,
             "recovered": recovered_count,
-            "soft_removed": soft_removed_count,
+            "flagged_missing_from_upload": flagged_missing_count,
             "promoted_from_waitlist": promoted_from_waitlist,
             "linked": linked_count,
             "total_students": total_students,

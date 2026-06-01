@@ -32,7 +32,20 @@ from scope import (
     is_full_admin,
     PRIVILEGED_VIEWING_ROLES,
 )
-from routes.students import auto_assign_single_student, is_valid_flight, sync_roster_to_budget, find_existing_participant, find_match_with_candidates, link_to_user_account, determine_participant_type
+from routes.students import (
+    auto_assign_single_student,
+    is_valid_flight,
+    sync_roster_to_budget,
+    find_existing_participant,
+    find_match_with_candidates,
+    link_to_user_account,
+    determine_participant_type,
+    assert_student_flight_capacity,
+    is_student_participant_type,
+    normalize_flight,
+    ALL_FLIGHTS,
+    FLIGHT_TO_SQUADRON,
+)
 
 # ================= PARTICIPANT ROUTES =================
 
@@ -1034,8 +1047,9 @@ async def bulk_change_assignment(
         if f == "" or f.lower() == "none":
             update_doc["flight"] = None
         elif f.lower() in VALID_FLIGHTS:
-            # Store capitalized for UI ("Alpha")
-            update_doc["flight"] = f.capitalize()
+            # Store canonical lower-case slug. UI can format labels.
+            update_doc["flight"] = f.lower()
+            update_doc["squadron"] = FLIGHT_TO_SQUADRON[f.lower()]
         else:
             raise HTTPException(status_code=400, detail=f"flight must be one of: {sorted(VALID_FLIGHTS)} or empty/None")
 
@@ -1051,6 +1065,22 @@ async def bulk_change_assignment(
 
     if not update_doc:
         raise HTTPException(status_code=400, detail="At least one of flight or squadron must be provided")
+
+    # Enforce the 15-student cap for bulk moves.  Cadre/senior staff are not
+    # counted against student seats.
+    target_flight = normalize_flight(update_doc.get("flight")) if "flight" in update_doc else None
+    if target_flight:
+        selected = await db.participants.find(
+            {"id": {"$in": data.participant_ids}, "is_removed": {"$ne": True}},
+            {"_id": 0, "id": 1, "participant_type": 1},
+        ).to_list(5000)
+        incoming_students = [p for p in selected if is_student_participant_type(p.get("participant_type"))]
+        if incoming_students:
+            await assert_student_flight_capacity(
+                target_flight,
+                incoming_student_count=len(incoming_students),
+                exclude_ids={p["id"] for p in selected if p.get("id")},
+            )
 
     update_doc["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.participants.update_many(
@@ -1224,7 +1254,7 @@ async def update_participant_assignment(
     cadre_only_roles = [UserRole.EXEC_CADRE]
     
     # Check permissions
-    is_student = participant_type in ["basic_student", "advanced_student"]
+    is_student = is_student_participant_type(participant_type)
     
     if user_role in full_access_roles:
         # Full access - can edit both students and cadre
@@ -1287,6 +1317,12 @@ async def update_participant_assignment(
 
         # Auto-assign squadron for cadet flights only.
         if new_flight_lower and new_flight_lower in flight_squadron_map:
+            if is_student:
+                await assert_student_flight_capacity(
+                    new_flight_lower,
+                    incoming_student_count=1,
+                    exclude_ids={participant_id},
+                )
             update_data["squadron"] = flight_squadron_map[new_flight_lower]
     
     if assignment.squadron is not None:

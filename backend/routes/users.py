@@ -96,8 +96,85 @@ async def get_users(user: dict = Depends(require_role([UserRole.DCP, UserRole.CO
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return [UserResponse(**u) for u in users]
 
+# ─────────────────────────────────────────────────────────────────────────
+# Role-management constants
+# ─────────────────────────────────────────────────────────────────────────
+
+# Roles an Exec Cadre user is allowed to manage. Cadre-only scope.
+EXEC_CADRE_MANAGEABLE_ROLES: set[str] = {
+    UserRole.CADRE,
+    UserRole.EXEC_CADRE,
+    UserRole.SQUADRON_COMMANDER,
+    UserRole.SUPPORT_LOGISTICS,
+    UserRole.SUPPORT_COMMS,
+    UserRole.SUPPORT_PA,
+    UserRole.SUPPORT_DINING,
+    UserRole.SUPPORT_HEALTH,
+}
+
+# Roles a non-full-admin caller must NEVER be able to grant. These are
+# system-level capabilities — only DCP / Commander / Executive Staff may
+# set them.
+PROTECTED_ROLES: set[str] = {
+    UserRole.DCP,
+    UserRole.COMMANDER,
+    UserRole.EXECUTIVE_STAFF,
+    UserRole.SUPERINTENDENT,
+    UserRole.CHIEF_TRAINING_OFFICER,
+}
+
+FULL_ADMIN_ROLES_LOCAL: set[str] = {
+    UserRole.DCP,
+    UserRole.COMMANDER,
+    UserRole.EXECUTIVE_STAFF,
+}
+
+
+async def _audit_role_change(actor: dict, target_user: dict,
+                             previous_role: str | None, new_role: str) -> None:
+    """Record every user-role change in the `role_audit_log` collection.
+    Fields per acceptance test:
+      * who made the change
+      * whose role was changed
+      * previous role
+      * new role
+      * timestamp
+    """
+    await db.role_audit_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "actor_user_id": actor.get("id"),
+        "actor_email": actor.get("email"),
+        "actor_role": actor.get("role"),
+        "target_user_id": target_user.get("id"),
+        "target_email": target_user.get("email"),
+        "previous_role": previous_role,
+        "new_role": new_role,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 @api_router.put("/users/{user_id}/role")
-async def update_user_role(user_id: str, role: str, user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))):
+async def update_user_role(
+    user_id: str,
+    role: str,
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.EXEC_CADRE,
+    ])),
+):
+    """Update a user's role.
+
+    Permission rules:
+      * Full admin (DCP / Commander / Executive Staff) may set any valid role.
+      * Exec Cadre may ONLY set roles within `EXEC_CADRE_MANAGEABLE_ROLES`
+        (cadre + support cadre + squadron_commander + exec_cadre).
+      * Exec Cadre may ONLY edit users who are themselves currently in a
+        cadre-managed role — they cannot promote a student/parent or
+        re-role a senior staff member.
+      * Nobody but full admins can grant `PROTECTED_ROLES` (commander, dcp,
+        executive_staff, superintendent, chief_training_officer).
+      * Every change is recorded in `role_audit_log`.
+    """
     valid_roles = [
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF, UserRole.LOGISTICS,
         UserRole.TRAINING_OFFICER, UserRole.FINANCE, UserRole.PLANS_PROGRAMS,
@@ -105,18 +182,70 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
         UserRole.HEALTH_SERVICES,
         UserRole.DINING_FACILITY, UserRole.SUPPORT_LOGISTICS, UserRole.SUPPORT_COMMS,
         UserRole.SUPPORT_PA, UserRole.SUPPORT_DINING, UserRole.SUPPORT_HEALTH,
-        UserRole.SQUADRON_COMMANDER, UserRole.PARENT
+        UserRole.SQUADRON_COMMANDER, UserRole.PARENT,
+        UserRole.SUPERINTENDENT, UserRole.CHIEF_TRAINING_OFFICER,
+        UserRole.PUBLIC_AFFAIRS,
     ]
     if role not in valid_roles:
         raise HTTPException(status_code=400, detail="Invalid role")
-    
-    result = await db.users.update_one(
-        {"id": user_id}, 
-        {"$set": {"role": role, "permissions": get_default_permissions(role)}}
+
+    target = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "id": 1, "email": 1, "role": 1},
     )
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    actor_role = user.get("role")
+    previous_role = target.get("role")
+
+    # ── Permission scoping ─────────────────────────────────────────────
+    if actor_role not in FULL_ADMIN_ROLES_LOCAL:
+        # Non-admin caller (Exec Cadre is the only other allowed role here).
+        if actor_role != UserRole.EXEC_CADRE:
+            # Defensive — require_role already enforced this, but keep the
+            # double-check so a future router change doesn't open a hole.
+            raise HTTPException(status_code=403, detail="Not authorised to change roles")
+
+        # Exec Cadre may only manage cadre-side roles.
+        if role not in EXEC_CADRE_MANAGEABLE_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Exec Cadre may only assign cadre-side roles "
+                    "(cadre, exec_cadre, squadron_commander, support_*)."
+                ),
+            )
+        # And only edit users who are CURRENTLY in a cadre-managed role.
+        if previous_role not in EXEC_CADRE_MANAGEABLE_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Exec Cadre cannot modify a user whose current role "
+                    f"({previous_role}) is not cadre-managed."
+                ),
+            )
+        # Never let a non-admin grant protected/system roles.
+        if role in PROTECTED_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail="Only full admins can grant system-level roles.",
+            )
+
+    # ── Apply + audit ──────────────────────────────────────────────────
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": role, "permissions": get_default_permissions(role)}},
+    )
+    if result.modified_count == 0 and previous_role == role:
+        # Idempotent no-op — still audit it so we can see attempted churn.
+        await _audit_role_change(user, target, previous_role, role)
+        return {"message": "Role unchanged (already set to this value)"}
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    await _audit_role_change(user, target, previous_role, role)
+
     # Auto-sync org chart after role change
     try:
         updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
@@ -124,8 +253,33 @@ async def update_user_role(user_id: str, role: str, user: dict = Depends(require
             await auto_sync_org_chart(updated_user)
     except Exception as e:
         logger.error(f"Org chart auto-sync on role change failed: {e}")
-    
-    return {"message": "Role updated successfully"}
+
+    return {
+        "message": "Role updated successfully",
+        "previous_role": previous_role,
+        "new_role": role,
+    }
+
+
+@api_router.get("/users/role-audit-log")
+async def list_role_audit_log(
+    limit: int = 200,
+    user: dict = Depends(require_role([
+        UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
+        UserRole.EXEC_CADRE,
+    ])),
+):
+    """List recent role changes.
+
+    Full admins see everything. Exec Cadre sees only entries where they
+    were the actor — they don't get to read senior-staff role changes.
+    """
+    query: dict = {}
+    if user.get("role") == UserRole.EXEC_CADRE:
+        query["actor_user_id"] = user.get("id")
+
+    cur = db.role_audit_log.find(query, {"_id": 0}).sort("timestamp", -1).limit(min(limit, 500))
+    return await cur.to_list(length=min(limit, 500))
 
 @api_router.put("/users/{user_id}/unit")
 async def assign_user_unit(
