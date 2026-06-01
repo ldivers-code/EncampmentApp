@@ -9,8 +9,11 @@ class UserRole:
     EXECUTIVE_STAFF = "executive_staff"
     LOGISTICS = "logistics"
     TRAINING_OFFICER = "training_officer"
+    SUPERINTENDENT = "superintendent"
+    CHIEF_TRAINING_OFFICER = "chief_training_officer"
     FINANCE = "finance"
     PLANS_PROGRAMS = "plans_programs"
+    PUBLIC_AFFAIRS = "public_affairs"
     EXEC_CADRE = "exec_cadre"
     STAFF = "staff"
     CADRE = "cadre"
@@ -457,6 +460,13 @@ class ParticipantResponse(ParticipantBase):
     updated_at: str
     manually_edited_at: Optional[str] = None
     manually_edited_by: Optional[str] = None
+    # Read-only enrichments from the linked user account — populated by
+    # /api/participants. Used by the Roster UI to render the correct
+    # squadron/flight dropdowns for non-flight participants.
+    linked_user_role: Optional[str] = None
+    linked_support_section: Optional[str] = None
+    is_non_flight: Optional[bool] = False
+    is_support: Optional[bool] = False
 
 class ScheduleEventBase(BaseModel):
     title: str

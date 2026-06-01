@@ -206,10 +206,37 @@ const RosterPage = () => {
     notes: ''
   });
 
+  // Support-section taxonomy (fetched once, used by Roster dropdowns).
+  // Falls back to a hardcoded list if the endpoint is unreachable so the
+  // UI still works during offline / preview blips.
+  const [supportTaxonomy, setSupportTaxonomy] = useState({
+    support_sections: [
+      { slug: 'logistics', label: 'Logistics' },
+      { slug: 'communications', label: 'Communications' },
+      { slug: 'public_affairs', label: 'Public Affairs' },
+      { slug: 'dining', label: 'Dining' },
+      { slug: 'health', label: 'Health' },
+      { slug: 'plans_programs', label: 'Plans / Programs' },
+      { slug: 'training', label: 'Training' },
+      { slug: 'finance', label: 'Finance' },
+    ],
+  });
+
   useEffect(() => {
     loadParticipants();
     loadStats();
     loadFlightDistribution();
+    // Best-effort taxonomy fetch.
+    (async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/taxonomy/support`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        if (res.ok) setSupportTaxonomy(await res.json());
+      } catch (e) {
+        /* keep fallback */
+      }
+    })();
   }, []);
 
   const loadParticipants = async () => {
@@ -389,10 +416,13 @@ const RosterPage = () => {
   // Waitlist count: active students with no flight assigned. These remain
   // unassigned because the 6×15=90 cap is full — earliest `app_edit_data`
   // applicants are seated first, late applicants stay here until a seat opens.
+  // Support cadre / senior members are excluded — they're non-flight by
+  // design and shouldn't show as "waitlisted".
   const waitlistCount = useMemo(() => {
     return participants.filter(p =>
       !p.is_removed
       && isStudentType(p.participant_type)
+      && !p.is_non_flight
       && (!p.flight || p.flight === 'None')
     ).length;
   }, [participants]);
@@ -853,8 +883,13 @@ const RosterPage = () => {
     const squadronLower = (squadron || '').toLowerCase().replace(/\s+/g, '_');
     const squadronMap = {
       '6th_cts': { name: '6th CTS', color: 'text-sky-600', badge: 'bg-sky-100 text-sky-700 border-sky-300' },
+      '16th_cts': { name: '16th CTS', color: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
       '21st_cts': { name: '21st CTS', color: 'text-red-700', badge: 'bg-red-100 text-red-700 border-red-300' },
       '22nd_cts': { name: '22nd CTS', color: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+      // Non-flight squadrons (support / senior member)
+      'support_cadre': { name: 'Support — Cadre', color: 'text-violet-700', badge: 'bg-violet-100 text-violet-800 border-violet-300' },
+      'support_senior_staff': { name: 'Support — Sr Staff', color: 'text-violet-900', badge: 'bg-violet-200 text-violet-900 border-violet-400' },
+      'senior_member': { name: 'Senior Member', color: 'text-slate-800', badge: 'bg-slate-200 text-slate-800 border-slate-400' },
       // Handle space-separated versions too
       '6th cts': { name: '6th CTS', color: 'text-sky-600', badge: 'bg-sky-100 text-sky-700 border-sky-300' },
       '21st cts': { name: '21st CTS', color: 'text-red-700', badge: 'bg-red-100 text-red-700 border-red-300' },
@@ -2115,33 +2150,57 @@ const RosterPage = () => {
                         </span>
                       </div>
                     </td>
-                    {/* Editable Flight Cell */}
+                    {/* Editable Flight Cell (or Support Section for non-flight participants) */}
                     <td onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
                         <Select value={inlineEditFlight} onValueChange={setInlineEditFlight}>
-                          <SelectTrigger className="h-7 w-24 text-xs rounded-sm">
-                            <SelectValue placeholder="Flight" />
+                          <SelectTrigger className="h-7 w-32 text-xs rounded-sm">
+                            <SelectValue placeholder={p.is_non_flight ? 'Section' : 'Flight'} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="None">None</SelectItem>
-                            <SelectItem value="Alpha">Alpha</SelectItem>
-                            <SelectItem value="Bravo">Bravo</SelectItem>
-                            <SelectItem value="Charlie">Charlie</SelectItem>
-                            <SelectItem value="Delta">Delta</SelectItem>
-                            <SelectItem value="Echo">Echo</SelectItem>
-                            <SelectItem value="Foxtrot">Foxtrot</SelectItem>
+                            {p.is_non_flight ? (
+                              (supportTaxonomy.support_sections || []).map(s => (
+                                <SelectItem key={s.slug} value={s.slug}>{s.label}</SelectItem>
+                              ))
+                            ) : (
+                              <>
+                                <SelectItem value="Alpha">Alpha</SelectItem>
+                                <SelectItem value="Bravo">Bravo</SelectItem>
+                                <SelectItem value="Charlie">Charlie</SelectItem>
+                                <SelectItem value="Delta">Delta</SelectItem>
+                                <SelectItem value="Echo">Echo</SelectItem>
+                                <SelectItem value="Foxtrot">Foxtrot</SelectItem>
+                              </>
+                            )}
                           </SelectContent>
                         </Select>
                       ) : (
-                        <div 
+                        <div
                           className="cursor-pointer group flex items-center gap-1"
                           onClick={() => canEdit() && startInlineEdit(p)}
                         >
-                          {p.flight && p.flight !== 'None' ? (
+                          {p.is_non_flight ? (
+                            // Support / Senior Member — show their section
+                            // (or a dash if not set). NEVER a Waitlist badge.
+                            (() => {
+                              const sec = p.flight || p.linked_support_section;
+                              const label = (supportTaxonomy.support_sections || [])
+                                .find(s => s.slug === sec)?.label;
+                              return sec ? (
+                                <span className="inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                  {label || sec.replace(/_/g, ' ')}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 italic text-xs">— set section —</span>
+                              );
+                            })()
+                          ) : p.flight && p.flight !== 'None' ? (
                             <span className={`inline-block px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-sm ${flightColors.badge}`}>
                               {p.flight}
                             </span>
-                          ) : (
+                          ) : isStudentType(p.participant_type) ? (
+                            // Real waitlist — only for students with no flight.
                             <span className="flex flex-col gap-0.5">
                               <span className="inline-block px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold rounded-sm bg-amber-100 text-amber-800 border border-amber-300 w-fit">
                                 Waitlist
@@ -2152,6 +2211,8 @@ const RosterPage = () => {
                                 </span>
                               )}
                             </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
                           )}
                           {canEdit() && (
                             <Edit3 className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -2163,18 +2224,30 @@ const RosterPage = () => {
                     <td onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
                         <Select value={inlineEditSquadron} onValueChange={setInlineEditSquadron}>
-                          <SelectTrigger className="h-7 w-24 text-xs rounded-sm">
+                          <SelectTrigger className="h-7 w-36 text-xs rounded-sm">
                             <SelectValue placeholder="Squadron" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="None">None</SelectItem>
-                            <SelectItem value="6th_cts">6th CTS</SelectItem>
-                            <SelectItem value="21st_cts">21st CTS</SelectItem>
-                            <SelectItem value="22nd_cts">22nd CTS</SelectItem>
+                            {p.is_non_flight ? (
+                              // Support dropdown — 2-level: Cadre vs Senior Staff.
+                              <>
+                                <SelectItem value="support_cadre">Support — Cadre</SelectItem>
+                                <SelectItem value="support_senior_staff">Support — Senior Staff</SelectItem>
+                                <SelectItem value="senior_member">Senior Member</SelectItem>
+                              </>
+                            ) : (
+                              <>
+                                <SelectItem value="6th_cts">6th CTS</SelectItem>
+                                <SelectItem value="16th_cts">16th CTS</SelectItem>
+                                <SelectItem value="21st_cts">21st CTS</SelectItem>
+                                <SelectItem value="22nd_cts">22nd CTS</SelectItem>
+                              </>
+                            )}
                           </SelectContent>
                         </Select>
                       ) : (
-                        <div 
+                        <div
                           className="cursor-pointer group flex items-center gap-1"
                           onClick={() => canEdit() && startInlineEdit(p)}
                         >

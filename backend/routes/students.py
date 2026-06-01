@@ -822,7 +822,9 @@ async def upload_students(
             'PaidInFull': 'paid_in_full',
             # Application timestamp — used to seat students in application
             # order so late applicants land on the waitlist (column AI in
-            # eCAP exports).
+            # eCAP exports). Accept both spellings — eCAP exports use
+            # `AppEditDate`, but legacy templates sometimes use `AppEditData`.
+            'AppEditDate': 'app_edit_data',
             'AppEditData': 'app_edit_data',
         }
         

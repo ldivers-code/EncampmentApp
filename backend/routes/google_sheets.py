@@ -1030,7 +1030,8 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
             'UnitCCName': 'unit_cc_name', 'UnitCCEmail': 'unit_cc_email',
             'LastEncampment': 'last_encampment', 'CPPTExpiration': 'cppt_expiration',
             'FirstAid': 'first_aid', 'SubEvents': 'sub_events',
-            # Application timestamp — used for waitlist sort.
+            # Application timestamp — used for waitlist sort. Accept both spellings.
+            'AppEditDate': 'app_edit_data',
             'AppEditData': 'app_edit_data',
         }
         

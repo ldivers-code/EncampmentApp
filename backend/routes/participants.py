@@ -58,6 +58,32 @@ async def get_participants(user: dict = Depends(get_current_user)):
     apply_participant_visibility(query, user)
 
     participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
+
+    # Enrich with linked-user info so the Roster page can render the
+    # Support-vs-Flight dropdowns correctly. We do one batched users.find()
+    # rather than N+1 lookups.
+    from support_sections import is_non_flight_role, is_support_role
+    ids = [p["id"] for p in participants if p.get("id")]
+    if ids:
+        users = await db.users.find(
+            {"linked_participant_id": {"$in": ids}},
+            {"_id": 0, "linked_participant_id": 1, "role": 1, "support_section": 1}
+        ).to_list(2000)
+        link_map = {u["linked_participant_id"]: u for u in users
+                    if u.get("linked_participant_id")}
+        for p in participants:
+            u = link_map.get(p.get("id"))
+            if u:
+                p["linked_user_role"] = u.get("role")
+                p["linked_support_section"] = u.get("support_section")
+                p["is_non_flight"] = is_non_flight_role(u.get("role"))
+                p["is_support"] = is_support_role(u.get("role"))
+            else:
+                p["linked_user_role"] = None
+                p["linked_support_section"] = None
+                p["is_non_flight"] = False
+                p["is_support"] = False
+
     redacted = redact_participants(participants, user)
     return [ParticipantResponse(**p) for p in redacted]
 
@@ -1217,13 +1243,31 @@ async def update_participant_assignment(
             detail="You do not have permission to modify participant assignments"
         )
     
-    # Validate flight/squadron combinations
-    valid_flights = [None, "", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
-    valid_squadrons = [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre", "6th_cts", "21st_cts", "22nd_cts"]
-    
+    # Validate flight/squadron combinations.
+    # The "flight" field has two distinct meanings depending on the
+    # participant: a cadet-flight slug (alpha–foxtrot) OR a support section
+    # slug (logistics, communications, …) when the participant is non-flight.
+    from support_sections import (
+        SUPPORT_SECTION_SLUGS,
+        SQUADRON_SUPPORT_CADRE,
+        SQUADRON_SUPPORT_SENIOR_STAFF,
+        SQUADRON_SENIOR_MEMBER,
+        role_for_section,
+        section_label,
+    )
+
+    valid_cadet_flights = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+    valid_flights = [None, ""] + valid_cadet_flights + list(SUPPORT_SECTION_SLUGS)
+    valid_squadrons = (
+        [None, "", "staff", "support_cadre", "exec_cadre", "ops_cadre",
+         "6th_cts", "16th_cts", "21st_cts", "22nd_cts",
+         SQUADRON_SUPPORT_CADRE, SQUADRON_SUPPORT_SENIOR_STAFF,
+         SQUADRON_SENIOR_MEMBER]
+    )
+
     if assignment.flight and assignment.flight.lower() not in [f.lower() if f else f for f in valid_flights]:
         raise HTTPException(status_code=400, detail=f"Invalid flight: {assignment.flight}")
-    
+
     if assignment.squadron and assignment.squadron.lower() not in [s.lower() if s else s for s in valid_squadrons]:
         raise HTTPException(status_code=400, detail=f"Invalid squadron: {assignment.squadron}")
     
@@ -1235,14 +1279,15 @@ async def update_participant_assignment(
     }
     
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    
+    new_flight_lower = None
+
     if assignment.flight is not None:
-        flight_lower = assignment.flight.lower() if assignment.flight else None
-        update_data["flight"] = flight_lower
-        
-        # Auto-assign squadron for student flights
-        if flight_lower and flight_lower in flight_squadron_map:
-            update_data["squadron"] = flight_squadron_map[flight_lower]
+        new_flight_lower = assignment.flight.lower() if assignment.flight else None
+        update_data["flight"] = new_flight_lower
+
+        # Auto-assign squadron for cadet flights only.
+        if new_flight_lower and new_flight_lower in flight_squadron_map:
+            update_data["squadron"] = flight_squadron_map[new_flight_lower]
     
     if assignment.squadron is not None:
         update_data["squadron"] = assignment.squadron.lower() if assignment.squadron else None
@@ -1254,7 +1299,39 @@ async def update_participant_assignment(
         {"id": participant_id},
         {"$set": update_data}
     )
-    
+
+    # ── Roster ↔ User sync ──────────────────────────────────────────────
+    # When the participant is a support member and we changed their support
+    # section ("flight" cell), push the change into the linked user account
+    # so their permissions stay in sync. We only do this for support
+    # participants — cadets and senior-member leadership don't carry a
+    # support_section.
+    if new_flight_lower is not None and new_flight_lower in SUPPORT_SECTION_SLUGS:
+        linked_user_id = participant.get("linked_user_id") or participant.get("user_id")
+        # Determine the canonical squadron bucket so we pick the right
+        # role-map (cadre-side vs senior-staff-side).
+        bucket = update_data.get("squadron") or participant.get("squadron")
+        suggested_role = role_for_section(new_flight_lower, bucket)
+
+        user_updates: dict[str, object] = {"support_section": new_flight_lower}
+        if suggested_role:
+            user_updates["role"] = suggested_role
+
+        # Try to find the linked user via id or by reverse lookup on
+        # linked_participant_id. We don't fail the request if the link is
+        # missing — the participant edit succeeded and that's the primary
+        # action.
+        if linked_user_id:
+            await db.users.update_one(
+                {"id": linked_user_id},
+                {"$set": user_updates},
+            )
+        else:
+            await db.users.update_one(
+                {"linked_participant_id": participant_id},
+                {"$set": user_updates},
+            )
+
     updated = await db.participants.find_one({"id": participant_id}, {"_id": 0})
     return ParticipantResponse(**updated)
 
