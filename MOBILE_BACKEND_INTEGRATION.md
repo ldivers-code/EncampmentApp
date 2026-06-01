@@ -16,6 +16,65 @@ All endpoints are prefixed with `/api`. Example: `POST https://tnwing-preview.em
 
 ---
 
+## 1a. Recent Backend Changes (Mobile-Relevant)
+
+> Last updated: **Feb 2026**. If your mobile build is older than this, review these before shipping.
+
+### 1. Canonical `participant_type` (Phase 2 — Jan 2026)
+
+The legacy values `basic_student`, `advanced_student`, `staff`, `senior_member`, and `exec_cadre` are **DEPRECATED**. The backend never returns them anymore. Use only:
+
+```
+student | cadre | senior_staff | needs_review
+```
+
+Executive cadre is now a **boolean flag** (`is_exec_cadre`) on top of `participant_type == "cadre"`, not its own type. See §3 for the full Seven-Concern model.
+
+### 2. Waitlist & application-order auto-assign (Feb 2026)
+
+The encampment caps each flight at **3 elements × 5 cadets = 15** seats. With 6 flights, the maximum cohort is 90.
+
+When more than 90 students are uploaded:
+- The **earliest** `app_edit_data` values (eCAP roster column AI — e.g. `"30 May 2026"`) get the seats.
+- Students past the cap have `flight == null` — that's the **waitlist**. Treat them as a valid roster state, not an error.
+- When a student is removed via Sync-Mode upload (`POST /api/students/upload`), the backend **automatically promotes** the highest-priority waitlisted cadet into the freed seat. The upload response includes `promoted_from_waitlist: N` so mobile can show a toast.
+- Admins can also manually re-run assignment via `POST /api/students/auto-assign` (response: `{assigned, waitlisted, total_unassigned, flight_counts}`).
+
+**Mobile UI guidance:** for any roster row where `flight == null` and `participant_type == "student"`, show a yellow `WAITLIST` chip and the `app_edit_data` date underneath. Sort waitlisted lists by `app_edit_data` ascending. Do NOT call the auto-assign endpoint from mobile clients — it's an admin tool that runs server-side.
+
+### 3. Schedule grid-format parser + tab auto-discovery (Feb 2026)
+
+`POST /api/google-sheets/schedules/{id}/sync` now auto-detects two formats:
+- **Flat table** — one row per event (Date, Start, End, Title, …).
+- **Grid layout** — A1 contains a day title (e.g. `"Friday | Day 1 CADRE Arrival | May 29th"`), then a header row with `START`, `END`, one column per squadron, optional `Notes`. The parser:
+  - Extracts the date from cell A1.
+  - Stitches vertically-merged cells back into one event by extending `end_time`.
+  - Emits per-squadron events when cells differ; emits one all-squadron event when only the first column is filled in a block.
+  - Tags every event with `target_groups` (e.g. `["6th_cts","21st_cts","22nd_cts","16th_cts"]`).
+
+Two new admin endpoints:
+- `POST /api/google-sheets/discover-tabs` `{spreadsheet_id}` → enumerates every tab in the spreadsheet, returns `{tabs:[{sheet_name, a1, parsed_date, looks_like_schedule, suggested_label}], schedule_tab_count}`. The mobile admin client can use this to show a one-paste "Import all day-tabs" UX.
+- `POST /api/google-sheets/schedules/bulk-add` `{spreadsheet_id, tabs:[{sheet_name, label}]}` → appends one Schedule config per selected tab. Dedup'd by `(spreadsheet_id, sheet_name)`.
+
+The existing `ScheduleSheetConfig` now carries an optional `sheet_name` field. Tab resolution order: `gid → sheet_name → first tab`.
+
+### 4. Finance Tracker Sync (Feb 2026)
+
+`POST /api/students/upload` now parses the `AmountPaid` and `PaidInFull` columns and auto-buckets payments by sub-event into the finance tracker. Rows that are flagged paid but lack a matching sub-event are written to a "Needs Review" list at `GET /api/budget/finance/needs-review` (used by the Finance Officer dashboard). Mobile finance views should consume this endpoint to mirror the web's `FinanceReviewWidget`.
+
+### 5. Field additions on `Participant`
+
+Added to `ParticipantResponse` (visible in `GET /api/participants` and `GET /api/participants/{id}`):
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `app_edit_data` | `string?` | eCAP column AI. Drives waitlist ordering. |
+| `is_exec_cadre` | `bool` | True only when `participant_type == "cadre"` AND the cadet is on exec staff. |
+| `amount_paid` | `number?` | Numeric (was string in earlier mobile builds). |
+| `is_removed` | `bool` | Soft-delete flag. Active queries filter `is_removed != true` server-side; mobile should never need to filter this itself. |
+
+---
+
 ## 2. Authentication Flow (Mobile)
 
 The backend accepts JWT tokens via **three methods** (checked in this order):
@@ -310,6 +369,9 @@ All secrets (JWT_SECRET, MONGO_URL, SENDGRID, etc.) live server-side only. The m
 | `POST` | `/api/participants/bulk-reset/clear-all` | Yes | Clear all (Commander/DCP) |
 | `POST` | `/api/participants/import` | Yes | Import from Excel |
 | `POST` | `/api/participants/{id}/photo` | Yes | Upload cadet photo |
+| `POST` | `/api/students/upload` | Yes | Upload eCAP roster (Excel). Default mode = **Sync** — soft-removes any active student not in the file, auto-promotes from waitlist into the freed seats, auto-syncs payment buckets to the finance tracker. Response: `{imported, updated, recovered, soft_removed, promoted_from_waitlist, linked, auto_assigned, total_students, flight_distribution}`. |
+| `POST` | `/api/students/upload/preview` | Yes | Dry-run preview of the Sync Mode upload — returns the same diff numbers without writing anything. |
+| `POST` | `/api/students/auto-assign` | Yes | Manually re-run flight assignment for any currently unassigned students. Seats by **application order** (`app_edit_data` asc). Response: `{assigned, waitlisted, total_unassigned, flight_counts, message}`. |
 
 ### Schedule (13 endpoints)
 
@@ -494,7 +556,7 @@ All secrets (JWT_SECRET, MONGO_URL, SENDGRID, etc.) live server-side only. The m
 | **Meal Plans** | 4 | `GET/POST/PUT/DELETE /api/meal-plans` |
 | **Logistics** | (via logistics.py inline) | inventory, radios, vehicles, facilities, supply requests |
 | **Users/Admin** | 11 | `GET /api/users`, `PUT /api/users/{id}/role`, `POST /api/users/{id}/approve` |
-| **Google Sheets** | 4 | `GET/POST /api/google-sheets/settings`, sync |
+| **Google Sheets** | 6 | `GET/POST /api/google-sheets/settings`, `POST /api/google-sheets/schedules/{id}/sync`, `POST /api/google-sheets/discover-tabs`, `POST /api/google-sheets/schedules/bulk-add`, `POST /api/google-sheets/sync-all` (admin-only) |
 | **Stats** | 2 | `GET /api/stats/dashboard`, `GET /api/stats/dashboard-quickview` |
 | **Students** | 4 | `POST /api/students/upload`, auto-assign, flight-distribution |
 
@@ -568,7 +630,7 @@ Receipt OCR response:
   "rank": "C/LtCol",
   "participant_type": "cadre",       // CANONICAL: student | cadre | senior_staff | needs_review
   "is_exec_cadre": false,            // boolean — true for executive cadre (was the legacy "exec_cadre" participant_type)
-  "flight": "alpha",                 // alpha-foxtrot or null
+  "flight": "alpha",                 // alpha-foxtrot (always lowercase) or null = WAITLIST
   "squadron": "6th_cts",             // or null
   "position": "Flight Commander",    // or null
   "email": "user@cap.gov",
@@ -576,15 +638,25 @@ Receipt OCR response:
   "wing": "TNWG",
   "gender": "Female",
   "age": 17,
-  "member_type": "CADET",           // CADET | SENIOR | CADET SPONSOR
+  "member_type": "CADET",            // CADET | SENIOR | CADET SPONSOR
   "registration_status": "Confirmed",
   "emergency_contact": "Parent Name",
   "emergency_phone": "615-555-0123",
   "cadet_parent_email": "parent@email.com",
-  "amount_paid": "100.00",
-  "paid_in_full": "Yes"
+  "amount_paid": 100.00,             // numeric (was string in v1; canonicalised Feb 2026)
+  "paid_in_full": "Yes",
+  "app_edit_data": "30 May 2026",    // eCAP roster column AI — drives waitlist ordering. Earlier = higher priority.
+  "is_removed": false                // soft-delete flag (true means hidden from active queries)
 }
 ```
+
+> **Waitlist semantics** — a participant with `participant_type == "student"` and
+> `flight == null` is currently on the **waitlist**. The encampment caps each
+> flight at 3 elements × 5 cadets = 15, so 6 × 15 = 90 seats max. When the
+> applicant pool exceeds 90, the *latest* `app_edit_data` values are kept
+> unassigned. Mobile UIs that show "My Flight" or roster summaries should
+> render a yellow **Waitlist** chip for these students rather than treating
+> them as a data error.
 
 ### Schedule Event
 
@@ -593,15 +665,25 @@ Receipt OCR response:
   "id": "uuid",
   "title": "PT Formation",
   "date": "2026-07-19",
-  "start_time": "0600",
-  "end_time": "0700",
+  "start_time": "06:00",                 // 24-hour HH:MM (grid parser normalised, Feb 2026)
+  "end_time": "07:00",
   "location": "Parade Field",
-  "type": "physical_training",
+  "event_type": "physical_training",     // renamed from `type` to match backend
   "description": "Morning PT",
-  "target_groups": ["all"],
-  "is_published": true
+  "target_groups": ["6th_cts", "21st_cts", "22nd_cts", "16th_cts"],
+  "uniform": null,
+  "is_published": true,
+  "source_schedule_id": "cast_day_1",    // nullable. Set when the event was imported from a configured Google Sheet.
+  "source_schedule_label": "CAST Day 1"  // human label of the source schedule (same as Admin → Settings → Schedules row)
 }
 ```
+
+> **Target group filtering on mobile** — events imported by the grid parser
+> are tagged with one or more group slugs (`6th_cts`, `21st_cts`, `alpha`,
+> `bravo`, …). Filter the personalised "My Schedule" feed by intersecting
+> these against the logged-in participant's `squadron` and `flight`. Events
+> tagged `["6th_cts","21st_cts","22nd_cts","16th_cts"]` (the full block) are
+> all-squadron events — show them to everyone in those squadrons.
 
 ### Org Chart Node
 
