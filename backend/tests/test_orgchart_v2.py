@@ -1,11 +1,18 @@
 """
-Org Chart API Tests - Iteration 60
-Tests the SECOND complete rebuild of org chart with 85 positions.
-New hierarchy: Encampment Commander → Commandant → CTG/CC → [CTG/CD, CTG/DF, CTG/CCEA, CSS/CC, CTO, Squadrons]
-New categories: command, cadet_training, support, cadet_support
-Dual reporting: CSS/CC has secondary_reports_to = ctg-df
+Org Chart API Tests - Iteration 60 (DEPRECATED)
+
+This file targeted an interim 85-position template. The canonical template
+is now 79 positions (Feb 2026 Phase 1+2 overhaul). See
+`tests/test_orgchart_phase1_2.py` for the current suite.
 """
 import pytest
+
+pytest.skip(
+    "Legacy 85-position org-chart suite — superseded by test_orgchart_phase1_2.py "
+    "(canonical 79-position template; PA under DCS).",
+    allow_module_level=True,
+)
+
 import requests
 import os
 

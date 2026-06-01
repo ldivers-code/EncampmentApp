@@ -1,9 +1,18 @@
 """
-Org Chart API Tests - Iteration 59
-Tests the rebuilt org chart with 86 positions from TNWG ENC26 spreadsheet.
-Schema: position_title, assigned_name, role_category, display_label, job_description, reports_to, children
+Org Chart API Tests - Iteration 59 (DEPRECATED)
+
+This file targeted the old 86-position template. The canonical template is
+now 79 positions with Public Affairs moved under DCS (Feb 2026 Phase 1+2
+overhaul). See `tests/test_orgchart_phase1_2.py` for the current suite.
 """
 import pytest
+
+pytest.skip(
+    "Legacy 86-position org-chart suite — superseded by test_orgchart_phase1_2.py "
+    "(canonical 79-position template; PA under DCS).",
+    allow_module_level=True,
+)
+
 import requests
 import os
 

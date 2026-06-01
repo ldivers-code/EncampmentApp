@@ -1,0 +1,56 @@
+{
+  "summary": "Backend regression for Org Chart Phase 1+2 overhaul. Wrote new pytest suite (17 tests) covering template (79 positions, 6 categories, PA under DCS, First Sergeants, all canonical flight ids), seed (preserve + reset + seed-defaults), roles enrichment, live-sync (unit + role flows including promotion + demotion fallback), resync-from-users, Exec Cadre permission scoping, and role_audit_log endpoint. All 17 tests PASS. Deprecated 3 legacy suites (test_orgchart.py / _v2 / _v3) that asserted obsolete 85-86 position counts and pre-restructure hierarchy via module-level pytest.skip.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_orgchart_phase1_2.py",
+    "/app/test_reports/pytest/orgchart_phase1_2_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/users.py is 916 lines — over 700-line guideline; consider splitting role-management + approval + unit-assignment into separate modules.",
+    "auto_sync_org_chart correctly clears stale assignments before assigning the new role_id and handles single vs multi-occupant positions with $addToSet — good defensive design. Failures are swallowed and logged so they never block the parent operation.",
+    "Exec Cadre scoping in PUT /users/{id}/role is layered: require_role gate + actor-role check + EXEC_CADRE_MANAGEABLE_ROLES + previous-role check + PROTECTED_ROLES — verified all four enforcement points work via tests.",
+    "POST /api/org-chart/seed preserve-mode correctly retains assigned_name on existing positions while still reconciling metadata changes — verified via TEST_PRESERVE_MARKER round-trip.",
+    "Minor: PUT /api/users/{user_id}/role passes role via query-string (?role=...) instead of JSON body. Works, but inconsistent with other PUT endpoints in this codebase that use JSON bodies. Worth documenting in API contract."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orgchart_phase1_2.py (created)",
+    "/app/backend/tests/test_orgchart.py (deprecated via module-level skip)",
+    "/app/backend/tests/test_orgchart_v2.py (deprecated via module-level skip)",
+    "/app/backend/tests/test_orgchart_v3.py (deprecated via module-level skip)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "commander@test.com / test123; exec_cadre@test.com / test123 (verified live).",
+  "seed_data_creation": "Each live-sync test creates a fresh TEST_cadre_<uuid>@example.com user, approves it via POST /users/{id}/approve, exercises sync, then deletes the user in fixture teardown. No persistent test data left behind.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_orgchart_phase1_2.py is the canonical regression suite for the 79-position template. Legacy test_orgchart{,_v2,_v3}.py are now skipped — do not revive without updating their assertions. role-audit endpoint lives at GET /api/users/role-audit-log (not /api/role-audit-log). Approve endpoint is POST (not PUT). Role updates use ?role=<value> query-string.",
+  "verified_features": [
+    "GET /api/org-chart/template returns count=79, categories={staff,support,cadet_support,6th_cts,21st_cts,22nd_cts}",
+    "Public Affairs (public-affairs-dept) reports_to=dcs, NOT under ctg-ccea",
+    "First Sergeants (6th-sq-1sgt, 21st-sq-1sgt, 22nd-sq-1sgt) all exist with position_title='First Sergeant'",
+    "All 12 squadron flight position ids present",
+    "POST /seed (default) returns mode='preserve' with inserted/updated/deleted/preserved_assignments counts; preserves marker assigned_name",
+    "POST /seed?reset=true returns mode='reset', inserts 79, applies INITIAL_ASSIGNMENTS (enc-commander='Maj Divers, L')",
+    "POST /seed-defaults returns mode='reset' with 79 positions",
+    "GET /roles returns 79 enriched entries with role_id/position_title/reports_to/role_category/order/assigned_name/children fields",
+    "Live sync: cadre_position=flight_sergeant + flight=alpha + squadron=6th_cts → 6th-flt-a-sgt.assigned_name set",
+    "Live sync move: flight_sergeant → flight_commander clears 6th-flt-a-sgt and sets 6th-flt-a-cmdr",
+    "Live sync promotion: PUT /users/{id}/role?role=squadron_commander sets 6th-sq-cmdr and clears prior position",
+    "Live sync demotion: role=cadre falls back to cadre_position mapping (re-occupies 6th-flt-a-cmdr)",
+    "POST /resync-from-users returns {synced, skipped, total_users}",
+    "Exec Cadre CAN promote cadre user to squadron_commander",
+    "Exec Cadre CANNOT grant any PROTECTED_ROLE (commander/dcp/executive_staff/superintendent/chief_training_officer) → 403",
+    "Exec Cadre CANNOT edit a senior-staff user (commander@test.com) → 403",
+    "GET /users/role-audit-log returns 200 with a list"
+  ],
+  "rca of the issue": "No regressions found. Initial test errors were due to using PUT for approve endpoint (actual: POST) and wrong path for audit log (actual: /api/users/role-audit-log). Test script was corrected; underlying app behaviour is correct."
+}

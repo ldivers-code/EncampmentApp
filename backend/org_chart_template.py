@@ -283,9 +283,13 @@ def build_position_template() -> list[dict]:
         pos.append(_p(f"{sq_id}-1sgt", "First Sergeant", f"{sq_id}-cmdr",
                       cat, 1, secondary_reports_to="ctg-df",
                       allowed_types=(PT_CADET_CADRE,)))
+        # Flight role_ids drop the "-sq" infix to match the canonical
+        # IDs referenced by tests + the live-sync mapper:
+        #   `<prefix>-flt-<letter>-cmdr`   (e.g. 6th-flt-a-cmdr)
+        sq_prefix = sq_id.replace("-sq", "")
         for i, flight_letter in enumerate(flights):
-            cmd_id = f"{sq_id}-flt-{flight_letter.lower()}-cmdr"
-            sgt_id = f"{sq_id}-flt-{flight_letter.lower()}-sgt"
+            cmd_id = f"{sq_prefix}-flt-{flight_letter.lower()}-cmdr"
+            sgt_id = f"{sq_prefix}-flt-{flight_letter.lower()}-sgt"
             pos.append(_p(cmd_id, f"Flight Commander - {flight_letter}",
                           f"{sq_id}-cmdr", cat, i + 2,
                           secondary_reports_to="ctg-df",
@@ -304,3 +308,196 @@ def build_position_template() -> list[dict]:
 # Build once at import — cheap & deterministic.
 POSITION_TEMPLATE: list[dict] = build_position_template()
 POSITION_BY_ID: dict[str, dict] = {p["role_id"]: p for p in POSITION_TEMPLATE}
+
+
+# ── Initial assignments (used only on the very first seed; subsequent
+# ── seeds preserve whatever assigned_name is already in the DB) ───────
+INITIAL_ASSIGNMENTS: dict[str, str] = {
+    "enc-commander":       "Maj Divers, L",
+    "dcs":                 "Capt Belli, S",
+    "sm-superintendent":   "TSgt Breslin, D",
+    "ctg-cc":              "C/Lt Col Yoder, L",
+    "ctg-cd":              "C/Lt Col Grammer, A",
+    "ctg-df":              "C/Maj Doran, G",
+    "ctg-ccea":            "C/CMSgt Railey, A",
+    "css-cc":              "C/Capt. Posta, A",
+    "6th-sq-cmdr":         "C/Capt Nhan, V",
+    "21st-sq-cmdr":        "C/2nd Lt Nair, P",
+    "22nd-sq-cmdr":        "C/1st Lt Breslin, D",
+    "css-logistics":       "C/Capt Parker, T",
+    "css-dining":          "C/1st Lt Jackson, J",
+    "css-word":            "C/CMSgt Plummer, R",
+    "6th-sq-to":           "Capt Brad Dozier",
+    "21st-sq-to":          "Capt Renee Cyr",
+    "22nd-sq-to":          "1st Lt Max Hammond",
+    "lg-logistics":        "Capt Reed, A",
+    "health-word":         "Lt Col Divers, K",
+    "pp-cadet-oic":        "Lt Col Brian Hughes",
+    "pp-cadet-aoic":       "Maj Randall Parker",
+    "pp-cadet-coic":       "C/Maj. Stacey, R",
+    "pp-cadet-caoic":      "C/Capt. Lawson, J",
+    "pp-cadet-member-1":   "C/Maj. Phillips, L",
+    "pp-cadet-member-2":   "C/Lt Col Santos, N",
+    "media-member-1":      "C/TSgt Spurling, I",
+    "xp-oic":              "Lt Col Brian Hughes",
+    "xp-aoic":             "Maj Randall Parker",
+    "lg-oic":              "C/Capt Parker, T",
+    "lg-aoic":             "C/2nd Lt Langston, M",
+    "lg-member-1":         "C/SrA Mudhireddy, V",
+    "lg-member-2":         "C/2nd Lt Phillips, E",
+    "lg-member-3":         "C/SMSgt Nichols, A",
+    "comm-oic":            "1st Lt Reed, I",
+    "finance-oic":         "1st Lt Reed, I",
+    "hs-oic":              "C/CMSgt Plummer, R",
+    "hs-ncoic":            "C/CMSgt Steele, L",
+    "hs-member-1":         "C/SMSgt Nhan, D",
+    "pa-oic":              "C/Lt Col Bartlett, E",
+    "pa-aoic":             "C/2d Lt Boykin, N",
+    "pa-member-1":         "C/SMSgt Tran, T",
+    "pa-member-2":         "C/TSgt Zamudio, A",
+    "pa-member-3":         "C/MSgt Plucker, J",
+    "pa-member-4":         "C/2nd Lt Marfio, M",
+    "df-oic":              "C/1st Lt Jackson, J",
+    "df-aoic":             "C/1st Lt Ciampa, B",
+    "df-member-1":         "C/SSgt Mulverhill, M",
+    "df-member-2":         "C/CMSgt Kover, M",
+    "df-member-3":         "C/SrA Sporin, L",
+    "df-member-4":         "C/SSgt Flippen, M",
+    "6th-sq-1sgt":         "C/SMSgt Thomasson, T",
+    "6th-flt-a-cmdr":      "C/CMSgt Anand, R",
+    "6th-flt-a-sgt":       "C/SSgt Mellott, P",
+    "6th-flt-b-sgt":       "C/MSgt DeJesus, R",
+    "21st-sq-1sgt":        "C/CMSgt Jackson, L",
+    "21st-flt-c-cmdr":     "C/1st Lt Madera, G",
+    "21st-flt-c-sgt":      "C/SMSgt Wilson, T",
+    "21st-flt-d-cmdr":     "C/MSgt Calvez, T",
+    "21st-flt-d-sgt":      "C/SrA Garcia, B",
+    "22nd-sq-1sgt":        "C/SMSgt Wainman, A",
+    "22nd-flt-e-cmdr":     "C/2nd Lt Rizzo, H",
+    "22nd-flt-e-sgt":      "C/MSgt Ambelis, I",
+    "22nd-flt-f-cmdr":     "C/2nd Lt Terbizan, S",
+    "22nd-flt-f-sgt":      "C/MSgt Kyle, E",
+}
+
+
+# ── Live-sync mapping: figure out which canonical position a given user
+# ── currently occupies, based on role + unit assignment fields. ────────
+
+_FLIGHT_TO_SQ_PREFIX: dict[str, str] = {
+    "alpha": "6th",   "bravo":   "6th",
+    "charlie": "21st", "delta":  "21st",
+    "echo": "22nd",    "foxtrot": "22nd",
+}
+_SQUADRON_TO_PREFIX: dict[str, str] = {
+    "6th_cts": "6th", "21st_cts": "21st", "22nd_cts": "22nd",
+}
+_FLIGHT_LETTER: dict[str, str] = {
+    "alpha": "a", "bravo": "b", "charlie": "c",
+    "delta": "d", "echo": "e", "foxtrot": "f",
+}
+_SUPPORT_SECTION_TO_ROLE: dict[str, str] = {
+    # css-* nodes live UNDER the cadet support squadron (CSS/CC)
+    "logistics":      "css-logistics",
+    "communications": "css-comms",
+    "comms":          "css-comms",
+    "dining":         "css-dining",
+    "dining_facility": "css-dining",
+    "health":         "css-word",
+    "health_services": "css-word",
+    "word":           "css-word",
+    # public_affairs uses the DCS branch node
+    "public_affairs": "public-affairs-dept",
+    "pa":             "public-affairs-dept",
+    "plans_programs": "xp-plans",
+    "plans/programs": "xp-plans",
+    "training":       "css-to",
+    "finance":        "finance",
+}
+_SUPPORT_ROLE_TO_NODE: dict[str, str] = {
+    "support_logistics": "css-logistics",
+    "support_comms":     "css-comms",
+    "support_pa":        "public-affairs-dept",
+    "support_dining":    "css-dining",
+    "support_health":    "css-word",
+}
+
+
+def find_role_id_for_user(user_data: dict) -> Optional[str]:
+    """Return the canonical org_chart_template `role_id` this user currently
+    occupies, or `None` if no mapping can be inferred.
+
+    Resolution priority:
+      1. Top-level roles that ARE positions in their own right
+         (squadron_commander, training_officer, senior-staff roles,
+         support_*) — these always win, regardless of any stale
+         `cadre_position` field left over from a prior assignment.
+      2. `cadre_position` combined with `flight` / `squadron` (only
+         meaningful for `cadre` / `exec_cadre` role users).
+      3. Fall-through senior-staff mapping for roles not covered above.
+    """
+    role = (user_data.get("role") or "").lower()
+    flight = (user_data.get("flight") or "").lower()
+    squadron = (user_data.get("squadron") or "").lower()
+    cadre_position = (user_data.get("cadre_position") or "").lower()
+    cadre_unit = (user_data.get("cadre_unit") or "").lower()
+    support_section = (user_data.get("support_section") or "").lower()
+
+    sq_prefix = _SQUADRON_TO_PREFIX.get(squadron) or _FLIGHT_TO_SQ_PREFIX.get(flight)
+    flt_letter = _FLIGHT_LETTER.get(flight)
+
+    # 1) Role-as-position (takes precedence over stale cadre_position)
+    if role == "squadron_commander" and sq_prefix:
+        return f"{sq_prefix}-sq-cmdr"
+    if role == "training_officer" and sq_prefix:
+        return f"{sq_prefix}-sq-to"
+
+    if role in _SUPPORT_ROLE_TO_NODE:
+        if support_section and support_section in _SUPPORT_SECTION_TO_ROLE:
+            return _SUPPORT_SECTION_TO_ROLE[support_section]
+        return _SUPPORT_ROLE_TO_NODE[role]
+
+    senior_map = {
+        "commander":              "enc-commander",
+        "dcp":                    "dcs",
+        "executive_staff":        "dcs",
+        "superintendent":         "sm-superintendent",
+        "chief_training_officer": "chief-training-officer",
+        "logistics":              "lg-logistics",
+        "finance":                "finance",
+        "plans_programs":         "xp-plans",
+        "health_services":        "health-word",
+        "dining_facility":        "css-dining",
+        "public_affairs":         "public-affairs-dept",
+    }
+    if role in senior_map:
+        return senior_map[role]
+
+    # 2) cadre_position-driven mapping (for cadre / exec_cadre users)
+    if cadre_position == "flight_commander" and sq_prefix and flt_letter:
+        return f"{sq_prefix}-flt-{flt_letter}-cmdr"
+    if cadre_position == "flight_sergeant" and sq_prefix and flt_letter:
+        return f"{sq_prefix}-flt-{flt_letter}-sgt"
+    if cadre_position == "cadet_first_sergeant" and sq_prefix:
+        return f"{sq_prefix}-sq-1sgt"
+    if cadre_position == "cadet_squadron_commander" and sq_prefix:
+        return f"{sq_prefix}-sq-cmdr"
+    if cadre_position == "squadron_training_officer" and sq_prefix:
+        return f"{sq_prefix}-sq-to"
+    if cadre_position == "commandant_of_cadets":
+        return "commandant"
+    if cadre_position == "chief_training_officer":
+        return "chief-training-officer"
+    if cadre_position == "group_commander":
+        return "ctg-cc"
+    if cadre_position == "group_deputy_commander":
+        return "ctg-cd"
+    if cadre_position == "group_superintendent":
+        return "ctg-ccea"
+    if cadre_position == "cadet_dean_academics":
+        return "ctg-df"
+
+    # 3) cadre_unit hint (last-resort)
+    if cadre_unit == "group" and role == "exec_cadre":
+        return "ctg-ccea"
+
+    return None

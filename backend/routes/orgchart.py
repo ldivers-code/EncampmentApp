@@ -108,30 +108,115 @@ async def delete_org_chart_role(
     return {"message": "Position deleted"}
 
 
-@api_router.post("/org-chart/seed")
-async def seed_org_chart(
+@api_router.get("/org-chart/template")
+async def get_org_chart_template(user: dict = Depends(get_current_user)):
+    """Return the **canonical** org-chart position template (read-only).
+
+    This is the single source of truth for the position hierarchy — branch
+    categories, parent/child relationships, allowed participant types, and
+    job descriptions. The mobile app and the frontend visualizer both read
+    this to render the chart skeleton, then merge in live assignments from
+    `GET /api/org-chart/roles`.
+    """
+    from org_chart_template import POSITION_TEMPLATE, ALLOWED_CATEGORIES
+    return {
+        "version": "feb-2026",
+        "categories": sorted(ALLOWED_CATEGORIES),
+        "positions": POSITION_TEMPLATE,
+        "count": len(POSITION_TEMPLATE),
+    }
+
+
+@api_router.post("/org-chart/resync-from-users")
+async def resync_org_chart_from_users(
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
-    """Re-seed the org chart from the spreadsheet data"""
-    from seed_orgchart import build_orgchart
+    """Rebuild every org-chart assignment from the current users collection.
 
-    # Wipe and reseed
-    await db.org_chart_roles.delete_many({})
-    nodes = build_orgchart()
-    if nodes:
-        await db.org_chart_roles.insert_many(nodes)
-    return {"message": f"Seeded {len(nodes)} positions"}
+    Walks every approved user, resolves their canonical position via
+    `org_chart_template.find_role_id_for_user`, and writes the resulting
+    `assigned_name` / `assigned_user_id` onto the matching `org_chart_roles`
+    row. Useful after a bulk migration, a tab-by-tab upload, or when an
+    operator wants to "rebuild now" instead of waiting for the next live
+    role change.
+
+    Does NOT delete template positions — for that use `POST /seed`.
+    """
+    from routes.users import auto_sync_org_chart  # local import to avoid cycle
+
+    now = datetime.now(timezone.utc).isoformat()
+    # Clear every dynamic assignment first so removed users disappear too.
+    await db.org_chart_roles.update_many(
+        {},
+        {"$set": {
+            "assigned_user_id": None,
+            "assigned_user_ids": [],
+            "assigned_name": "",
+            "updated_at": now,
+        }},
+    )
+
+    users = await db.users.find(
+        {"is_approved": True}, {"_id": 0, "password_hash": 0}
+    ).to_list(2000)
+
+    synced = 0
+    skipped = 0
+    for u in users:
+        result = await auto_sync_org_chart(u)
+        if result:
+            synced += 1
+        else:
+            skipped += 1
+
+    return {
+        "message": f"Resynced org chart from {len(users)} users",
+        "synced": synced,
+        "skipped": skipped,
+        "total_users": len(users),
+    }
+
+
+@api_router.post("/org-chart/seed")
+async def seed_org_chart(
+    reset: bool = False,
+    user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
+):
+    """Reconcile `org_chart_roles` against the canonical template.
+
+    Default behaviour (`reset=False`):
+      * Adds positions present in the template but missing from the DB.
+      * Updates template-driven metadata (title, parent, category, order)
+        on existing rows but **preserves `assigned_name`** so manual edits
+        and Exec Cadre role-sync writes survive the reseed.
+      * Prunes any orphan positions that are no longer in the template.
+
+    `reset=True` is destructive — wipes everything and re-seeds with the
+    INITIAL_ASSIGNMENTS defaults. Use only when intentionally rebuilding.
+    """
+    from seed_orgchart import apply_seed
+    summary = await apply_seed(db, reset=reset)
+    return {
+        "message": (
+            f"Seeded {summary['total']} positions "
+            f"(mode={summary['mode']}, inserted={summary['inserted']}, "
+            f"updated={summary['updated']}, deleted={summary['deleted']}, "
+            f"preserved={summary['preserved_assignments']})"
+        ),
+        **summary,
+    }
 
 
 @api_router.post("/org-chart/seed-defaults")
 async def seed_default_org_chart(
+    reset: bool = True,
     user: dict = Depends(require_role([UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF]))
 ):
-    """Seed default org chart (alias for /seed)"""
-    from seed_orgchart import build_orgchart
+    """Reset the org chart to template defaults (destructive by default).
 
-    await db.org_chart_roles.delete_many({})
-    nodes = build_orgchart()
-    if nodes:
-        await db.org_chart_roles.insert_many(nodes)
-    return {"message": f"Seeded {len(nodes)} positions"}
+    Distinct from `/seed`: this endpoint defaults to `reset=True` and is
+    the explicit "blow it away and start over" affordance.
+    """
+    from seed_orgchart import apply_seed
+    summary = await apply_seed(db, reset=reset)
+    return {"message": f"Seeded {summary['total']} positions (reset={reset})", **summary}

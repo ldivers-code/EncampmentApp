@@ -1,11 +1,19 @@
 """
-Org Chart V3 Tests - Iteration 61
-Tests for:
-1. Squadron Training Officers moved under Chief Training Officer
-2. Secondary reporting to CTG/DF for squadron positions
-3. 5-color category scheme (command, cadet_training, squadron, support, cadet_support)
+Org Chart V3 Tests - Iteration 61 (DEPRECATED)
+
+This file targeted the 85-position template with squadron-category color
+scheme. The canonical template is now 79 positions with 6 categories
+(staff/support/cadet_support/6th_cts/21st_cts/22nd_cts) — Feb 2026 Phase 1+2
+overhaul. See `tests/test_orgchart_phase1_2.py` for the current suite.
 """
 import pytest
+
+pytest.skip(
+    "Legacy 85-position v3 org-chart suite — superseded by test_orgchart_phase1_2.py "
+    "(canonical 79-position template; 6 categories).",
+    allow_module_level=True,
+)
+
 import requests
 import os
 

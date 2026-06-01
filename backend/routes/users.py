@@ -19,70 +19,102 @@ from role_groups import (
 
 logger = logging.getLogger(__name__)
 
-# Org chart role_id mappings
-SQUADRON_ORG_CHART_MAP = {
-    "6th_cts": {"cc": "sq1-cc", "to": "to-sq1", "ato": "ato-sq1"},
-    "21st_cts": {"cc": "sq2-cc", "to": "to-sq2", "ato": "ato-sq2"},
-    "22nd_cts": {"cc": "sq3-cc", "to": "to-sq3", "ato": "ato-sq3"},
-}
 
 async def auto_sync_org_chart(user_data: dict):
-    """Auto-update org chart positions based on user role and unit assignment"""
-    role = user_data.get("role", "")
-    flight = (user_data.get("flight") or "").lower()
-    squadron = (user_data.get("squadron") or "").lower()
-    participant_id = user_data.get("linked_participant_id")
-    
-    # Find participant by CAPID if no linked_participant_id
-    if not participant_id:
-        capid = user_data.get("capid", "")
-        if capid:
-            p = await db.participants.find_one({"capid": capid, "is_removed": {"$ne": True}}, {"_id": 0, "id": 1})
-            if p:
-                participant_id = p["id"]
-    
-    org_role_id = None
-    
-    flight_to_sq = {
-        "alpha": "6th_cts", "bravo": "6th_cts",
-        "charlie": "21st_cts", "delta": "21st_cts",
-        "echo": "22nd_cts", "foxtrot": "22nd_cts"
-    }
-    
-    if role == UserRole.SQUADRON_COMMANDER:
-        sq = squadron if squadron in SQUADRON_ORG_CHART_MAP else flight_to_sq.get(flight, "")
-        if sq and sq in SQUADRON_ORG_CHART_MAP:
-            org_role_id = SQUADRON_ORG_CHART_MAP[sq]["cc"]
-    elif role == UserRole.TRAINING_OFFICER:
-        sq = squadron if squadron in SQUADRON_ORG_CHART_MAP else flight_to_sq.get(flight, "")
-        if sq and sq in SQUADRON_ORG_CHART_MAP:
-            org_role_id = SQUADRON_ORG_CHART_MAP[sq]["to"]
-    elif flight:
-        # Detect position from user's position field or role context
-        position = (user_data.get("position") or "").lower()
-        name = user_data.get("name", "")
-        
-        # Check if user name contains hints
-        name_lower = name.lower()
-        
-        if "flight commander" in position or "flt cc" in position or "flight commander" in name_lower:
-            org_role_id = f"flight_{flight}_commander"
-        elif "flight sergeant" in position or "flt sgt" in position or "flight sergeant" in name_lower:
-            org_role_id = f"flight_{flight}_sergeant"
-    
-    if org_role_id and participant_id:
-        existing = await db.org_chart_roles.find_one({"role_id": org_role_id}, {"_id": 0})
-        if existing:
-            await db.org_chart_roles.update_one(
-                {"role_id": org_role_id},
-                {"$set": {
-                    "assigned_participant_id": participant_id,
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                }}
+    """Sync the live org chart with a user's current assignment.
+
+    Resolution: delegates to `org_chart_template.find_role_id_for_user` which
+    maps a user's `cadre_position` + `role` + `flight` + `squadron` +
+    `support_section` to the canonical position `role_id`.
+
+    Side effects on `db.org_chart_roles`:
+      1. If the user was previously assigned to some position, that
+         position's `assigned_name` / `assigned_user_id` is cleared.
+      2. The newly-resolved position gets `assigned_name` set to the
+         user's full name and `assigned_user_id` to their UUID. For
+         `single_occupant=False` positions, the user is added to a
+         `assigned_user_ids` array instead of clobbering existing names.
+
+    Safe to call from any code path — it never raises; failures are logged
+    so a sync glitch can never block a user-management operation.
+    """
+    from org_chart_template import find_role_id_for_user, POSITION_BY_ID
+
+    try:
+        user_id = user_data.get("id")
+        user_name = (user_data.get("name") or "").strip()
+        if not user_id:
+            return None
+
+        new_role_id = find_role_id_for_user(user_data)
+        now = datetime.now(timezone.utc).isoformat()
+
+        # 1. Clear any previous assignments tied to this user_id (other than the new one).
+        clear_query = {"assigned_user_id": user_id}
+        if new_role_id:
+            clear_query["role_id"] = {"$ne": new_role_id}
+        await db.org_chart_roles.update_many(
+            clear_query,
+            {"$set": {"assigned_user_id": None, "assigned_name": "", "updated_at": now}},
+        )
+        await db.org_chart_roles.update_many(
+            {"assigned_user_ids": user_id, **({"role_id": {"$ne": new_role_id}} if new_role_id else {})},
+            {"$pull": {"assigned_user_ids": user_id}, "$set": {"updated_at": now}},
+        )
+
+        if not new_role_id:
+            logger.info(
+                "auto_sync_org_chart: cleared previous assignments for user=%s; "
+                "no canonical position resolved for role=%s flight=%s squadron=%s "
+                "support_section=%s cadre_position=%s",
+                user_id, user_data.get("role"), user_data.get("flight"),
+                user_data.get("squadron"), user_data.get("support_section"),
+                user_data.get("cadre_position"),
             )
-            logger.info(f"Auto-synced org chart: {org_role_id} -> participant {participant_id}")
-    elif org_role_id:
-        logger.info(f"Org chart role {org_role_id} identified but no participant_id to link")
+            return None
+
+        position_meta = POSITION_BY_ID.get(new_role_id) or {}
+        single_occupant = position_meta.get("single_occupant", True)
+        existing = await db.org_chart_roles.find_one({"role_id": new_role_id}, {"_id": 0})
+        if not existing:
+            logger.warning("auto_sync_org_chart: position %s not in DB", new_role_id)
+            return None
+
+        if single_occupant:
+            await db.org_chart_roles.update_one(
+                {"role_id": new_role_id},
+                {"$set": {
+                    "assigned_name": user_name,
+                    "assigned_user_id": user_id,
+                    "assigned_participant_id": user_data.get("linked_participant_id"),
+                    "updated_at": now,
+                }},
+            )
+        else:
+            # Multi-occupant: append name + id without clobbering peers.
+            current_names = (existing.get("assigned_name") or "").strip()
+            names_list = [n.strip() for n in current_names.split(";") if n.strip() and n.strip() != user_name]
+            if user_name:
+                names_list.append(user_name)
+            await db.org_chart_roles.update_one(
+                {"role_id": new_role_id},
+                {
+                    "$set": {
+                        "assigned_name": "; ".join(names_list),
+                        "updated_at": now,
+                    },
+                    "$addToSet": {"assigned_user_ids": user_id},
+                },
+            )
+
+        logger.info(
+            "auto_sync_org_chart: user=%s (%s) -> %s",
+            user_id, user_name or user_data.get("email"), new_role_id,
+        )
+        return new_role_id
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.exception("auto_sync_org_chart failed: %s", exc)
+        return None
 
 
 # ================= USER MANAGEMENT =================
@@ -651,6 +683,13 @@ async def link_user_to_participant(
     await db.users.update_one({"id": resolved_user_id}, {"$set": update_fields})
     
     updated_user = await db.users.find_one({"id": resolved_user_id}, {"_id": 0, "password_hash": 0})
+
+    # Auto-sync org chart after participant linking (name + capid changed)
+    try:
+        await auto_sync_org_chart(updated_user)
+    except Exception as e:
+        logger.error(f"Org chart auto-sync on link-participant failed: {e}")
+
     from account_status import compute_account_status
     return {
         "message": "User linked to participant successfully",
