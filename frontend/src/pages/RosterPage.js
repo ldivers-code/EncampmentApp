@@ -585,10 +585,19 @@ const RosterPage = () => {
     setAutoBalancing(true);
     try {
       const result = await autoAssignUnassignedStudents();
-      if (result.assigned === 0) {
+      const assigned = result.assigned || 0;
+      const waitlisted = result.waitlisted || 0;
+      if (assigned === 0 && waitlisted === 0) {
         toast.info('All students already have flight assignments');
+      } else if (assigned === 0 && waitlisted > 0) {
+        toast.warning(
+          `Flights are full — ${waitlisted} student${waitlisted > 1 ? 's are' : ' is'} on the waitlist. ` +
+          `Slots will free up when a student is removed from the roster.`
+        );
       } else {
-        toast.success(`Auto-assigned ${result.assigned} student${result.assigned > 1 ? 's' : ''} to flights`);
+        let msg = `Auto-assigned ${assigned} student${assigned > 1 ? 's' : ''} to flights`;
+        if (waitlisted > 0) msg += ` (${waitlisted} still on the waitlist)`;
+        toast.success(msg);
         loadParticipants();
         loadStats();
         loadFlightDistribution();

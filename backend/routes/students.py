@@ -306,7 +306,32 @@ FLIGHT_TO_SQUADRON = {
 }
 
 ALL_FLIGHTS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
+# Each flight is 3 elements × 5 cadets = 15 seats. Students beyond this
+# cap stay UNASSIGNED on the waitlist (filled by application order from the
+# eCAP `AppEditData` column — earliest application gets the slot).
 MAX_STUDENTS_PER_FLIGHT = 15
+FLIGHT_TOTAL_CAPACITY = len(ALL_FLIGHTS) * MAX_STUDENTS_PER_FLIGHT  # 90
+
+
+def _app_edit_sort_key(value) -> str:
+    """Convert the eCAP `AppEditData` cell (e.g. "30 May 2026") into a
+    sortable ISO date string so the assigner processes students in
+    application order. Blank / unparseable values sort LAST (treated as the
+    most-recent applicants who get pushed to the waitlist)."""
+    if value is None:
+        return "9999-12-31"
+    s = str(value).strip()
+    if not s or s.lower() in ("nan", "none", "nat"):
+        return "9999-12-31"
+    # Already ISO?
+    import re as _re
+    if _re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    try:
+        return pd.to_datetime(s, errors="raise").strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return "9999-12-31"
+
 
 # Rank ordering for distribution (lower = junior)
 RANK_ORDER = {
@@ -358,9 +383,9 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     
     Distribution balanced by: Wing, Unit (home squadron), Age, Gender
     """
-    # Only apply to students
+    # Only apply to students (canonical participant_type)
     participant_type = student_doc.get("participant_type", "")
-    if participant_type not in ["basic_student", "advanced_student"]:
+    if participant_type != "student":
         return student_doc  # Not a student, no auto-assignment
     
     # PROTECTION: Don't change students who already have a valid flight
@@ -382,7 +407,7 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
     valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
     existing = await db.participants.find(
-        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        {"participant_type": "student", "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
         {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
@@ -475,13 +500,13 @@ async def auto_assign_single_student(student_doc: dict) -> dict:
 async def auto_assign_flights(students: list) -> dict:
     """
     Automatically assign students to flights using balanced distribution.
-    
+
     Distribution Rules:
-    1. Evenly distribute total students across 6 flights (max 15 per flight)
-    2. Balance male/female distribution (Gender)
-    3. Spread students from same Wing across different flights
-    4. Spread students from same Unit (home squadron) across different flights
-    5. Balance age distribution across flights
+    1. Evenly distribute across 6 flights (3 elements × 5 cadets = 15 per flight)
+    2. Process students in **application order** — earliest `app_edit_data`
+       first. Late applicants whose order falls beyond capacity stay UNASSIGNED
+       (waitlist).
+    3. Balance Gender / Wing / Unit / Age across flights.
     """
     # Get current flight distribution from database
     flight_counts = {f: {
@@ -497,7 +522,7 @@ async def auto_assign_flights(students: list) -> dict:
     valid_flights_query = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
     
     existing = await db.participants.find(
-        {"participant_type": {"$in": ["basic_student", "advanced_student"]}, "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
+        {"participant_type": "student", "is_removed": {"$ne": True}, "flight": {"$in": valid_flights_query}},
         {"flight": 1, "gender": 1, "wing": 1, "unit": 1, "age": 1, "age_at_event": 1}
     ).to_list(1000)
     
@@ -541,12 +566,19 @@ async def auto_assign_flights(students: list) -> dict:
                 "gender": gender,
                 "wing": (s.get("wing") or "").upper(),
                 "unit": str(s.get("unit") or ""),
-                "age_tier": get_age_tier(s.get("age") or s.get("age_at_event"))
+                "age_tier": get_age_tier(s.get("age") or s.get("age_at_event")),
+                "_app_order": _app_edit_sort_key(s.get("app_edit_data")),
             })
     
-    # Sort to distribute diverse groups first (helps balance)
-    # Sort by: wing, then unit, then age_tier, then gender
-    students_to_assign.sort(key=lambda x: (x["wing"], x["unit"], x["age_tier"], x["gender"]))
+    # Sort by application order (earliest application = first served).
+    # Late applicants whose order exceeds the 6×15 capacity stay UNASSIGNED.
+    # Tiebreak by capid for stability, then by the balancing key
+    # (wing/unit/age_tier/gender) to keep diverse groups distributed.
+    students_to_assign.sort(key=lambda x: (
+        x["_app_order"],
+        str(x.get("capid") or ""),
+        x["wing"], x["unit"], x["age_tier"], x["gender"],
+    ))
     
     assignments = {}
     
@@ -788,6 +820,10 @@ async def upload_students(
             'HighestORide': 'highest_oride',
             'AmountPaid': 'amount_paid',
             'PaidInFull': 'paid_in_full',
+            # Application timestamp — used to seat students in application
+            # order so late applicants land on the waitlist (column AI in
+            # eCAP exports).
+            'AppEditData': 'app_edit_data',
         }
         
         df = df.rename(columns=column_map)
@@ -893,7 +929,7 @@ async def upload_students(
                 "last_encampment": get_str(row_dict, 'last_encampment') or None,
                 "highest_oride": get_str(row_dict, 'highest_oride') or None,
                 "participant_type": p_type,
-                "student_type": "First-Time Student" if p_type == 'basic_student' else None,
+                "student_type": "First-Time Student" if p_type == 'student' else None,
                 "member_type": m_type,
                 "staff_member": staff_flag,
                 # Phase 10 payment fields — store on every upload so the
@@ -904,6 +940,8 @@ async def upload_students(
                 # Stash the raw sub-event so we can flag ambiguous-but-paid
                 # rows for the finance officer.
                 "event_name": event_name or None,
+                # Application order — earlier app_edit_data wins a flight seat.
+                "app_edit_data": get_str(row_dict, 'app_edit_data') or None,
             })
         
         # Auto-assign flights if enabled
@@ -1033,6 +1071,46 @@ async def upload_students(
             )
             soft_removed_count = res.modified_count
 
+        # Phase 7c: when Sync Mode removes someone, promote a waitlisted
+        # applicant to fill the now-empty flight seat. This keeps every
+        # flight as close to its 3×5=15 capacity as possible without
+        # admin intervention.
+        promoted_from_waitlist = 0
+        if sync and soft_removed_count:
+            try:
+                valid_flights_all = (
+                    ALL_FLIGHTS
+                    + [f.capitalize() for f in ALL_FLIGHTS]
+                    + [f.upper() for f in ALL_FLIGHTS]
+                )
+                unassigned_after = await db.participants.find(
+                    {
+                        "participant_type": "student",
+                        "is_removed": {"$ne": True},
+                        "$or": [
+                            {"flight": None},
+                            {"flight": ""},
+                            {"flight": {"$exists": False}},
+                            {"flight": {"$nin": valid_flights_all}},
+                        ],
+                    },
+                    {"_id": 0},
+                ).to_list(1000)
+                if unassigned_after:
+                    promo = await auto_assign_flights(unassigned_after)
+                    for capid, a in (promo.get("assignments") or {}).items():
+                        await db.participants.update_one(
+                            {"capid": capid},
+                            {"$set": {
+                                "flight": a["flight"],
+                                "squadron": a["squadron"],
+                                "updated_at": now,
+                            }},
+                        )
+                        promoted_from_waitlist += 1
+            except Exception as e:
+                logger.error("[upload] waitlist auto-promotion failed: %s", e)
+
         # Phase 10: AUTO-SYNC roster payment totals to the finance budget AND
         # notify the finance officer about any paid rows we couldn't auto-
         # bucket (needs_review / blank SubEvent / Parent event).
@@ -1077,13 +1155,13 @@ async def upload_students(
             logger.error("[upload] finance review notification failed: %s", e)
         
         # Get final counts
-        total_students = await db.participants.count_documents({"participant_type": "basic_student", "is_removed": {"$ne": True}})
+        total_students = await db.participants.count_documents({"participant_type": "student", "is_removed": {"$ne": True}})
         
         # Get flight distribution
         flight_distribution = {}
         for flight in ALL_FLIGHTS:
             count = await db.participants.count_documents({
-                "participant_type": "basic_student",
+                "participant_type": "student",
                 "flight": flight,
                 "is_removed": {"$ne": True}
             })
@@ -1093,6 +1171,7 @@ async def upload_students(
             "message": (
                 f"Roster sync complete: {imported_count} new, {updated_count} updated, "
                 f"{recovered_count} recovered, {soft_removed_count} removed (not in file), "
+                f"{promoted_from_waitlist} promoted from waitlist, "
                 f"{linked_count} linked to accounts"
                 if sync else
                 f"Student upload complete: {imported_count} new, {updated_count} updated, {linked_count} linked to accounts"
@@ -1102,6 +1181,7 @@ async def upload_students(
             "updated": updated_count,
             "recovered": recovered_count,
             "soft_removed": soft_removed_count,
+            "promoted_from_waitlist": promoted_from_waitlist,
             "linked": linked_count,
             "total_students": total_students,
             "auto_assigned": len(flight_assignments),
@@ -1163,11 +1243,21 @@ async def auto_assign_unassigned_students(
     """
     # Valid flight values (both lowercase and capitalized for case-insensitive matching)
     valid_flights_all_cases = ALL_FLIGHTS + [f.capitalize() for f in ALL_FLIGHTS] + [f.upper() for f in ALL_FLIGHTS]
-    
+
+    # Data hygiene pass: normalise any mixed-case flight values to lowercase
+    # so flight-grouped queries elsewhere don't double-count "Alpha" vs
+    # "alpha". This runs cheaply once per auto-assign trigger.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for f in ALL_FLIGHTS:
+        await db.participants.update_many(
+            {"flight": {"$in": [f.capitalize(), f.upper()]}},
+            {"$set": {"flight": f, "updated_at": now_iso}},
+        )
+
     # Find all students without a valid flight assignment
     unassigned = await db.participants.find(
         {
-            "participant_type": {"$in": ["basic_student", "advanced_student"]},
+            "participant_type": "student",
             "is_removed": {"$ne": True},
             "$or": [
                 {"flight": None},
@@ -1186,7 +1276,9 @@ async def auto_assign_unassigned_students(
             "total_unassigned": 0
         }
     
-    # Use the batch assignment function
+    # Use the batch assignment function — sorts by `app_edit_data` so the
+    # earliest applicants get the seats and late applicants stay on the
+    # waitlist when the 6×15=90 cap is reached.
     result = await auto_assign_flights(unassigned)
     assignments = result.get("assignments", {})
     
@@ -1203,9 +1295,14 @@ async def auto_assign_unassigned_students(
         )
         assigned_count += 1
     
+    waitlisted = len(unassigned) - assigned_count
     return {
-        "message": f"Auto-assigned {assigned_count} students to flights",
+        "message": (
+            f"Auto-assigned {assigned_count} students to flights"
+            + (f" ({waitlisted} remain on the waitlist — flights are at capacity)" if waitlisted else "")
+        ),
         "assigned": assigned_count,
+        "waitlisted": waitlisted,
         "total_unassigned": len(unassigned),
         "flight_counts": result.get("flight_counts", {})
     }

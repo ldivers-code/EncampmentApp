@@ -144,11 +144,11 @@ class TestParticipantCategoryFiltering:
         print(f"  Types: {type_counts}")
         
         # Verify we have students
-        student_count = type_counts.get("basic_student", 0) + type_counts.get("advanced_student", 0)
+        student_count = type_counts.get("student", 0)
         assert student_count > 0, "Expected at least some students in the system"
     
     def test_students_have_correct_type(self, auth_headers):
-        """Students have participant_type = basic_student or advanced_student"""
+        """Students have canonical participant_type = student"""
         response = requests.get(
             f"{BASE_URL}/api/participants",
             headers=auth_headers
@@ -156,10 +156,10 @@ class TestParticipantCategoryFiltering:
         assert response.status_code == 200
         participants = response.json()
         
-        students = [p for p in participants if p.get("participant_type") in ["basic_student", "advanced_student"]]
+        students = [p for p in participants if p.get("participant_type") == "student"]
         
         for student in students[:5]:  # Check first 5
-            assert student.get("participant_type") in ["basic_student", "advanced_student"]
+            assert student.get("participant_type") == "student"
             # Students should have member_type = CADET
             assert student.get("member_type") == "CADET" or student.get("member_type") is None
         
@@ -174,7 +174,7 @@ class TestParticipantCategoryFiltering:
         assert response.status_code == 200
         participants = response.json()
         
-        students = [p for p in participants if p.get("participant_type") in ["basic_student", "advanced_student"]]
+        students = [p for p in participants if p.get("participant_type") == "student"]
         
         # Count students with flight assignments
         assigned = [s for s in students if s.get("flight") and s.get("flight") != "None"]

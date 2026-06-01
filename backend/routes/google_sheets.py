@@ -1030,6 +1030,8 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
             'UnitCCName': 'unit_cc_name', 'UnitCCEmail': 'unit_cc_email',
             'LastEncampment': 'last_encampment', 'CPPTExpiration': 'cppt_expiration',
             'FirstAid': 'first_aid', 'SubEvents': 'sub_events',
+            # Application timestamp — used for waitlist sort.
+            'AppEditData': 'app_edit_data',
         }
         
         df = df.rename(columns=column_map)
@@ -1159,6 +1161,7 @@ async def sync_roster_from_gsheet(spreadsheet_id: str, gid: str) -> dict:
                 'last_encampment': get_str('last_encampment'),
                 'cppt_expiration': get_str('cppt_expiration'),
                 'first_aid': get_str('first_aid'),
+                'app_edit_data': get_str('app_edit_data') or None,
                 'updated_at': now,
             }
             
