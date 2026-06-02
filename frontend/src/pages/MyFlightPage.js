@@ -3,8 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { 
   getMyFlightInfo, getFlightRoster, getSquadronRoster, 
   getFlightDocuments, getDocuments, createDocument, deleteDocument,
-  getScoreCategories, recordMeritDemerit, getMeritDemerits, getIndividualLeaderboard,
-  getFlightLeaderboard, getCumulativeStandings,
   getFlightReports, createFlightReport, reviewFlightReport, getReportSettings, updateReportSettings,
   escalateFlightReport, resolveFlightReport,
   getFlightLeadership, updateFlightLeadership,
@@ -93,11 +91,7 @@ const MyFlightPage = () => {
   const [activeTab, setActiveTab] = useState('roster');
   const [selectedCategory, setSelectedCategory] = useState('all');
   
-  // Points state
-  const [flightCadets, setFlightCadets] = useState([]);
-  const [cadetPoints, setCadetPoints] = useState({});
-  const [flightStanding, setFlightStanding] = useState(null);
-  const [recentMerits, setRecentMerits] = useState([]);
+  // Legacy merit/demerit modal state — kept until the modal JSX is removed.
   const [isMeritModalOpen, setIsMeritModalOpen] = useState(false);
   const [selectedCadet, setSelectedCadet] = useState(null);
   const [memberDetail, setMemberDetail] = useState(null);
@@ -176,16 +170,9 @@ const MyFlightPage = () => {
     if (selectedFlight) {
       loadRoster();
       loadDocuments();
-      loadFlightPoints();
       loadLeadership();
     }
   }, [selectedFlight, viewMode]);
-
-  useEffect(() => {
-    if (activeTab === 'points' && selectedFlight) {
-      loadFlightPoints();
-    }
-  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab === 'reports' && selectedFlight) {
@@ -212,37 +199,8 @@ const MyFlightPage = () => {
     }
   };
 
-  const loadFlightPoints = async () => {
-    if (!selectedFlight) return;
-    
-    try {
-      // Get roster for cadets
-      const rosterData = await getFlightRoster(selectedFlight);
-      const cadets = rosterData.roster?.filter(m => m.is_student) || [];
-      setFlightCadets(cadets);
-      
-      // Get individual leaderboard to get point totals
-      const leaderboard = await getIndividualLeaderboard('cadet');
-      const pointsMap = {};
-      leaderboard.forEach(entry => {
-        pointsMap[entry.participant_id] = entry.total_points;
-      });
-      setCadetPoints(pointsMap);
-      
-      // Get flight standing from cumulative standings
-      const standings = await getCumulativeStandings();
-      const flightData = standings.flights?.find(f => f.flight.toLowerCase() === selectedFlight.toLowerCase());
-      setFlightStanding(flightData);
-      
-      // Get recent merits for this flight's cadets
-      const merits = await getMeritDemerits({ limit: 20 });
-      const cadetIds = cadets.map(c => c.id);
-      const flightMerits = merits.filter(m => cadetIds.includes(m.participant_id));
-      setRecentMerits(flightMerits.slice(0, 10));
-    } catch (error) {
-      console.error('Failed to load flight points:', error);
-    }
-  };
+  // (Legacy `loadFlightPoints` removed Feb 2026 — Points are now their own
+  //  top-level route at /inspections, gated to Exec/P&P/Admin only.)
 
   // ================= REPORTS FUNCTIONS =================
 
@@ -518,30 +476,14 @@ const MyFlightPage = () => {
     setIsMeritModalOpen(true);
   };
 
-  const handleSubmitMerit = async (e) => {
-    e.preventDefault();
-    if (!selectedCadet || !meritForm.points || !meritForm.reason) {
-      toast.error('Please fill all fields');
-      return;
-    }
-
-    try {
-      await recordMeritDemerit({
-        participant_id: selectedCadet.id,
-        entry_type: meritForm.entry_type,
-        points: parseFloat(meritForm.points),
-        reason: meritForm.reason,
-        date: new Date().toISOString().split('T')[0]
-      });
-      
-      toast.success(`${meritForm.entry_type === 'merit' ? 'Merit' : 'Demerit'} recorded for ${selectedCadet.name}`);
-      setIsMeritModalOpen(false);
-      setSelectedCadet(null);
-      setMeritForm({ entry_type: 'merit', points: '', reason: '' });
-      loadFlightPoints();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to record');
-    }
+  const handleSubmitMerit = async () => {
+    // Legacy merit-demerit form retained in JSX only as a fallback — the
+    // canonical points system is /inspections (Inspections & Points). This
+    // handler is a no-op and clears the modal state.
+    toast.info('Merits are now managed under Inspections & Points');
+    setIsMeritModalOpen(false);
+    setSelectedCadet(null);
+    setMeritForm({ entry_type: 'merit', points: '', reason: '' });
   };
 
   const loadRoster = async () => {
@@ -914,7 +856,6 @@ const MyFlightPage = () => {
       <div className="flex gap-1 mb-6 border-b border-slate-200 overflow-x-auto">
         {[
           { id: 'roster', label: 'Roster', icon: Users },
-          { id: 'points', label: 'Points', icon: Trophy, count: flightCadets.length },
           { id: 'documents', label: 'Documents', icon: FileText, count: getDocumentCount() },
           { id: 'reports', label: 'Reports', icon: ClipboardList, count: reports.filter(r => 
             ['escalated_flight_commander', 'escalated_squadron', 'escalated_exec', 'escalated_dcs', 'escalated_commander', 'at_commander'].includes(r.status)
@@ -1228,170 +1169,6 @@ const MyFlightPage = () => {
               })}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Points Tab */}
-      {activeTab === 'points' && (
-        <div className="space-y-6">
-          {/* Flight Standing Card */}
-          {flightStanding && (
-            <div className="bg-gradient-to-r from-[#00205B] to-[#003087] text-white rounded-sm p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-                    <Trophy className="w-8 h-8 text-yellow-300" />
-                  </div>
-                  <div>
-                    <p className="text-blue-200 text-sm uppercase tracking-wide">Flight Standing</p>
-                    <p className="text-3xl font-black">{getFlightLabel(selectedFlight)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-5xl font-black">#{flightStanding.rank}</p>
-                  <p className="text-blue-200">{flightStanding.total_points.toFixed(0)} points</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Cadets Point List */}
-          <div className="bg-white border border-slate-200 rounded-sm">
-            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-500" />
-                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
-                  Flight Cadets
-                </h2>
-                <span className="text-xs text-slate-400 ml-2">{flightCadets.length} cadets</span>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={loadFlightPoints}
-                className="rounded-sm"
-              >
-                <RefreshCw className="w-4 h-4 mr-1" />
-                Refresh
-              </Button>
-            </div>
-            
-            {flightCadets.length === 0 ? (
-              <div className="p-8 text-center text-slate-400">
-                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No cadets assigned to this flight</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {flightCadets
-                  .sort((a, b) => (cadetPoints[b.id] || 0) - (cadetPoints[a.id] || 0))
-                  .map((cadet, idx) => (
-                  <div 
-                    key={cadet.id}
-                    className="p-4 hover:bg-slate-50 transition-colors flex items-center gap-4"
-                  >
-                    {/* Rank Badge */}
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                      idx === 1 ? 'bg-slate-200 text-slate-700' :
-                      idx === 2 ? 'bg-orange-100 text-orange-700' :
-                      'bg-slate-100 text-slate-500'
-                    }`}>
-                      {idx + 1}
-                    </div>
-                    
-                    {/* Cadet Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{cadet.name}</p>
-                      <p className="text-xs text-slate-400">{cadet.rank}</p>
-                    </div>
-                    
-                    {/* Points */}
-                    <div className="text-right mr-4">
-                      <p className="text-xl font-bold text-[#00205B]">
-                        {(cadetPoints[cadet.id] || 0).toFixed(0)}
-                      </p>
-                      <p className="text-[10px] text-slate-400 uppercase">Points</p>
-                    </div>
-                    
-                    {/* Quick Actions */}
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleQuickMerit(cadet, 'merit')}
-                        className="h-8 w-8 p-0 rounded-sm text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                        title="Give Merit"
-                        data-testid={`merit-${cadet.id}`}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleQuickMerit(cadet, 'demerit')}
-                        className="h-8 w-8 p-0 rounded-sm text-red-500 hover:bg-red-50 hover:text-red-600"
-                        title="Give Demerit"
-                        data-testid={`demerit-${cadet.id}`}
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Recent Activity */}
-          {recentMerits.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-sm">
-              <div className="border-b border-slate-100 p-4 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-[#00205B]" />
-                <h2 className="font-bold uppercase tracking-tight text-[#00205B] text-sm">
-                  Recent Activity
-                </h2>
-              </div>
-              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
-                {recentMerits.map((merit) => {
-                  const cadet = flightCadets.find(c => c.id === merit.participant_id);
-                  return (
-                    <div key={merit.id} className="p-3 flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        merit.entry_type === 'merit' 
-                          ? 'bg-emerald-100 text-emerald-600' 
-                          : 'bg-red-100 text-red-600'
-                      }`}>
-                        {merit.entry_type === 'merit' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {cadet?.name || 'Unknown'}
-                        </p>
-                        <p className="text-xs text-slate-400 truncate">{merit.reason}</p>
-                      </div>
-                      <div className={`text-sm font-bold ${
-                        merit.entry_type === 'merit' ? 'text-emerald-600' : 'text-red-600'
-                      }`}>
-                        {merit.entry_type === 'merit' ? '+' : '-'}{merit.points}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Link to Full Point Tracker */}
-          <div className="text-center">
-            <a 
-              href="/points" 
-              className="inline-flex items-center gap-2 text-sm text-[#00205B] hover:underline"
-            >
-              <Award className="w-4 h-4" />
-              View Full Point Tracker & Leaderboards
-            </a>
-          </div>
         </div>
       )}
 

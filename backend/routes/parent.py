@@ -145,32 +145,35 @@ async def get_my_cadet_med_diary(user: dict = Depends(get_current_user)):
 
 @api_router.get("/parent/my-cadet/points")
 async def get_my_cadet_points(user: dict = Depends(get_current_user)):
-    """Get points and awards for parent's cadet"""
+    """Inspection point summary for the parent's cadet.
+
+    Pulls from the new inspection_scores collection (the replacement for
+    the legacy score_entries / merit_demerits / honor_awards system).
+    """
     cadet = await get_parent_and_cadet(user)
-    
-    entries = await db.score_entries.find(
-        {"participant_id": cadet["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(200)
-    
-    merits = await db.merit_demerits.find(
-        {"participant_id": cadet["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(200)
-    
-    awards = await db.honor_awards.find(
-        {"participant_id": cadet["id"]}, {"_id": 0}
-    ).to_list(50)
-    
-    total_points = sum(e.get("points", 0) for e in entries)
-    total_merits = sum(1 for m in merits if m.get("type") == "merit")
-    total_demerits = sum(1 for m in merits if m.get("type") == "demerit")
-    
+
+    rows = await db.inspection_scores.find(
+        {"cadet_participant_id": cadet["id"]}, {"_id": 0}
+    ).sort([("day", 1), ("inspection_type", 1)]).to_list(500)
+
+    present = [r for r in rows if not r.get("absent")
+               and any(isinstance(v, (int, float)) for v in (r.get("field_scores") or {}).values())]
+    total_points = sum(float(r.get("total") or 0) for r in present)
+    avg_pct = (
+        sum(r["percent"] for r in present if isinstance(r.get("percent"), (int, float)))
+        / len(present)
+    ) if present else None
+
     return {
         "total_points": total_points,
-        "total_merits": total_merits,
-        "total_demerits": total_demerits,
-        "entries": entries[:20],
-        "merits": merits[:20],
-        "awards": awards
+        "avg_percent": avg_pct,
+        "inspections_taken": len(present),
+        "entries": rows[:50],
+        # legacy fields preserved for old mobile clients — always zero/empty now
+        "total_merits": 0,
+        "total_demerits": 0,
+        "merits": [],
+        "awards": [],
     }
 
 
@@ -358,8 +361,10 @@ async def admin_preview_health(participant_id: str, user: dict = Depends(get_cur
 async def admin_preview_points(participant_id: str, user: dict = Depends(get_current_user)):
     if user.get("role") not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Admin access only")
-    points = await db.points.find({"participant_id": participant_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return points
+    rows = await db.inspection_scores.find(
+        {"cadet_participant_id": participant_id}, {"_id": 0}
+    ).sort([("day", 1), ("inspection_type", 1)]).to_list(500)
+    return rows
 
 @api_router.get("/parent/admin-preview/{participant_id}/meals")
 async def admin_preview_meals(participant_id: str, user: dict = Depends(get_current_user)):

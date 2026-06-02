@@ -18,7 +18,7 @@ import DocumentsPage from "./pages/DocumentsPage";
 import AdminPage from "./pages/AdminPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import ProfilePage from "./pages/ProfilePage";
-import PointsPage from "./pages/PointsPage";
+import InspectionsPage from "./pages/InspectionsPage";
 import MyFlightPage from "./pages/MyFlightPage";
 import HealthServicesDashboard from "./pages/HealthServicesDashboard";
 import TrainingOfficerPage from "./pages/TrainingOfficerPage";
@@ -208,10 +208,10 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/points"
+        path="/inspections"
         element={
           <ProtectedRoute>
-            <PointsPage />
+            <InspectionsPage />
           </ProtectedRoute>
         }
       />

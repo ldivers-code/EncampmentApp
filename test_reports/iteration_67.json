@@ -1,0 +1,34 @@
+{
+  "summary": "Backend testing for the new /api/inspections/* module (replaces /api/points/*). Created /app/backend/tests/test_inspections.py with 18 tests across 9 test classes covering: types metadata, settings auto-create + validation, per-cadet score upserts with absent handling (knowledge Day 2 Alpha 8/9+8/9+absent), flight-level upserts (drill 51/54 = 0.9444), idempotent replace, GET filters, DELETE, merit points CRUD, dashboard aggregation (CTF avg/pts, CTS, Weekly Totals, Weekly Change Day-1 baseline, include_merit_points toggle), student summary, RBAC (regular cadre 403 with correct message, exec_cadre & commander 200, code-level check that EXEC_CADRE/EXECUTIVE_STAFF/PLANS_PROGRAMS/COMMANDER/DCP are in INSPECTION_ROLES), legacy /api/points/* returning 404, and /api/parent/my-cadet/points not 500'ing with zero data. All 18/18 passed against the public preview URL in 9.7s.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_inspections.py",
+    "/app/test_reports/pytest/inspections_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PUT /api/inspections/settings validation cleanly drops invalid days/types/weight keys (verified). Behaviour: silently strips bad input — fine for an admin UI but a stricter implementation would 400 on bogus inspection types. Low priority.",
+    "Dashboard aggregation matches spec exactly: when an inspection has no data, it's excluded from CTF average (not counted as 0). Absent cadets store percent=null and are excluded from flight avg. Verified mathematically with Day 2 Alpha knowledge=8/9 (88.89%) and drill=51/54 (94.44%) producing CTF avg ~91.67% and CTF pts ~183.33.",
+    "Code-level RBAC check confirms INSPECTION_ROLES = {EXEC_CADRE, EXECUTIVE_STAFF, PLANS_PROGRAMS, COMMANDER, DCP}. testcadre@cap.gov (role=cadre) correctly receives 403 with the spec'd message on /settings, /dashboard, /scores GET and PUT.",
+    "_compute_total_percent ignores non-numeric field values silently — a malformed payload (e.g. {q1: 'one'}) would compute 0/9 silently. Consider validating type. Low priority.",
+    "/api/inspections/scores GET has no pagination beyond to_list(2000); fine for current scale but worth noting if data grows.",
+    "Legacy /api/points/* fully removed — all probed paths return 404 as expected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_inspections.py (NEW)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "N/A (backend-only request)"},
+  "test_credentials": "commander@test.com/test123, exec_cadre@test.com/test123, testcadre@cap.gov/test123, jane.hundley@test.com/parent123",
+  "seed_data_creation": "Test rows created with cadet_participant_id prefix TEST_p1/p2/p3 and a module-scoped autouse cleanup fixture deletes Day 2/3 Alpha+Bravo inspection_scores and resets merit-points for Day 2 Alpha. Test settings are also restored to defaults after the validation test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Inspections module fully passes backend. If retesting frontend, the relevant tabs to verify are Dashboard, Enter Scores, Weekly Totals, Settings on /inspections. Sidebar item should be hidden from role=cadre and direct URL navigation should show 'Access Restricted'. Test file lives at /app/backend/tests/test_inspections.py and is safe to re-run (cleans up after itself)."
+}

@@ -94,8 +94,12 @@ const Sidebar = ({ children }) => {
       { path: '/roster', label: 'Roster' },
       { path: '/org-chart', label: 'Org Chart' },
       { path: '/schedule', label: 'Schedule' },
-      { path: '/points', label: 'Point Tracking' },
     ];
+    // Inspections & Points — restricted to Exec Cadre, Exec Staff,
+    // Plans & Programs (cadre or staff), and full admins.
+    if (['exec_cadre', 'executive_staff', 'plans_programs', 'commander', 'dcp'].includes(user?.role)) {
+      items.push({ path: '/inspections', label: 'Inspections & Points' });
+    }
 
     if (user?.role === 'parent') {
       return [{ path: '/my-cadet', label: 'My Cadet' }];

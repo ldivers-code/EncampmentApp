@@ -86,7 +86,7 @@ import routes.health_services
 import routes.medical_roster
 import routes.participants
 import routes.students
-import routes.points
+import routes.inspections  # noqa: F401 — replaces legacy routes.points
 import routes.parent
 import routes.otc_permissions
 import routes.photos
