@@ -71,17 +71,13 @@ async def get_flight_roster(
             entry["position"] = None
         roster.append(entry)
 
-    # Sort by participant type (cadre first), then by rank
-    rank_order = ["Col", "Lt Col", "Maj", "Capt", "1st Lt", "2nd Lt", "CMSgt", "SMSgt", "MSgt", "TSgt", "SSgt", "SrA", "A1C", "Amn", "AB",
-                  "C/Col", "C/Lt Col", "C/Maj", "C/Capt", "C/1st Lt", "C/2nd Lt", "C/CMSgt", "C/SMSgt", "C/MSgt", "C/TSgt", "C/SSgt", "C/SrA", "C/A1C", "C/Amn", "C/AB"]
-    
-    def sort_key(r):
-        type_order = 0 if not r.get("is_student") else 1
-        rank = r.get("rank", "")
-        rank_idx = rank_order.index(rank) if rank in rank_order else 999
-        return (type_order, rank_idx, r.get("last_name", ""))
-    
-    roster.sort(key=sort_key)
+    # Alphabetical by Last, First (case-insensitive). The legacy rank-based
+    # cadre-first ordering was removed — every roster surface in the app is
+    # now plain alphabetical per user request.
+    roster.sort(key=lambda r: (
+        (r.get("last_name") or "").lower(),
+        (r.get("first_name") or "").lower(),
+    ))
     
     return {
         "flight": flight_lower,
@@ -131,6 +127,13 @@ async def get_squadron_roster(
             if is_student:
                 entry["position"] = None
             roster_by_flight[flight].append(entry)
+
+    # Alphabetical by Last, First (case-insensitive) for each flight bucket.
+    def _alpha_key(r):
+        return ((r.get("last_name") or "").lower(),
+                (r.get("first_name") or "").lower())
+    for flight_key in roster_by_flight:
+        roster_by_flight[flight_key].sort(key=_alpha_key)
 
     return {
         "squadron": squadron,

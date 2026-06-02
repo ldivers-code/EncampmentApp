@@ -72,6 +72,14 @@ async def get_participants(user: dict = Depends(get_current_user)):
 
     participants = await db.participants.find(query, {"_id": 0}).to_list(1000)
 
+    # Alphabetical by Last, First (case-insensitive). Clients (RosterPage,
+    # MyFlightPage, mobile app) can still override locally if needed, but
+    # the canonical default everywhere is alphabetical now.
+    participants.sort(key=lambda p: (
+        (p.get("last_name") or "").lower(),
+        (p.get("first_name") or "").lower(),
+    ))
+
     # Enrich with linked-user info so the Roster page can render the
     # Support-vs-Flight dropdowns correctly. We do one batched users.find()
     # rather than N+1 lookups.
@@ -154,11 +162,17 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
                 flights_map[flight] = []
             flights_map[flight].append(entry)
     
+    # Sort key — Last, First, case-insensitive. Used for every flight bucket
+    # in the result so every roster surface shows people alphabetically.
+    def _alpha_key(x):
+        return ((x.get("last_name") or "").lower(),
+                (x.get("first_name") or "").lower())
+
     flight_order = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
     result = []
     for f in flight_order:
         if f in flights_map:
-            members = sorted(flights_map[f], key=lambda x: x["last_name"])
+            members = sorted(flights_map[f], key=_alpha_key)
             result.append({
                 "flight": f,
                 "flight_label": f.capitalize(),
@@ -168,7 +182,7 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
     
     for f in sorted(flights_map.keys()):
         if f not in flight_order:
-            members = sorted(flights_map[f], key=lambda x: x["last_name"])
+            members = sorted(flights_map[f], key=_alpha_key)
             result.append({
                 "flight": f,
                 "flight_label": f.capitalize() if f else "Unknown",
@@ -181,7 +195,7 @@ async def get_participants_by_flight(user: dict = Depends(get_current_user)):
             "flight": "unassigned",
             "flight_label": "Unassigned",
             "count": len(unassigned),
-            "members": sorted(unassigned, key=lambda x: x["last_name"])
+            "members": sorted(unassigned, key=_alpha_key)
         })
     
     return result

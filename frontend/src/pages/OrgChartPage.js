@@ -207,8 +207,17 @@ const OrgChartPage = () => {
   const loadUsers = async () => {
     try {
       const data = await getUsers();
-      // Only approved users are eligible for org-chart assignment
-      setAllUsers((data || []).filter(u => u.is_approved));
+      // Only approved users are eligible for org-chart assignment.
+      // Sort alphabetically by Last, First so the picker is predictable.
+      const approved = (data || []).filter(u => u.is_approved);
+      approved.sort((a, b) => {
+        // `u.name` is "First Last" — split to a Last-key for sorting.
+        const lastA = ((a.name || '').split(' ').slice(-1)[0] || '').toLowerCase();
+        const lastB = ((b.name || '').split(' ').slice(-1)[0] || '').toLowerCase();
+        if (lastA !== lastB) return lastA < lastB ? -1 : 1;
+        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+      });
+      setAllUsers(approved);
     } catch {
       // Silent — picker just falls back to empty list (only admins have /users access)
     }

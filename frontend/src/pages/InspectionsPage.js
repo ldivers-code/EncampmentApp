@@ -252,7 +252,12 @@ const EnterScoresTab = ({ typesMeta, settings, participants, reload }) => {
       (p.flight || '').toLowerCase() === flight
       && ['student', 'basic_student', 'advanced_student'].includes((p.participant_type || '').toLowerCase())
       && !p.is_removed
-    ).sort((a, b) => (a.last_name || '').localeCompare(b.last_name || '')),
+    ).sort((a, b) => {
+      const al = (a.last_name || '').toLowerCase();
+      const bl = (b.last_name || '').toLowerCase();
+      if (al !== bl) return al < bl ? -1 : 1;
+      return (a.first_name || '').toLowerCase().localeCompare((b.first_name || '').toLowerCase());
+    }),
   [participants, flight]);
 
   const loadExisting = useCallback(async () => {

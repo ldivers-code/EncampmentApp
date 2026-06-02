@@ -398,6 +398,15 @@ const RosterPage = () => {
         const sb = b.app_edit_data || '9999-12-31';
         if (sa !== sb) return sa < sb ? -1 : 1;
       }
+      // Default: alphabetical by Last, First (case-insensitive). The backend
+      // already returns rows alphabetically, but this guarantees the order
+      // survives any client-side filtering / inline edits.
+      const al = (a.last_name || '').toLowerCase();
+      const bl = (b.last_name || '').toLowerCase();
+      if (al !== bl) return al < bl ? -1 : 1;
+      const af = (a.first_name || '').toLowerCase();
+      const bf = (b.first_name || '').toLowerCase();
+      if (af !== bf) return af < bf ? -1 : 1;
       return 0;
     });
   }, [participants, searchTerm, typeFilter, paidFilter, flightFilter, squadronFilter, genderFilter, wingFilter, rankFilter, showRemoved, rosterView, categoryTab]);
