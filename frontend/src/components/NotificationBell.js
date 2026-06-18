@@ -104,7 +104,7 @@ const NotificationBell = () => {
 
       {open && (
         <div
-          className="absolute top-full right-0 mt-2 w-[min(22rem,calc(100vw-1rem))] bg-white border border-slate-200 rounded-sm shadow-xl z-[100] max-h-[min(70vh,32rem)] flex flex-col"
+          className="absolute top-full right-0 mt-2 w-80 sm:w-96 max-w-[calc(100vw-1rem)] max-h-[32rem] sm:max-h-[36rem] bg-white border border-slate-200 rounded-sm shadow-xl z-[100] flex flex-col"
           data-testid="notification-panel"
         >
           {/* Header */}
