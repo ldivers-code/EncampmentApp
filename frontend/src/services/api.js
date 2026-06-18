@@ -772,6 +772,40 @@ export const getStudentInspectionSummary = async (participantId) => {
   return r.data;
 };
 
+// ============ Parent ↔ Exec Staff messaging ============
+export const getExecStaffContacts = async () => {
+  const r = await axios.get(`${API}/parent/exec-contacts`, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const createParentMessage = async (subject, body, urgency = 'question') => {
+  const r = await axios.post(`${API}/parent/messages`, { subject, body, urgency }, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const listParentMessages = async () => {
+  const r = await axios.get(`${API}/parent/messages`, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const parentReplyToMessage = async (messageId, body) => {
+  const r = await axios.post(`${API}/parent/messages/${messageId}/reply`, { body }, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const listAllParentMessages = async ({ status, urgency } = {}) => {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (urgency) params.append('urgency', urgency);
+  const qs = params.toString();
+  const r = await axios.get(`${API}/exec/parent-messages${qs ? `?${qs}` : ''}`, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const execReplyToParentMessage = async (messageId, body) => {
+  const r = await axios.post(`${API}/exec/parent-messages/${messageId}/reply`, { body }, { headers: getAuthHeaders() });
+  return r.data;
+};
+export const updateParentMessageStatus = async (messageId, status) => {
+  const r = await axios.put(`${API}/exec/parent-messages/${messageId}/status`, { status }, { headers: getAuthHeaders() });
+  return r.data;
+};
+
 // ============ Annual Reset ============
 export const previewBulkReset = async (participantTypes) => {
   const response = await axios.post(`${API}/participants/bulk-reset/preview`, { participant_types: participantTypes, confirm: false }, { headers: getAuthHeaders() });

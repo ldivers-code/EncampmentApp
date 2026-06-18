@@ -37,6 +37,7 @@ import NotificationManager from '../components/NotificationManager';
 import AdminSettingsTab from './admin/AdminSettingsTab';
 import FinanceReviewWidget from './admin/FinanceReviewWidget';
 import ReviewQueueWidget from './admin/ReviewQueueWidget';
+import ExecParentMessagesWidget from './admin/ExecParentMessagesWidget';
 
 // ─── Annual Reset Tab ───
 const AnnualResetTab = ({ currentUser }) => {
@@ -804,6 +805,7 @@ const AdminPage = () => {
           immediately. Each widget hides itself when there's nothing to do. */}
       {isFullAdmin && (
         <div className="space-y-3 mb-4">
+          <ExecParentMessagesWidget />
           <ReviewQueueWidget />
           <FinanceReviewWidget />
         </div>

@@ -9,10 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import {
   User, Calendar, Heart, Award, Utensils, CheckCircle2, AlertTriangle,
   Clock, MapPin, Shield, Pill, Camera, Eye, EyeOff, Maximize2, Minimize2,
-  Save, Settings, ChevronUp, ChevronDown, Search, Loader2
+  Save, Settings, ChevronUp, ChevronDown, Search, Loader2, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadCadetPhoto, getCadetPhotoUrl, deleteCadetPhoto } from '../services/api';
+import ContactExecStaff from '../components/parent/ContactExecStaff';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const fetchOpts = { credentials: 'include' };
@@ -21,12 +22,13 @@ const STAFF_ROLES = ['dcp', 'commander', 'executive_staff'];
 
 const DEFAULT_WIDGETS = {
   overview: { visible: true, size: 'full', order: 0, label: 'Cadet Overview' },
-  schedule: { visible: true, size: 'full', order: 1, label: 'Schedule' },
-  health: { visible: true, size: 'half', order: 2, label: 'Health Incidents' },
-  med_diary: { visible: true, size: 'half', order: 3, label: 'Medication Diary' },
-  points: { visible: true, size: 'half', order: 4, label: 'Points & Awards' },
-  meals: { visible: true, size: 'full', order: 5, label: 'Meal Plans' },
-  otc_form: { visible: true, size: 'full', order: 6, label: 'OTC Permission Form' }
+  contact_exec: { visible: true, size: 'full', order: 1, label: 'Contact Exec Staff' },
+  schedule: { visible: true, size: 'full', order: 2, label: 'Schedule' },
+  health: { visible: true, size: 'half', order: 3, label: 'Health Incidents' },
+  med_diary: { visible: true, size: 'half', order: 4, label: 'Medication Diary' },
+  points: { visible: true, size: 'half', order: 5, label: 'Points & Awards' },
+  meals: { visible: true, size: 'full', order: 6, label: 'Meal Plans' },
+  otc_form: { visible: true, size: 'full', order: 7, label: 'OTC Permission Form' }
 };
 
 const SIZE_OPTIONS = [
@@ -317,31 +319,55 @@ export default function MyCadetPage() {
     </div>
   );
 
-  const renderSchedule = () => (
-    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-      {(!schedule || schedule.length === 0) ? (
-        <p className="text-sm text-slate-400 text-center py-4">No schedule events</p>
-      ) : schedule.slice(0, 20).map((evt, i) => (
-        <div key={evt.id || `sched-${i}`} className="flex items-start gap-2 p-2 bg-slate-50 rounded-sm border border-slate-100">
-          <Clock className="w-3.5 h-3.5 text-[#00205B] mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm">{evt.title}</div>
-            <div className="text-xs text-slate-500">{evt.date} {evt.start_time && `${evt.start_time} - ${evt.end_time}`}</div>
-            {evt.location && <div className="text-xs text-slate-400 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{evt.location}</div>}
+  const renderSchedule = () => {
+    // Backend may return either a flat array of events OR
+    // an object like {events:[...]} / {schedule:[...]} depending on the
+    // tenant. Normalise to an array to avoid `.slice is not a function`.
+    const events = Array.isArray(schedule)
+      ? schedule
+      : (schedule?.events || schedule?.schedule || schedule?.items || []);
+    return (
+      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+        {events.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">No schedule events</p>
+        ) : events.slice(0, 20).map((evt, i) => (
+          <div key={evt.id || `sched-${i}`} className="flex items-start gap-2 p-2 bg-slate-50 rounded-sm border border-slate-100">
+            <Clock className="w-3.5 h-3.5 text-[#00205B] mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-sm">{evt.title}</div>
+              <div className="text-xs text-slate-500">{evt.date} {evt.start_time && `${evt.start_time} - ${evt.end_time}`}</div>
+              {evt.location && <div className="text-xs text-slate-400 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{evt.location}</div>}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+      </div>
+    );
+  };
 
-  const renderHealth = () => (
+  /** Normalize a raw API response into a flat array — defends against
+   *  payloads that wrap arrays in `{items: [...]}` / `{events: [...]}` /
+   *  `{entries: [...]}` etc. Avoids `health.map is not a function` style
+   *  TypeErrors caused by backend shape changes. */
+  const toArray = (raw, keys = ['items', 'events', 'entries', 'schedule', 'alerts', 'incidents', 'data', 'list']) => {
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object') {
+      for (const k of keys) {
+        if (Array.isArray(raw[k])) return raw[k];
+      }
+    }
+    return [];
+  };
+
+  const renderHealth = () => {
+    const items = toArray(health);
+    return (
     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-      {(!health || health.length === 0) ? (
+      {items.length === 0 ? (
         <div className="text-center py-4">
           <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-400 mb-1" />
           <p className="text-sm text-slate-400">No health incidents reported</p>
         </div>
-      ) : health.map((inc, i) => (
+      ) : items.map((inc, i) => (
         <div key={inc.id || `health-${i}`} className="p-2 bg-rose-50 rounded-sm border border-rose-100">
           <div className="flex items-center gap-1.5">
             <Heart className="w-3 h-3 text-rose-500" />
@@ -352,16 +378,19 @@ export default function MyCadetPage() {
         </div>
       ))}
     </div>
-  );
+    );
+  };
 
-  const renderMedDiary = () => (
+  const renderMedDiary = () => {
+    const items = toArray(medDiary);
+    return (
     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-      {(!medDiary || medDiary.length === 0) ? (
+      {items.length === 0 ? (
         <div className="text-center py-4">
           <Pill className="w-6 h-6 mx-auto text-slate-300 mb-1" />
           <p className="text-sm text-slate-400">No medication diary entries</p>
         </div>
-      ) : medDiary.map((entry, i) => (
+      ) : items.map((entry, i) => (
         <div key={entry.id || `med-${i}`} className="p-2 bg-blue-50 rounded-sm border border-blue-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -379,33 +408,39 @@ export default function MyCadetPage() {
         </div>
       ))}
     </div>
-  );
+    );
+  };
 
-  const renderPoints = () => (
+  const renderPoints = () => {
+    const items = toArray(points);
+    return (
     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-      {(!points || points.length === 0) ? (
+      {items.length === 0 ? (
         <div className="text-center py-4">
           <Award className="w-6 h-6 mx-auto text-slate-300 mb-1" />
           <p className="text-sm text-slate-400">No points or awards yet</p>
         </div>
-      ) : points.map((pt, i) => (
+      ) : items.map((pt, i) => (
         <div key={pt.id || `pt-${i}`} className="flex items-center gap-2 p-2 bg-amber-50 rounded-sm border border-amber-100">
           <Award className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <span className="text-sm font-medium">{pt.reason || pt.description || 'Points'}</span>
+            <span className="text-sm font-medium">{pt.reason || pt.description || pt.subject || 'Points'}</span>
             {pt.category && <span className="text-xs text-slate-400 ml-2">{pt.category}</span>}
           </div>
-          <Badge className="bg-amber-600">{pt.points > 0 ? `+${pt.points}` : pt.points}</Badge>
+          <Badge className="bg-amber-600">{(pt.points || pt.total || 0) > 0 ? `+${pt.points || pt.total}` : (pt.points || pt.total || 0)}</Badge>
         </div>
       ))}
     </div>
-  );
+    );
+  };
 
-  const renderMeals = () => (
+  const renderMeals = () => {
+    const items = toArray(meals);
+    return (
     <div className="space-y-2 max-h-[400px] overflow-y-auto">
-      {(!meals || meals.length === 0) ? (
+      {items.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-4">No meal plans available</p>
-      ) : meals.map((meal, i) => (
+      ) : items.map((meal, i) => (
         <div key={meal.id || `meal-${i}`} className="flex items-start gap-2 p-2 bg-orange-50 rounded-sm border border-orange-100">
           <Utensils className="w-3.5 h-3.5 text-orange-600 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
@@ -416,7 +451,8 @@ export default function MyCadetPage() {
         </div>
       ))}
     </div>
-  );
+    );
+  };
 
   const renderOtcForm = () => {
     if (isAdmin) {
@@ -460,8 +496,11 @@ export default function MyCadetPage() {
     );
   };
 
+  const renderContactExec = () => <ContactExecStaff />;
+
   const WIDGET_RENDERERS = {
     overview: renderOverview,
+    contact_exec: renderContactExec,
     schedule: renderSchedule,
     health: renderHealth,
     med_diary: renderMedDiary,
@@ -472,6 +511,7 @@ export default function MyCadetPage() {
 
   const WIDGET_ICONS = {
     overview: User,
+    contact_exec: Mail,
     schedule: Calendar,
     health: Heart,
     points: Award,

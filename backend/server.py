@@ -88,6 +88,7 @@ import routes.participants
 import routes.students
 import routes.inspections  # noqa: F401 — replaces legacy routes.points
 import routes.parent
+import routes.parent_messages  # noqa: F401 — parent ↔ exec staff direct contact
 import routes.otc_permissions
 import routes.photos
 import routes.assignments
