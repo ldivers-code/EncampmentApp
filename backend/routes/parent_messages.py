@@ -85,13 +85,16 @@ def _strip(s: Optional[str], maxlen: int) -> str:
 
 # ── Pydantic ─────────────────────────────────────────────────────────
 class ParentMessageCreate(BaseModel):
-    subject: str = Field(..., min_length=1, max_length=200)
-    body: str = Field(..., min_length=1, max_length=5000)
+    # No max_length on the Pydantic side — `_strip()` truncates server-side
+    # so a stressed parent typing a long emergency message gets a stored
+    # (truncated) thread instead of a 422 hard-rejection.
+    subject: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
     urgency: str = "question"  # question | urgent | emergency
 
 
 class ReplyBody(BaseModel):
-    body: str = Field(..., min_length=1, max_length=5000)
+    body: str = Field(..., min_length=1)
 
 
 class StatusUpdate(BaseModel):
