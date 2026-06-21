@@ -39,18 +39,28 @@ const AnalyticsPage = () => {
 
   const loadData = async () => {
     setLoading(true);
-    try {
-      const [analyticsData, paymentsData] = await Promise.all([
-        getDetailedAnalytics(),
-        getPendingPayments()
-      ]);
-      setAnalytics(analyticsData);
-      setPendingPayments(paymentsData);
-    } catch (error) {
-      toast.error('Failed to load analytics data');
-    } finally {
+    // Load analytics + finance separately. Pending payments are gated to
+    // finance roles only — a 403 there must NOT block the rest of the page
+    // for Exec Cadre / non-finance viewers.
+    const analyticsResult = await getDetailedAnalytics().catch(err => ({ __err: err }));
+    if (analyticsResult.__err) {
+      toast.error(analyticsResult.__err?.response?.data?.detail || 'Failed to load analytics data');
       setLoading(false);
+      return;
     }
+    setAnalytics(analyticsResult);
+
+    const paymentsResult = await getPendingPayments().catch(err => ({ __err: err }));
+    if (paymentsResult.__err) {
+      // 403 = caller isn't finance — silently skip; analytics still renders.
+      if (paymentsResult.__err?.response?.status !== 403) {
+        toast.error('Failed to load pending payments');
+      }
+      setPendingPayments([]);
+    } else {
+      setPendingPayments(paymentsResult);
+    }
+    setLoading(false);
   };
 
   const handleExport = async (type) => {

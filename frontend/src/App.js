@@ -194,7 +194,7 @@ function AppRoutes() {
       <Route
         path="/analytics"
         element={
-          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'staff', 'finance', 'support_pa']}>
+          <ProtectedRoute allowedRoles={['dcp', 'commander', 'executive_staff', 'exec_cadre', 'staff', 'finance', 'dining_facility', 'support_pa']}>
             <AnalyticsPage />
           </ProtectedRoute>
         }

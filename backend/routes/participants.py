@@ -598,7 +598,7 @@ async def export_analytics(
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
         UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.FINANCE,
         UserRole.HEALTH_SERVICES, UserRole.LOGISTICS, UserRole.TRAINING_OFFICER,
-        UserRole.SQUADRON_COMMANDER,
+        UserRole.SQUADRON_COMMANDER, UserRole.EXEC_CADRE,
     ]))
 ):
     """Export analytics data as CSV or Excel.
@@ -667,7 +667,7 @@ async def export_analytics_summary(
         UserRole.DCP, UserRole.COMMANDER, UserRole.EXECUTIVE_STAFF,
         UserRole.STAFF, UserRole.PLANS_PROGRAMS, UserRole.FINANCE,
         UserRole.HEALTH_SERVICES, UserRole.LOGISTICS, UserRole.TRAINING_OFFICER,
-        UserRole.SQUADRON_COMMANDER,
+        UserRole.SQUADRON_COMMANDER, UserRole.EXEC_CADRE,
     ]))
 ):
     """Export analytics summary report as Excel with multiple sheets.
